@@ -46,6 +46,9 @@ wrote, which is what keeps large assemblies smooth (the benchmark behind that is
 a shell layer gets solid / glass / hidden, a toggle layer gets a switch. Explode and
 section work on any model.
 
+Moving around: drag to orbit, scroll or pinch to zoom, and hold Shift to pan, with a
+drag or with a two-finger scroll on a trackpad. A right-button drag pans too.
+
 **Claude** is the Claude Code already on your machine, run through the
 [Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview) in the project's folder.
 The app has no login of its own and stores no credentials; if you need to sign in again,

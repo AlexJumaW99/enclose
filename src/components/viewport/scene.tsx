@@ -1,7 +1,7 @@
 import * as React from "react"
 import * as THREE from "three"
 import { Canvas, useFrame, useThree } from "@react-three/fiber"
-import { CameraControls, Edges } from "@react-three/drei"
+import { CameraControls, CameraControlsImpl, Edges } from "@react-three/drei"
 import { LineMaterial } from "three/addons/lines/LineMaterial.js"
 import { LineSegments2 } from "three/addons/lines/LineSegments2.js"
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js"
@@ -276,11 +276,33 @@ function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
     if (atHome.current && !first.current) frame(false, aspect)
   }, [aspect, frame])
 
+  // Holding Shift turns orbiting into panning: for a drag, and for a two-finger scroll
+  // on a trackpad, which otherwise zooms.
+  const gl = useThree((state) => state.gl)
+  React.useEffect(() => {
+    const around = gl.domElement.parentElement
+    if (!around) return
+    const { ACTION } = CameraControlsImpl
+    const choose = (event: WheelEvent | PointerEvent) => {
+      const { mouseButtons } = controls.current ?? {}
+      if (!mouseButtons) return
+      mouseButtons.left = event.shiftKey ? ACTION.TRUCK : ACTION.ROTATE
+      mouseButtons.wheel = event.shiftKey ? ACTION.TRUCK : ACTION.DOLLY
+    }
+    // capturing, one element up: this runs before the controls' own listeners on the canvas
+    around.addEventListener("wheel", choose, { capture: true, passive: true })
+    around.addEventListener("pointerdown", choose, { capture: true })
+    return () => {
+      around.removeEventListener("wheel", choose, { capture: true })
+      around.removeEventListener("pointerdown", choose, { capture: true })
+    }
+  }, [gl])
+
   return (
     <CameraControls
       ref={controls}
       makeDefault
-      onStart={() => {
+      onControl={() => {
         atHome.current = false
       }}
       minDistance={radius * 0.15}
