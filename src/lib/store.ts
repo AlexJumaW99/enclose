@@ -8,33 +8,60 @@ import type {
   PartRef,
   Project,
   ThreadItem,
+  Vec3,
 } from "@shared/api"
+import type { Turn } from "@/lib/orient"
 
-export type ShellMode = "solid" | "glass" | "hidden"
-export type Axis = "x" | "y" | "z"
-export type Clip = { axis: Axis; at: number; side: 1 | -1 }
+/** solid: as built. glass: the outside goes see-through. wireframe: edges only. */
+export type DisplayMode = "solid" | "glass" | "wireframe"
+
+/** A flat cut through the model, with one side of it hidden. */
+export type Section = {
+  /** a point the cut passes through, model mm */
+  position: Vec3
+  /** how the cut is turned: the turn that carries +Z to the side that is kept */
+  turn: Turn
+  /** keep the other side instead */
+  flipped: boolean
+}
 
 export type View = {
-  shell: ShellMode
-  explode: number
-  clip: Clip | null
+  mode: DisplayMode
+  exploded: boolean
+  /** how far apart the parts are pulled, as a multiple of the model's own distances */
+  spread: number
+  section: Section | null
   keepouts: boolean
-  /** toggle layers that are switched off */
-  off: Record<string, boolean>
+  /** parts switched off in the layers panel */
+  hidden: Record<string, boolean>
 }
 
-/** A part someone clicked, and where on screen, for the prompt that opens next to it. */
-export type Selection = { part: PartRef; x: number; y: number }
+/** Exploding starts at the model's own distances and can be pushed this much further. */
+export const SPREAD = { min: 1, max: 4 }
 
-const HOME_VIEW: View = {
-  shell: "glass",
-  explode: 0,
-  clip: null,
-  keepouts: true,
-  off: {},
-}
+/**
+ * A part that is picked out. `at` is where on screen it was clicked, and is what the
+ * prompt opens beside; a part picked from the layers list has none.
+ */
+export type Selection = { part: PartRef; at: { x: number; y: number } | null }
+
 const ACTIVE_KEY = "cad-ai:project"
 const ACCESS_KEY = "cad-ai:access"
+const MODE_KEY = "cad-ai:mode"
+
+const savedMode = (): DisplayMode => {
+  const mode = localStorage.getItem(MODE_KEY)
+  return mode === "glass" || mode === "wireframe" ? mode : "solid"
+}
+/** How a model is looked at when it opens: whole, assembled, in the mode last used. */
+const homeView = (): View => ({
+  mode: savedMode(),
+  exploded: false,
+  spread: SPREAD.min,
+  section: null,
+  keepouts: true,
+  hidden: {},
+})
 
 type State = {
   ready: boolean
@@ -42,10 +69,13 @@ type State = {
   activeId: string | null
   items: Record<string, ThreadItem[]>
   threadOpen: boolean
+  layersOpen: boolean
   access: Access
   claude: ClaudeStatus | null
   view: View
   selection: Selection | null
+  /** the part under the pointer, in the view or in the layers list */
+  hoveredId: string | null
   /** whether the prompt beside the selection is showing */
   prompting: boolean
   /** bumps to ask the viewport to return to its home view */
@@ -57,8 +87,10 @@ type State = {
   setView(patch: Partial<View>): void
   goHome(): void
   select(selection: Selection | null): void
+  hover(partId: string | null): void
   closePrompt(): void
   setThreadOpen(open: boolean): void
+  setLayersOpen(open: boolean): void
   setAccess(access: Access): void
   send(text: string, part: PartRef | null): void
 }
@@ -69,17 +101,25 @@ export const useStore = create<State>()((set, get) => ({
   activeId: null,
   items: {},
   threadOpen: false,
+  layersOpen: false,
   access: localStorage.getItem(ACCESS_KEY) === "full" ? "full" : "ask",
   claude: null,
-  view: HOME_VIEW,
+  view: homeView(),
   selection: null,
+  hoveredId: null,
   prompting: false,
   homeRequests: 0,
 
   activate(id) {
     if (get().activeId === id) return
     localStorage.setItem(ACTIVE_KEY, id)
-    set({ activeId: id, selection: null, prompting: false, view: HOME_VIEW })
+    set({
+      activeId: id,
+      selection: null,
+      hoveredId: null,
+      prompting: false,
+      view: homeView(),
+    })
     if (!get().items[id]) {
       void window.cad.thread.items(id).then((items) => {
         set((state) => ({ items: { ...state.items, [id]: items } }))
@@ -97,18 +137,20 @@ export const useStore = create<State>()((set, get) => ({
   },
 
   setView(patch) {
+    if (patch.mode) localStorage.setItem(MODE_KEY, patch.mode)
     set((state) => ({ view: { ...state.view, ...patch } }))
   },
 
   goHome() {
-    set((state) => ({
-      view: { ...state.view, explode: 0, clip: null },
-      homeRequests: state.homeRequests + 1,
-    }))
+    set((state) => ({ homeRequests: state.homeRequests + 1 }))
   },
 
   select(selection) {
-    set({ selection, prompting: selection !== null })
+    set({ selection, prompting: Boolean(selection?.at) })
+  },
+
+  hover(hoveredId) {
+    if (get().hoveredId !== hoveredId) set({ hoveredId })
   },
 
   closePrompt() {
@@ -117,6 +159,10 @@ export const useStore = create<State>()((set, get) => ({
 
   setThreadOpen(threadOpen) {
     set({ threadOpen })
+  },
+
+  setLayersOpen(layersOpen) {
+    set({ layersOpen })
   },
 
   setAccess(access) {

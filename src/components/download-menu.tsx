@@ -68,22 +68,16 @@ export function DownloadMenu({
         <TooltipTrigger
           render={
             <DropdownMenuTrigger
-              render={
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="bg-background shadow-sm"
-                />
-              }
+              render={<Button variant="ghost" size="icon" />}
             />
           }
         >
           <DownloadIcon />
           <span className="sr-only">Download STEP</span>
         </TooltipTrigger>
-        <TooltipContent>Download STEP</TooltipContent>
+        <TooltipContent side="left">Download STEP</TooltipContent>
       </Tooltip>
-      <DropdownMenuContent align="end" className="w-80">
+      <DropdownMenuContent side="left" align="start" className="w-80">
         {whole.length > 0 && (
           <DropdownMenuGroup>
             <DropdownMenuLabel>Everything in one file</DropdownMenuLabel>

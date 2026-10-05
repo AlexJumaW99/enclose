@@ -9,10 +9,10 @@ millimetres, Z is up.
 
 {
   "title": "Enclosure",                 // optional
-  "layers": [                            // optional; how the toolbar groups parts
-    { "id": "enclosure", "label": "Enclosure", "control": "shell" },   // solid / glass / hidden
-    { "id": "inside", "label": "Electronics", "control": "toggle" },   // on / off
-    { "id": "screws", "label": "Screws", "control": "always" }
+  "layers": [                            // optional; how the layers panel groups parts
+    { "id": "enclosure", "label": "Enclosure", "shell": true },   // the outside: see-through in glass mode
+    { "id": "inside", "label": "Electronics" },
+    { "id": "screws", "label": "Screws" }
   ],
   "parts": [
     {
@@ -23,7 +23,7 @@ millimetres, Z is up.
       "edges": "top.edges.bin",          // optional: float32 x1 y1 z1 x2 y2 z2 per edge segment, mm
       "color": "#f4f4f2",                // optional; omit to keep the colours in the file
       "matrix": null,                    // optional: 16 numbers, row-major, placing the part
-      "explode": [0, 0, 46],             // optional: where it goes when exploded, mm
+      "explode": [0, 0, 46],             // optional: where it goes when exploded, mm (worked out when no part says)
       "glass": true,                     // optional: force see-through (or not) in glass mode
       "finish": "metal"                  // optional: drawn as bare metal (screws, pins)
     }

@@ -25,11 +25,13 @@ export type LoadedPart = {
   part: Part
   skins: Skin[]
   /** x1 y1 z1 x2 y2 z2 per segment, model mm */
-  edges: Float32Array | null
+  edges: Float32Array
   /** in the part's own frame */
   box: THREE.Box3
   /** where the part sits in the model */
   home: THREE.Matrix4
+  /** where it moves to when the model is exploded, mm */
+  away: THREE.Vector3
   faces: number
 }
 
@@ -158,7 +160,36 @@ async function loadPart(
   const home = new THREE.Matrix4()
   if (part.matrix)
     home.set(...(part.matrix as Parameters<THREE.Matrix4["set"]>))
-  return { part, skins, edges, box, home, faces }
+  return {
+    part,
+    skins,
+    edges: edges ?? creases(skins),
+    box,
+    home,
+    away: new THREE.Vector3(...part.explode),
+    faces,
+  }
+}
+
+/**
+ * Edges for a part whose build did not supply any: wherever two triangles meet at more
+ * than a slight angle. Not as exact as the CAD's own edges (a smooth blend between two
+ * faces leaves no line), but enough to draw the part in outline.
+ */
+function creases(skins: Skin[]): Float32Array {
+  const runs = skins.map((skin) => {
+    const edges = new THREE.EdgesGeometry(skin.geometry, 20)
+    const positions = edges.attributes.position.array as Float32Array
+    edges.dispose()
+    return positions
+  })
+  const all = new Float32Array(runs.reduce((sum, run) => sum + run.length, 0))
+  let offset = 0
+  for (const run of runs) {
+    all.set(run, offset)
+    offset += run.length
+  }
+  return all
 }
 
 /**
@@ -187,6 +218,14 @@ export async function loadModel(
   )
   const box = new THREE.Box3()
   for (const part of parts) box.union(part.box.clone().applyMatrix4(part.home))
+
+  // A model that does not say how it comes apart is pulled straight out from its middle.
+  if (parts.every((part) => part.away.lengthSq() === 0)) {
+    const middle = box.getCenter(new THREE.Vector3())
+    for (const part of parts) {
+      part.box.getCenter(part.away).applyMatrix4(part.home).sub(middle)
+    }
+  }
   return { model, parts, box }
 }
 

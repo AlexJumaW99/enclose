@@ -40,8 +40,8 @@ export function PartPrompt({
 
   // the popover hangs off the point that was clicked rather than off an element
   const anchor = React.useMemo(() => {
-    if (!selection) return null
-    const { x, y } = selection
+    if (!selection?.at) return null
+    const { x, y } = selection.at
     return {
       getBoundingClientRect: () =>
         DOMRect.fromRect({ x, y, width: 0, height: 0 }),

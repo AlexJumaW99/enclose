@@ -1,15 +1,10 @@
 import * as React from "react"
-import {
-  BoxIcon,
-  MessageSquareIcon,
-  RotateCcwIcon,
-  TriangleAlertIcon,
-} from "lucide-react"
+import { BoxIcon, TriangleAlertIcon } from "lucide-react"
 
 import type { Project } from "@shared/api"
-import { DownloadMenu } from "@/components/download-menu"
+import { LayersPanel } from "@/components/layers-panel"
 import { PartPrompt } from "@/components/part-prompt"
-import { Toolbar } from "@/components/toolbar"
+import { Tools } from "@/components/tools"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
@@ -21,16 +16,14 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { Spinner } from "@/components/ui/spinner"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
 import { readModel } from "@/lib/model"
 import { useStore } from "@/lib/store"
+import { AxisGizmo } from "./axis-gizmo"
 import { bridge } from "./bridge"
+import { ExplodeSlider } from "./explode-slider"
 import { disposeModel, loadModel, type LoadedModel } from "./load"
 import { appearance, Scene } from "./scene"
+import { SectionPlanes } from "./section-planes"
 
 type Loading =
   | { status: "loading"; done: number; total: number }
@@ -94,12 +87,13 @@ function useLoadedModel(project: Project) {
 function Model({ project }: { project: Project }) {
   const { loaded, state } = useLoadedModel(project)
   const view = useStore((s) => s.view)
+  const setView = useStore((s) => s.setView)
   const selection = useStore((s) => s.selection)
   const select = useStore((s) => s.select)
+  const hoveredId = useStore((s) => s.hoveredId)
+  const hover = useStore((s) => s.hover)
   const homeRequests = useStore((s) => s.homeRequests)
-  const goHome = useStore((s) => s.goHome)
-  const threadOpen = useStore((s) => s.threadOpen)
-  const setThreadOpen = useStore((s) => s.setThreadOpen)
+  const layersOpen = useStore((s) => s.layersOpen)
 
   // what Claude gets when it asks which parts are on screen
   React.useEffect(() => {
@@ -123,6 +117,20 @@ function Model({ project }: { project: Project }) {
     }
   }, [loaded])
 
+  // the section's handle was dragged in the view: the cut moves, the side shown stays
+  const moveSection = React.useCallback(
+    (moved: Parameters<React.ComponentProps<typeof Scene>["onSection"]>[0]) => {
+      const { section } = useStore.getState().view
+      if (section) setView({ section: { ...section, ...moved } })
+    },
+    [setView]
+  )
+
+  const middle = React.useMemo(
+    () => loaded?.box.getCenter(loaded.box.min.clone()).toArray() ?? null,
+    [loaded]
+  )
+
   return (
     <>
       {loaded && (
@@ -130,8 +138,11 @@ function Model({ project }: { project: Project }) {
           loaded={loaded}
           view={view}
           selectedId={selection?.part.id ?? null}
+          hoveredId={hoveredId}
           homeKey={`${project.id}:${homeRequests}`}
           onPick={select}
+          onHover={hover}
+          onSection={moveSection}
         />
       )}
 
@@ -155,56 +166,22 @@ function Model({ project }: { project: Project }) {
         </div>
       )}
 
-      <div className="pointer-events-none absolute top-0 right-0 flex gap-2 p-3">
-        {loaded && (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="pointer-events-auto bg-background shadow-sm"
-                  onClick={goHome}
-                />
-              }
-            >
-              <RotateCcwIcon />
-              <span className="sr-only">Reset the view</span>
-            </TooltipTrigger>
-            <TooltipContent>Reset the view</TooltipContent>
-          </Tooltip>
-        )}
-        {loaded && loaded.model.downloads.length > 0 && (
-          <div className="pointer-events-auto">
-            <DownloadMenu
-              downloads={loaded.model.downloads}
-              projectId={project.id}
-            />
-          </div>
-        )}
-        {!threadOpen && (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="pointer-events-auto bg-background shadow-sm"
-                  onClick={() => setThreadOpen(true)}
-                />
-              }
-            >
-              <MessageSquareIcon />
-              <span className="sr-only">Show the conversation</span>
-            </TooltipTrigger>
-            <TooltipContent>Conversation</TooltipContent>
-          </Tooltip>
-        )}
-      </div>
-
-      {loaded && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center p-4">
-          <Toolbar loaded={loaded} />
+      <Tools loaded={loaded} projectId={project.id} />
+      {loaded && layersOpen && (
+        <LayersPanel
+          loaded={loaded}
+          className="absolute top-1/2 right-17 max-h-[70%] -translate-y-1/2"
+        />
+      )}
+      {loaded && view.exploded && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-5 flex justify-center">
+          <ExplodeSlider />
+        </div>
+      )}
+      {loaded && middle && (
+        <div className="pointer-events-none absolute right-3 bottom-3 flex items-end gap-1">
+          <SectionPlanes middle={middle} />
+          <AxisGizmo />
         </div>
       )}
       {loaded && <PartPrompt model={loaded.model} projectId={project.id} />}

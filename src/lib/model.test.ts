@@ -13,7 +13,7 @@ describe("readModel", () => {
     const model = readModel({
       title: "Bracket",
       layers: [
-        { id: "body", label: "Body", control: "shell" },
+        { id: "body", label: "Body", shell: true },
         { id: "fasteners", label: "Fasteners" },
       ],
       parts: [
@@ -23,8 +23,8 @@ describe("readModel", () => {
     })
     expect(model.title).toBe("Bracket")
     expect(model.layers).toEqual([
-      { id: "body", label: "Body", control: "shell" },
-      { id: "fasteners", label: "Fasteners", control: "toggle" },
+      { id: "body", label: "Body", shell: true },
+      { id: "fasteners", label: "Fasteners", shell: false },
     ])
     expect(model.parts[0]).toMatchObject({
       label: "plate",
@@ -39,13 +39,15 @@ describe("readModel", () => {
     expect(model.keepoutsLabel).toBe("Keep-outs")
   })
 
-  it("gives a layer nobody declared a switch of its own", () => {
+  it("lists a layer that a part names but nobody declared", () => {
     const model = readModel({
-      layers: [],
-      parts: [part("a", { layer: "odd_bits" })],
+      // "control": "shell" is how the first version of the format marked the outside
+      layers: [{ id: "case", control: "shell" }],
+      parts: [part("a", { layer: "odd_bits" }), part("b", { layer: "case" })],
     })
     expect(model.layers).toEqual([
-      { id: "odd_bits", label: "Odd bits", control: "toggle" },
+      { id: "case", label: "Case", shell: true },
+      { id: "odd_bits", label: "Odd bits", shell: false },
     ])
   })
 
@@ -73,10 +75,10 @@ describe("readModel", () => {
         { id: "broken", min: [0, 0], max: [1, 1, 1] },
       ],
     })
-    expect(model.layers.map((l) => [l.label, l.control])).toEqual([
-      ["Enclosure", "shell"],
-      ["Electronics", "toggle"],
-      ["Screws", "always"],
+    expect(model.layers.map((l) => [l.label, l.shell])).toEqual([
+      ["Enclosure", true],
+      ["Electronics", false],
+      ["Screws", false],
     ])
     // electronics keep the colours of their own files; the colour only fills the gaps
     expect(model.parts.map((p) => p.paint)).toEqual(["all", "bare", "all"])
@@ -88,9 +90,9 @@ describe("readModel", () => {
     ])
   })
 
-  it("has nothing to switch when everything is one undeclared layer", () => {
+  it("puts parts that name no layer into one", () => {
     expect(readModel({ parts: [part("a"), part("b")] }).layers).toEqual([
-      { id: "model", label: "Model", control: "always" },
+      { id: "model", label: "Model", shell: false },
     ])
   })
 

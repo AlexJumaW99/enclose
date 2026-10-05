@@ -1,7 +1,12 @@
 import * as React from "react"
 import * as THREE from "three"
 import { Canvas, useFrame, useThree } from "@react-three/fiber"
-import { CameraControls, CameraControlsImpl, Edges } from "@react-three/drei"
+import {
+  CameraControls,
+  CameraControlsImpl,
+  Edges,
+  PivotControls,
+} from "@react-three/drei"
 import { LineMaterial } from "three/addons/lines/LineMaterial.js"
 import { LineSegments2 } from "three/addons/lines/LineSegments2.js"
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js"
@@ -10,12 +15,16 @@ import { acceleratedRaycast } from "three-mesh-bvh"
 import type { PartRef, Vec3 } from "@shared/api"
 import { useThemeColors, type ThemeColors } from "@/lib/css-color"
 import type { Keepout } from "@/lib/model"
-import type { Clip, Selection, View } from "@/lib/store"
-import { bridge } from "./bridge"
+import { nearestTurn, viewFrom, type Turn } from "@/lib/orient"
+import type { Section, Selection, View } from "@/lib/store"
+import { bridge, publishOrientation } from "./bridge"
 import type { LoadedModel, LoadedPart } from "./load"
 
 // The model is Z-up; three.js is Y-up. Everything inside the root group is in model mm.
 const MODEL_TO_WORLD: [number, number, number] = [-Math.PI / 2, 0, 0]
+const MODEL_TO_WORLD_TURN = new THREE.Quaternion().setFromEuler(
+  new THREE.Euler(...MODEL_TO_WORLD)
+)
 const toWorld = (v: THREE.Vector3) => new THREE.Vector3(v.x, v.z, -v.y)
 
 /** Where the camera sits when a model opens: front right, looking down on it. */
@@ -33,36 +42,39 @@ const BEHIND_EDGES = {
   polygonOffsetUnits: 1.5,
 }
 const NO_CLIP = { normal: new THREE.Vector3(0, 1, 0), constant: 1e6 }
-const AXIS: Record<Clip["axis"], THREE.Vector3> = {
-  x: new THREE.Vector3(1, 0, 0),
-  y: new THREE.Vector3(0, 0, -1),
-  z: new THREE.Vector3(0, 1, 0),
-}
+const ONE = new THREE.Vector3(1, 1, 1)
 /** A shell part smaller than this share of the model stays solid in glass mode: buttons, feet. */
 const GLASS_FROM = 0.25
 // drawn in this order, so what is behind glass is tinted by it and the glass keeps its outline
 const ORDER = { solid: 0, edges: 1, glass: 2, glassEdges: 3, keepouts: 4 }
 
-/** Whether a part is drawn at all, and whether it is see-through, under the current view. */
-export function appearance(loaded: LoadedPart, model: LoadedModel, view: View) {
-  const layer = model.model.layers.find((l) => l.id === loaded.part.layer)
-  if (layer?.control === "toggle")
-    return { shown: !view.off[layer.id], glass: false }
-  // the parts of a shell layer that the solid / glass / hidden control acts on
-  const shell =
-    layer?.control === "shell" &&
+/** solid: opaque. glass: see-through. wire: edges only. */
+type Look = "solid" | "glass" | "wire"
+
+/** Whether a part is drawn at all, and how, under the current view. */
+export function appearance(
+  loaded: LoadedPart,
+  model: LoadedModel,
+  view: View
+): { shown: boolean; look: Look } {
+  const shown = !view.hidden[loaded.part.id]
+  if (view.mode === "wireframe") return { shown, look: "wire" }
+  if (view.mode === "solid") return { shown, look: "solid" }
+  // Glass is for seeing inside: only the outside goes see-through. A model that does
+  // not say which parts are its outside goes see-through as a whole.
+  const shells = model.model.layers.filter((layer) => layer.shell)
+  if (shells.length === 0) return { shown, look: "glass" }
+  const outside =
+    shells.some((layer) => layer.id === loaded.part.layer) &&
     (loaded.part.glass ??
       loaded.box.getSize(new THREE.Vector3()).length() >=
         model.box.getSize(new THREE.Vector3()).length() * GLASS_FROM)
-  return {
-    shown: !(shell && view.shell === "hidden"),
-    glass: shell && view.shell === "glass",
-  }
+  return { shown, look: outside ? "glass" : "solid" }
 }
 
 const PartModel = React.memo(function PartModel({
   loaded,
-  glass,
+  look,
   hovered,
   selected,
   explode,
@@ -70,9 +82,10 @@ const PartModel = React.memo(function PartModel({
   colors,
 }: {
   loaded: LoadedPart
-  glass: boolean
+  look: Look
   hovered: boolean
   selected: boolean
+  /** how far along its way out the part is: 0 assembled, 1 the model's own distance */
   explode: number
   plane: THREE.Plane
   colors: ThemeColors
@@ -80,13 +93,15 @@ const PartModel = React.memo(function PartModel({
   const { part } = loaded
   const group = React.useRef<THREE.Group>(null)
   const invalidate = useThree((state) => state.invalidate)
+  const glass = look === "glass"
+  const wire = look === "wire"
 
   const home = React.useMemo(() => {
     const position = new THREE.Vector3()
     const quaternion = new THREE.Quaternion()
     loaded.home.decompose(position, quaternion, new THREE.Vector3())
-    return { position, quaternion, away: new THREE.Vector3(...part.explode) }
-  }, [loaded.home, part.explode])
+    return { position, quaternion }
+  }, [loaded.home])
 
   const planes = React.useMemo(() => [plane], [plane])
   const skinColors = React.useMemo(
@@ -106,7 +121,6 @@ const PartModel = React.memo(function PartModel({
   )
 
   const lines = React.useMemo(() => {
-    if (!loaded.edges) return null
     const geometry = new LineSegmentsGeometry().setPositions(loaded.edges)
     const material = new LineMaterial({
       linewidth: 1, // screen pixels
@@ -121,8 +135,8 @@ const PartModel = React.memo(function PartModel({
   }, [loaded.edges, plane])
   React.useEffect(
     () => () => {
-      lines?.geometry.dispose()
-      lines?.material.dispose()
+      lines.geometry.dispose()
+      lines.material.dispose()
     },
     [lines]
   )
@@ -142,11 +156,14 @@ const PartModel = React.memo(function PartModel({
     current.current = moving ? next : explode
     group.current.position
       .copy(home.position)
-      .addScaledVector(home.away, current.current)
+      .addScaledVector(loaded.away, current.current)
     group.current.quaternion.copy(home.quaternion)
     if (moving) invalidate()
   })
 
+  // With no surfaces drawn there is nothing light for a dark line to show against, so in
+  // wireframe the edges take the text colour instead.
+  const lit = selected || (wire && hovered)
   return (
     <group ref={group}>
       {loaded.skins.map((skin, index) => (
@@ -157,8 +174,10 @@ const PartModel = React.memo(function PartModel({
           renderOrder={glass ? ORDER.glass : ORDER.solid}
           userData={{ partId: part.id, skin: index, glass }}
         >
-          {/* hover and selection only retint what is already there */}
+          {/* hover and selection only retint what is already there; in wireframe the
+              surfaces are not drawn, but are still what a click lands on */}
           <meshStandardMaterial
+            visible={!wire}
             color={skinColors[index]}
             metalness={part.metal ? 0.55 : 0.1}
             roughness={part.metal ? 0.45 : 0.62}
@@ -173,30 +192,31 @@ const PartModel = React.memo(function PartModel({
           />
         </mesh>
       ))}
-      {lines && (
+      <primitive
+        object={lines}
+        renderOrder={glass ? ORDER.glassEdges : ORDER.edges}
+      >
         <primitive
-          object={lines}
-          renderOrder={glass ? ORDER.glassEdges : ORDER.edges}
-        >
-          <primitive
-            object={lines.material}
-            attach="material"
-            color={selected ? colors.selection : EDGE}
-            opacity={selected ? 1 : glass ? 0.28 : 0.85}
-          />
-        </primitive>
-      )}
+          object={lines.material}
+          attach="material"
+          color={lit ? colors.selection : wire ? colors.foreground : EDGE}
+          opacity={selected ? 1 : glass ? 0.28 : wire ? 0.6 : 0.85}
+        />
+      </primitive>
     </group>
   )
 })
 
 function KeepoutBox({
   keepout,
+  plane,
   colors,
 }: {
   keepout: Keepout
+  plane: THREE.Plane
   colors: ThemeColors
 }) {
+  const planes = React.useMemo(() => [plane], [plane])
   const size = keepout.max.map((v, i) => v - keepout.min[i]) as Vec3
   const center = keepout.max.map((v, i) => (v + keepout.min[i]) / 2) as Vec3
   const color = keepout.blocked ? colors.destructive : colors.muted
@@ -208,8 +228,13 @@ function KeepoutBox({
         transparent
         opacity={keepout.blocked ? 0.26 : 0.1}
         depthWrite={false}
+        clippingPlanes={planes}
       />
-      <Edges color={color} lineWidth={keepout.blocked ? 1.5 : 1} />
+      <Edges
+        color={color}
+        lineWidth={keepout.blocked ? 1.5 : 1}
+        clippingPlanes={planes}
+      />
     </mesh>
   )
 }
@@ -238,17 +263,6 @@ function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
     // a little inside the bounding sphere: models are rarely as tall as they are wide
     const distance = (reach / Math.sin(angle)) * 0.94
     const eye = toWorld(HOME_DIRECTION).multiplyScalar(distance).add(target)
-    // sit the model a little above centre, clear of the toolbar along the bottom
-    const forward = target.clone().sub(eye).normalize()
-    const right = forward
-      .clone()
-      .cross(new THREE.Vector3(0, 1, 0))
-      .normalize()
-    const lift = right
-      .cross(forward)
-      .multiplyScalar(-0.07 * distance * vertical)
-    eye.add(lift)
-    target.add(lift)
     void controls.current?.setLookAt(
       eye.x,
       eye.y,
@@ -298,6 +312,45 @@ function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
     }
   }, [gl])
 
+  // what the axis gizmo and the section planes, drawn outside the view, turn the camera with
+  React.useEffect(() => {
+    bridge.lookFrom = (axis, sign) => {
+      const camera = controls.current
+      if (!camera) return
+      const { azimuth, polar } = viewFrom(axis, sign)
+      atHome.current = false
+      void camera.rotateTo(
+        nearestTurn(camera.azimuthAngle, azimuth),
+        polar,
+        true
+      )
+    }
+    bridge.orbit = (dx, dy) => {
+      atHome.current = false
+      void controls.current?.rotate(-dx * 0.012, -dy * 0.012, false)
+    }
+    bridge.eye = () => {
+      const camera = controls.current
+      if (!camera) return [0, -1, 0]
+      const eye = camera
+        .getPosition(new THREE.Vector3())
+        .sub(camera.getTarget(new THREE.Vector3()))
+        .normalize()
+      return [eye.x, -eye.z, eye.y]
+    }
+    return () => {
+      bridge.lookFrom = bridge.orbit = bridge.eye = null
+    }
+  }, [])
+
+  // tell those widgets how the camera is turned, every frame it is drawn
+  const scratch = React.useMemo(() => new THREE.Quaternion(), [])
+  useFrame(({ camera }) => {
+    publishOrientation(
+      scratch.copy(camera.quaternion).invert().multiply(MODEL_TO_WORLD_TURN)
+    )
+  })
+
   return (
     <CameraControls
       ref={controls}
@@ -313,18 +366,123 @@ function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
   )
 }
 
-function Section({ plane, clip }: { plane: THREE.Plane; clip: Clip | null }) {
+/** Hides everything on one side of the section, by setting the plane every part clips against. */
+function Cut({
+  plane,
+  section,
+}: {
+  plane: THREE.Plane
+  section: Section | null
+}) {
   const invalidate = useThree((state) => state.invalidate)
   React.useEffect(() => {
-    if (!clip) plane.set(NO_CLIP.normal, NO_CLIP.constant)
-    else
-      plane.set(
-        AXIS[clip.axis].clone().multiplyScalar(clip.side),
-        -clip.side * clip.at
+    if (!section) plane.set(NO_CLIP.normal, NO_CLIP.constant)
+    else {
+      const kept = new THREE.Vector3(
+        0,
+        0,
+        section.flipped ? -1 : 1
+      ).applyQuaternion(new THREE.Quaternion(...section.turn))
+      plane.setFromNormalAndCoplanarPoint(
+        toWorld(kept),
+        toWorld(new THREE.Vector3(...section.position))
       )
+    }
     invalidate()
-  }, [clip, plane, invalidate])
+  }, [section, plane, invalidate])
   return null
+}
+
+/**
+ * The section's handle, where it cuts: an arrow to push the cut through the model, and
+ * two arcs to tilt it. Drawn at a constant size on screen, over everything.
+ */
+function SectionHandle({
+  section,
+  reach,
+  colors,
+  onChange,
+}: {
+  section: Section
+  reach: number
+  colors: ThemeColors
+  onChange: (moved: { position: Vec3; turn: Turn }) => void
+}) {
+  const matrix = React.useMemo(
+    () =>
+      new THREE.Matrix4().compose(
+        new THREE.Vector3(...section.position),
+        new THREE.Quaternion(...section.turn),
+        ONE
+      ),
+    [section.position, section.turn]
+  )
+  const drag = React.useMemo(() => {
+    const position = new THREE.Vector3()
+    const turn = new THREE.Quaternion()
+    const scale = new THREE.Vector3()
+    return (local: THREE.Matrix4) => {
+      local.decompose(position, turn, scale)
+      onChange({
+        position: position.toArray(),
+        turn: [turn.x, turn.y, turn.z, turn.w],
+      })
+    }
+  }, [onChange])
+
+  const line = `#${colors.foreground.getHexString()}`
+  const shared = {
+    matrix,
+    autoTransform: false,
+    fixed: true,
+    scale: 78,
+    lineWidth: 3,
+    depthTest: false,
+    disableSliders: true,
+    disableScaling: true,
+    axisColors: [line, line, line] as [string, string, string],
+    hoveredColor: `#${colors.selection.getHexString()}`,
+    onDrag: drag,
+    onDragStart: () => {
+      bridge.handling = true
+    },
+    // the click that ends the drag is still on its way
+    onDragEnd: () => {
+      setTimeout(() => {
+        bridge.handling = false
+      }, 0)
+    },
+  }
+  return (
+    <>
+      {/* a faint square where the cut is, so its tilt can be read at a glance */}
+      <mesh
+        matrix={matrix}
+        matrixAutoUpdate={false}
+        renderOrder={ORDER.keepouts}
+        raycast={() => {}}
+      >
+        <planeGeometry args={[reach * 0.85, reach * 0.85]} />
+        <meshBasicMaterial
+          color={colors.selection}
+          transparent
+          opacity={0.05}
+          side={THREE.DoubleSide}
+          depthWrite={false}
+        />
+        <Edges color={colors.selection} lineWidth={1} />
+      </mesh>
+      {/* three handles sharing one position: along the cut's normal, and about each of
+          the two directions that lie in it */}
+      <PivotControls
+        {...shared}
+        activeAxes={[false, false, true]}
+        disableRotations
+      />
+      <PivotControls {...shared} activeAxes={[false, true, true]} disableAxes />
+      <PivotControls {...shared} activeAxes={[true, false, true]} disableAxes />
+    </>
+  )
 }
 
 /**
@@ -401,7 +559,8 @@ function Picker({
       pressed = { x: event.clientX, y: event.clientY }
     }
     const move = (event: PointerEvent) => {
-      if (event.buttons !== 0) return // orbiting, not pointing
+      // orbiting, or dragging the section's handle: not pointing at a part
+      if (event.buttons !== 0 || bridge.handling) return
       const hit = cast(event)
       onHover((hit?.object.userData.partId as string | undefined) ?? null)
     }
@@ -409,13 +568,14 @@ function Picker({
     const click = (event: MouseEvent) => {
       // the end of a drag is not a click
       if (
-        pressed &&
-        Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y) > 4
+        bridge.handling ||
+        (pressed &&
+          Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y) > 4)
       )
         return
       const hit = cast(event)
       const part = hit && describe(hit)
-      onPick(part ? { part, x: event.clientX, y: event.clientY } : null)
+      onPick(part ? { part, at: { x: event.clientX, y: event.clientY } } : null)
     }
 
     canvas.addEventListener("pointerdown", down)
@@ -430,6 +590,18 @@ function Picker({
     }
   }, [gl, camera, raycaster, root, loaded, plane, onHover, onPick])
 
+  return null
+}
+
+/**
+ * The view is only redrawn when something asks for it. Most changes ask by themselves;
+ * a part being taken out of the scene does not, so every change of view asks here.
+ */
+function Redraw({ on }: { on: unknown }) {
+  const invalidate = useThree((state) => state.invalidate)
+  React.useEffect(() => {
+    invalidate()
+  }, [on, invalidate])
   return null
 }
 
@@ -471,28 +643,35 @@ export function Scene({
   loaded,
   view,
   selectedId,
+  hoveredId,
   homeKey,
   onPick,
+  onHover,
+  onSection,
 }: {
   loaded: LoadedModel
   view: View
   selectedId: string | null
+  hoveredId: string | null
   /** changes when the camera should go back to its home view */
   homeKey: string
   onPick: (selection: Selection | null) => void
+  onHover: (partId: string | null) => void
+  /** the section's handle was dragged */
+  onSection: (moved: { position: Vec3; turn: Turn }) => void
 }) {
   const colors = useThemeColors()
   const root = React.useRef<THREE.Group>(null)
-  const [hovered, setHovered] = React.useState<string | null>(null)
   const plane = React.useMemo(
     () => new THREE.Plane(NO_CLIP.normal.clone(), NO_CLIP.constant),
     []
   )
   const radius = loaded.box.getSize(new THREE.Vector3()).length() / 2
+  const explode = view.exploded ? view.spread : 0
 
   return (
     <Canvas
-      className={hovered ? "cursor-pointer" : undefined}
+      className={hoveredId ? "cursor-pointer" : undefined}
       frameloop="demand"
       camera={{
         fov: FOV,
@@ -511,27 +690,28 @@ export function Scene({
       <directionalLight position={[180, 320, 220]} intensity={1.7} />
       <directionalLight position={[-240, 160, -180]} intensity={0.55} />
       <Rig box={loaded.box} homeKey={homeKey} />
-      <Section plane={plane} clip={view.clip} />
+      <Cut plane={plane} section={view.section} />
       <Picker
         root={root}
         loaded={loaded}
         plane={plane}
-        onHover={setHovered}
+        onHover={onHover}
         onPick={onPick}
       />
       <Camera />
+      <Redraw on={view} />
       <group ref={root} rotation={MODEL_TO_WORLD}>
         {loaded.parts.map((part) => {
-          const { shown, glass } = appearance(part, loaded, view)
+          const { shown, look } = appearance(part, loaded, view)
           if (!shown) return null
           return (
             <PartModel
               key={part.part.id}
               loaded={part}
-              glass={glass}
-              hovered={hovered === part.part.id}
+              look={look}
+              hovered={hoveredId === part.part.id}
               selected={selectedId === part.part.id}
-              explode={view.explode}
+              explode={explode}
               plane={plane}
               colors={colors}
             />
@@ -539,10 +719,23 @@ export function Scene({
         })}
         {/* keep-outs mark where things sit assembled; pulled apart they'd mislead */}
         {view.keepouts &&
-          view.explode === 0 &&
+          !view.exploded &&
           loaded.model.keepouts.map((keepout) => (
-            <KeepoutBox key={keepout.id} keepout={keepout} colors={colors} />
+            <KeepoutBox
+              key={keepout.id}
+              keepout={keepout}
+              plane={plane}
+              colors={colors}
+            />
           ))}
+        {view.section && (
+          <SectionHandle
+            section={view.section}
+            reach={radius}
+            colors={colors}
+            onChange={onSection}
+          />
+        )}
       </group>
     </Canvas>
   )

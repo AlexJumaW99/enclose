@@ -2,10 +2,11 @@
 // The format is described in shared/manifest-format.ts.
 import type { Vec3 } from "@shared/api"
 
-/** shell: solid / glass / hidden. toggle: on / off. always: no control. */
-export type LayerControl = "shell" | "toggle" | "always"
-
-export type Layer = { id: string; label: string; control: LayerControl }
+/**
+ * A named group of parts, as the layers panel lists them. `shell` marks the outside of
+ * the thing: the parts that go see-through in glass mode, so what they enclose shows.
+ */
+export type Layer = { id: string; label: string; shell: boolean }
 
 export type Part = {
   id: string
@@ -57,9 +58,9 @@ export type Model = {
 // parts carry a `group`, and the viewer it came with knew what each group meant. A
 // manifest without `layers` is read the way that viewer read it.
 const UNDECLARED: Record<string, Omit<Layer, "id">> = {
-  enclosure: { label: "Enclosure", control: "shell" },
-  inside: { label: "Electronics", control: "toggle" },
-  screws: { label: "Screws", control: "always" },
+  enclosure: { label: "Enclosure", shell: true },
+  inside: { label: "Electronics", shell: false },
+  screws: { label: "Screws", shell: false },
 }
 const UNDECLARED_KEEPOUTS = "Cables"
 
@@ -123,24 +124,19 @@ export function readModel(manifest: unknown): Model {
     layers = (manifest.layers as unknown[]).filter(isObject).flatMap((raw) => {
       const id = text(raw.id)
       if (!id) return []
-      const control: LayerControl =
-        raw.control === "shell" || raw.control === "always"
-          ? raw.control
-          : "toggle"
-      return [{ id, label: text(raw.label) ?? titled(id), control }]
+      // "control": "shell" is how the first version of the format spelled it
+      const shell = raw.shell === true || raw.control === "shell"
+      return [{ id, label: text(raw.label) ?? titled(id), shell }]
     })
-    // a part may name a layer nobody declared: it still needs a switch
+    // a part may name a layer nobody declared: it still gets listed
     for (const id of used) {
       if (!layers.some((l) => l.id === id))
-        layers.push({ id, label: titled(id), control: "toggle" })
+        layers.push({ id, label: titled(id), shell: false })
     }
   } else {
     layers = used.map((id) => ({
       id,
-      ...(UNDECLARED[id] ?? {
-        label: titled(id),
-        control: used.length === 1 ? ("always" as const) : ("toggle" as const),
-      }),
+      ...(UNDECLARED[id] ?? { label: titled(id), shell: false }),
     }))
   }
 

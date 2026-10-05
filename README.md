@@ -42,12 +42,24 @@ that lists parts is used.
 
 **The view** draws each part as one mesh per colour, however many faces the CAD export
 wrote, which is what keeps large assemblies smooth (the benchmark behind that is in
-[`spikes/draw-calls`](spikes/draw-calls)). The toolbar comes from the manifest's layers:
-a shell layer gets solid / glass / hidden, a toggle layer gets a switch. Explode and
-section work on any model.
+[`spikes/draw-calls`](spikes/draw-calls)).
 
 Moving around: drag to orbit, scroll or pinch to zoom, and hold Shift to pan, with a
-drag or with a two-finger scroll on a trackpad. A right-button drag pans too.
+drag or with a two-finger scroll on a trackpad. A right-button drag pans too. The axes in
+the bottom right corner turn with the camera: click the end of one to look at the model
+from there, click it again for the opposite side.
+
+Down the right-hand edge:
+
+- **Solid, glass, wireframe.** Glass makes the outside see-through (the layers a manifest
+  marks as `shell`, or everything if it marks none); wireframe draws edges only.
+- **Section** cuts the model open. Three squares appear by the axes, one per direction to
+  cut across; in the view, drag the arrow to push the cut through the model and the arcs
+  to tilt it. The button beside the squares shows the other half.
+- **Explode** pulls the parts apart by the distances the manifest gives (or straight out
+  from the middle, if it gives none), and a slider along the bottom pulls them further.
+- **Layers** lists the manifest's layers and the parts in each, with an eye to switch any
+  of them off. Pointing at a row lights the part up in the view; clicking picks it.
 
 **Claude** is the Claude Code already on your machine, run through the
 [Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview) in the project's folder.
@@ -67,7 +79,7 @@ else, such as running the build. "Full access" in the message box turns the aski
 ```
 electron/    the app's own process: window, project list, the line to Claude
 shared/      types and the manifest format, used by both sides
-src/         the window: project cards, 3D view, toolbar, conversation
+src/         the window: project cards, 3D view and its tools, conversation
 scripts/     dev loop and production build
 spikes/      experiments kept for their measurements
 ```
