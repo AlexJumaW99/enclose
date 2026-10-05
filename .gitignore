@@ -2,6 +2,7 @@ node_modules
 dist
 dist-electron
 release
-.DS_Store
+*.local
 *.log
+.DS_Store
 .env*
