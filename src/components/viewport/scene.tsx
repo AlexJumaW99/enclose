@@ -41,6 +41,13 @@ const BEHIND_EDGES = {
   polygonOffsetFactor: 1.5,
   polygonOffsetUnits: 1.5,
 }
+/** How close the camera gets to what it looks at, and how far, in model radii. */
+const REACH = { nearest: 0.02, furthest: 40 }
+/** How hard a scroll zooms, against the controls' own pace; and a pinch, against a scroll. */
+const ZOOM_SPEED = 3
+const PINCH = 2.25
+/** Seconds for the camera to settle: quick behind a zoom, unhurried for a turn. */
+const SMOOTH = { zoom: 0.1, turn: 0.3 }
 const NO_CLIP = { normal: new THREE.Vector3(0, 1, 0), constant: 1e6 }
 const ONE = new THREE.Vector3(1, 1, 1)
 /** A shell part smaller than this share of the model stays solid in glass mode: buttons, feet. */
@@ -263,6 +270,7 @@ function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
     // a little inside the bounding sphere: models are rarely as tall as they are wide
     const distance = (reach / Math.sin(angle)) * 0.94
     const eye = toWorld(HOME_DIRECTION).multiplyScalar(distance).add(target)
+    if (controls.current) controls.current.smoothTime = SMOOTH.turn
     void controls.current?.setLookAt(
       eye.x,
       eye.y,
@@ -294,7 +302,8 @@ function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
   // on a trackpad, which otherwise zooms.
   const gl = useThree((state) => state.gl)
   React.useEffect(() => {
-    const around = gl.domElement.parentElement
+    const canvas = gl.domElement
+    const around = canvas.parentElement
     if (!around) return
     const { ACTION } = CameraControlsImpl
     const choose = (event: WheelEvent | PointerEvent) => {
@@ -303,11 +312,34 @@ function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
       mouseButtons.left = event.shiftKey ? ACTION.TRUCK : ACTION.ROTATE
       mouseButtons.wheel = event.shiftKey ? ACTION.TRUCK : ACTION.DOLLY
     }
-    // capturing, one element up: this runs before the controls' own listeners on the canvas
-    around.addEventListener("wheel", choose, { capture: true, passive: true })
+    const wheel = (event: WheelEvent) => {
+      const camera = controls.current
+      if (!camera) return
+      choose(event)
+      // a zoom should keep up with the fingers; a turn from a button stays unhurried
+      camera.smoothTime = SMOOTH.zoom
+      // A pinch arrives as a scroll with Ctrl held, which the controls would answer by
+      // changing the lens instead of moving the camera. Pass it on as a plain scroll, so
+      // every zoom is the same kind: towards the pointer, within the same limits.
+      if (!event.ctrlKey) return
+      event.preventDefault()
+      event.stopPropagation()
+      canvas.dispatchEvent(
+        new WheelEvent("wheel", {
+          deltaY: event.deltaY * PINCH,
+          deltaMode: event.deltaMode,
+          clientX: event.clientX,
+          clientY: event.clientY,
+          bubbles: true,
+          cancelable: true,
+        })
+      )
+    }
+    // capturing, one element up: these run before the controls' own listeners on the canvas
+    around.addEventListener("wheel", wheel, { capture: true, passive: false })
     around.addEventListener("pointerdown", choose, { capture: true })
     return () => {
-      around.removeEventListener("wheel", choose, { capture: true })
+      around.removeEventListener("wheel", wheel, { capture: true })
       around.removeEventListener("pointerdown", choose, { capture: true })
     }
   }, [gl])
@@ -319,6 +351,7 @@ function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
       if (!camera) return
       const { azimuth, polar } = viewFrom(axis, sign)
       atHome.current = false
+      camera.smoothTime = SMOOTH.turn
       void camera.rotateTo(
         nearestTurn(camera.azimuthAngle, azimuth),
         polar,
@@ -358,9 +391,11 @@ function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
       onControl={() => {
         atHome.current = false
       }}
-      minDistance={radius * 0.15}
-      maxDistance={radius * 14}
-      smoothTime={0.3}
+      minDistance={radius * REACH.nearest}
+      maxDistance={radius * REACH.furthest}
+      dollySpeed={ZOOM_SPEED}
+      dollyToCursor
+      smoothTime={SMOOTH.turn}
       draggingSmoothTime={0.08}
     />
   )
@@ -675,8 +710,9 @@ export function Scene({
       frameloop="demand"
       camera={{
         fov: FOV,
-        near: radius / 40,
-        far: radius * 80,
+        // drawn from just in front of the nearest the camera gets, to past the furthest
+        near: (radius * REACH.nearest) / 4,
+        far: radius * REACH.furthest * 2,
         position: [radius * 3, radius * 3, radius * 3],
       }}
       dpr={[1, 2]}

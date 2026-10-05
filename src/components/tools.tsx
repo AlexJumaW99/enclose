@@ -60,7 +60,10 @@ function Switch({
           <Toggle
             pressed={on}
             onPressedChange={onChange}
-            className={cn(ROUND, "aria-pressed:ring-foreground/25")}
+            className={cn(
+              ROUND,
+              "aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary/85 aria-pressed:hover:text-primary-foreground"
+            )}
           />
         }
       >
