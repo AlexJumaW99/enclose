@@ -50,11 +50,11 @@ export function App() {
   return (
     <TooltipProvider>
       <div className="flex h-svh overflow-hidden bg-sidebar text-sidebar-foreground">
-        <Sidebar />
         <main className="relative min-w-0 flex-1">
           {ready && <Viewport project={project} />}
           {/* the top edge of the view is also what the window is dragged by */}
           <div className="drag absolute inset-x-0 top-0 h-3" />
+          <Sidebar />
         </main>
         {threadOpen && project && <Thread project={project} />}
       </div>

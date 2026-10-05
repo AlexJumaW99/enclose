@@ -67,7 +67,7 @@ else, such as running the build. "Full access" in the message box turns the aski
 ```
 electron/    the app's own process: window, project list, the line to Claude
 shared/      types and the manifest format, used by both sides
-src/         the window: sidebar, 3D view, toolbar, conversation
+src/         the window: project cards, 3D view, toolbar, conversation
 scripts/     dev loop and production build
 spikes/      experiments kept for their measurements
 ```

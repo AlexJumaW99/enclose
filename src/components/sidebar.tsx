@@ -11,7 +11,6 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Tooltip,
   TooltipContent,
@@ -56,10 +55,10 @@ function ProjectCard({ project, now }: { project: Project; now: number }) {
             aria-current={active}
             onClick={() => activate(project.id)}
             className={cn(
-              "no-drag flex w-full flex-col gap-0.5 rounded-xl px-3 py-2.5 text-left transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+              "glass pointer-events-auto flex w-full shrink-0 flex-col gap-0.5 rounded-xl px-3 py-2.5 text-left ring-1 transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
               active
-                ? "bg-sidebar-accent"
-                : "bg-sidebar-accent/40 hover:bg-sidebar-accent/70"
+                ? "bg-sidebar-accent/90 shadow-sm ring-foreground/15"
+                : "bg-sidebar-accent/45 ring-foreground/5 hover:bg-sidebar-accent/65"
             )}
           />
         }
@@ -97,39 +96,41 @@ function ProjectCard({ project, now }: { project: Project; now: number }) {
   )
 }
 
-/** The projects: one card per folder, with what its conversation is up to. */
+/**
+ * The projects: one card per folder, with what its conversation is up to. The cards float
+ * over the 3D view rather than taking a column from it, so the model is never cut off at
+ * an edge; everything between and below them still belongs to the view.
+ */
 export function Sidebar() {
   const projects = useStore((state) => state.projects)
   const addProject = useStore((state) => state.addProject)
   const now = useNow()
 
   return (
-    <aside className="flex w-58 shrink-0 flex-col">
+    <aside className="pointer-events-none absolute inset-y-0 left-0 flex w-58 flex-col">
       {/* room for the window's traffic lights, and something to drag it by */}
-      <div className="drag h-12 shrink-0" />
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="flex flex-col gap-1.5 px-4.5 pb-4">
-          {projects.map((project) => (
-            <ProjectCard key={project.id} project={project} now={now} />
-          ))}
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="secondary"
-                  size="icon-sm"
-                  className="mt-1.5"
-                  onClick={() => void addProject()}
-                />
-              }
-            >
-              <PlusIcon />
-              <span className="sr-only">Add a project folder</span>
-            </TooltipTrigger>
-            <TooltipContent side="right">Add a project folder</TooltipContent>
-          </Tooltip>
-        </div>
-      </ScrollArea>
+      <div className="drag pointer-events-auto h-12 shrink-0" />
+      <div className="flex min-h-0 [scrollbar-width:none] flex-col items-start gap-1.5 overflow-y-auto px-4.5 pb-4">
+        {projects.map((project) => (
+          <ProjectCard key={project.id} project={project} now={now} />
+        ))}
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="outline"
+                size="icon-sm"
+                className="pointer-events-auto mt-1.5 shrink-0 bg-background shadow-sm"
+                onClick={() => void addProject()}
+              />
+            }
+          >
+            <PlusIcon />
+            <span className="sr-only">Add a project folder</span>
+          </TooltipTrigger>
+          <TooltipContent side="right">Add a project folder</TooltipContent>
+        </Tooltip>
+      </div>
     </aside>
   )
 }
