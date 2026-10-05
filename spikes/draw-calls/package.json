@@ -1,0 +1,13 @@
+{
+  "name": "draw-calls-spike",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "bench": "node run.js"
+  },
+  "dependencies": {
+    "three": "^0.186.1",
+    "vite": "^8.3.2"
+  }
+}

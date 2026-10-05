@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Draw-call benchmark</title>
+    <style>
+      body { margin: 16px; background: #141414; color: #e8e8e8; font: 14px/1.5 ui-sans-serif, system-ui; }
+      canvas { display: block; margin-top: 16px; }
+      table { border-collapse: collapse; margin-top: 12px; }
+      th, td { padding: 4px 14px 4px 0; text-align: right; font-variant-numeric: tabular-nums; }
+      th:first-child, td:first-child { text-align: left; }
+      th { color: #9a9a9a; font-weight: 500; }
+      #status { color: #9a9a9a; }
+    </style>
+  </head>
+  <body>
+    <div id="status">Loading…</div>
+    <table id="results"></table>
+    <canvas id="view"></canvas>
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>
