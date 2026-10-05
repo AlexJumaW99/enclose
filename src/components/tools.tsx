@@ -15,7 +15,6 @@ import {
   WireframeIcon,
 } from "@/components/icons"
 import { Button } from "@/components/ui/button"
-import { Separator } from "@/components/ui/separator"
 import { Toggle } from "@/components/ui/toggle"
 import {
   Tooltip,
@@ -28,20 +27,19 @@ import { bridge } from "./viewport/bridge"
 import type { LoadedModel } from "./viewport/load"
 import { sectionAcross } from "./viewport/section-planes"
 
-/** A column of buttons that belong together, floating over the view. */
+/** What every button floating over the view is: a frosted circle of its own. */
+const ROUND =
+  "glass size-9 bg-background/60 px-0 shadow-sm ring-1 ring-foreground/10"
+
+/** Buttons that belong together, one under the other. */
 function Stack({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
-      className={cn(
-        "glass pointer-events-auto flex flex-col gap-0.5 rounded-full bg-background/60 p-1 shadow-sm ring-1 ring-foreground/10",
-        className
-      )}
+      className={cn("pointer-events-auto flex flex-col gap-1.5", className)}
       {...props}
     />
   )
 }
-
-const Rule = () => <Separator className="mx-auto my-0.5 data-horizontal:w-5" />
 
 /** A button that is either on or off, named by its tooltip. */
 function Switch({
@@ -62,7 +60,7 @@ function Switch({
           <Toggle
             pressed={on}
             onPressedChange={onChange}
-            className="size-9 px-0"
+            className={cn(ROUND, "aria-pressed:ring-foreground/25")}
           />
         }
       >
@@ -100,7 +98,7 @@ export function Tools({
   const setLayersOpen = useStore((state) => state.setLayersOpen)
 
   return (
-    <div className="pointer-events-none absolute inset-y-0 right-0 w-17">
+    <div className="pointer-events-none absolute inset-y-0 right-0 w-15">
       <Stack className="absolute top-3 right-3">
         <Switch label="Conversation" on={threadOpen} onChange={setThreadOpen}>
           <MessageSquareIcon />
@@ -109,59 +107,73 @@ export function Tools({
           <DownloadMenu
             downloads={loaded.model.downloads}
             projectId={projectId}
+            className={ROUND}
           />
         )}
       </Stack>
 
+      {/* how the model is looked at: a little air between the kinds of control */}
       {loaded && (
-        <Stack className="absolute top-1/2 right-3 -translate-y-1/2">
-          <Tooltip>
-            <TooltipTrigger
-              render={<Button variant="ghost" size="icon" onClick={goHome} />}
-            >
-              <RotateCcwIcon />
-              <span className="sr-only">Reset the view</span>
-            </TooltipTrigger>
-            <TooltipContent side="left">Reset the view</TooltipContent>
-          </Tooltip>
-          <Rule />
-          {MODES.map(({ mode, label, icon }) => (
+        <div className="absolute top-1/2 right-3 flex -translate-y-1/2 flex-col gap-4">
+          <Stack>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={ROUND}
+                    onClick={goHome}
+                  />
+                }
+              >
+                <RotateCcwIcon />
+                <span className="sr-only">Reset the view</span>
+              </TooltipTrigger>
+              <TooltipContent side="left">Reset the view</TooltipContent>
+            </Tooltip>
+          </Stack>
+          <Stack>
+            {MODES.map(({ mode, label, icon }) => (
+              <Switch
+                key={mode}
+                label={label}
+                on={view.mode === mode}
+                onChange={() => setView({ mode })}
+              >
+                {icon}
+              </Switch>
+            ))}
+          </Stack>
+          <Stack>
             <Switch
-              key={mode}
-              label={label}
-              on={view.mode === mode}
-              onChange={() => setView({ mode })}
+              label="Section"
+              on={view.section !== null}
+              onChange={(on) => {
+                if (!on) return setView({ section: null })
+                // start with the cut that faces the camera most squarely: it opens
+                // the model up towards you
+                const { axis } = nearestAxis(bridge.eye?.() ?? [0, -1, 0])
+                const middle = loaded.box.getCenter(loaded.box.min.clone())
+                setView({ section: sectionAcross(axis, middle.toArray()) })
+              }}
             >
-              {icon}
+              <SectionIcon />
             </Switch>
-          ))}
-          <Rule />
-          <Switch
-            label="Section"
-            on={view.section !== null}
-            onChange={(on) => {
-              if (!on) return setView({ section: null })
-              // start with the cut that faces the camera most squarely: it opens the
-              // model up towards you
-              const { axis } = nearestAxis(bridge.eye?.() ?? [0, -1, 0])
-              const middle = loaded.box.getCenter(loaded.box.min.clone())
-              setView({ section: sectionAcross(axis, middle.toArray()) })
-            }}
-          >
-            <SectionIcon />
-          </Switch>
-          <Switch
-            label="Explode"
-            on={view.exploded}
-            onChange={(exploded) => setView({ exploded, spread: SPREAD.min })}
-          >
-            <UnfoldVerticalIcon />
-          </Switch>
-          <Rule />
-          <Switch label="Layers" on={layersOpen} onChange={setLayersOpen}>
-            <LayersIcon />
-          </Switch>
-        </Stack>
+            <Switch
+              label="Explode"
+              on={view.exploded}
+              onChange={(exploded) => setView({ exploded, spread: SPREAD.min })}
+            >
+              <UnfoldVerticalIcon />
+            </Switch>
+          </Stack>
+          <Stack>
+            <Switch label="Layers" on={layersOpen} onChange={setLayersOpen}>
+              <LayersIcon />
+            </Switch>
+          </Stack>
+        </div>
       )}
     </div>
   )

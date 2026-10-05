@@ -56,9 +56,12 @@ function Item({
 export function DownloadMenu({
   downloads,
   projectId,
+  className,
 }: {
   downloads: Download[]
   projectId: string
+  /** for the button that opens the menu */
+  className?: string
 }) {
   const whole = downloads.filter((d) => d.kind !== "part")
   const parts = downloads.filter((d) => d.kind === "part")
@@ -68,7 +71,9 @@ export function DownloadMenu({
         <TooltipTrigger
           render={
             <DropdownMenuTrigger
-              render={<Button variant="ghost" size="icon" />}
+              render={
+                <Button variant="ghost" size="icon" className={className} />
+              }
             />
           }
         >

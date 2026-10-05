@@ -170,7 +170,7 @@ function Model({ project }: { project: Project }) {
       {loaded && layersOpen && (
         <LayersPanel
           loaded={loaded}
-          className="absolute top-1/2 right-17 max-h-[70%] -translate-y-1/2"
+          className="absolute top-1/2 right-15 max-h-[70%] -translate-y-1/2"
         />
       )}
       {loaded && view.exploded && (
