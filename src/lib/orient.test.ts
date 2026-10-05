@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest"
 
-import { nearestAxis, nearestTurn, normalOf, turnTo, viewFrom } from "./orient"
+import {
+  nearestAxis,
+  nearestTurn,
+  normalOf,
+  turnTo,
+  viewFrom,
+  VIEWS,
+} from "./orient"
 
 const close = (a: number[], b: number[]) =>
   a.forEach((n, i) => expect(n).toBeCloseTo(b[i], 6))
@@ -70,5 +77,20 @@ describe("nearestTurn", () => {
       Math.PI * 4 - Math.PI / 2
     )
     expect(nearestTurn(-3, 3)).toBeCloseTo(3 - Math.PI * 2)
+  })
+})
+
+describe("VIEWS", () => {
+  it("lists the six flat views in the order of their shortcuts, Cmd+2 first", () => {
+    expect(
+      VIEWS.map((v) => `${v.name} ${v.sign > 0 ? "+" : "-"}${v.axis}`)
+    ).toEqual([
+      "Front -y",
+      "Back +y",
+      "Top +z",
+      "Bottom -z",
+      "Right +x",
+      "Left -x",
+    ])
   })
 })

@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/empty"
 import { Spinner } from "@/components/ui/spinner"
 import { readModel } from "@/lib/model"
+import { VIEWS } from "@/lib/orient"
 import { useStore } from "@/lib/store"
 import { AxisGizmo } from "./axis-gizmo"
 import { bridge } from "./bridge"
@@ -94,6 +95,23 @@ function Model({ project }: { project: Project }) {
   const hover = useStore((s) => s.hover)
   const homeRequests = useStore((s) => s.homeRequests)
   const layersOpen = useStore((s) => s.layersOpen)
+  const goHome = useStore((s) => s.goHome)
+
+  // Cmd+1 is the view the model opened with; Cmd+2 to 7 are the six flat ones
+  React.useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey)
+        return
+      const digit = /^Digit([1-7])$/.exec(event.code)?.[1]
+      if (!digit) return
+      event.preventDefault()
+      const view = VIEWS[Number(digit) - 2]
+      if (view) bridge.lookFrom?.(view.axis, view.sign)
+      else goHome()
+    }
+    window.addEventListener("keydown", key)
+    return () => window.removeEventListener("keydown", key)
+  }, [goHome])
 
   // what Claude gets when it asks which parts are on screen
   React.useEffect(() => {

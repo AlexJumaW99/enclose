@@ -1,12 +1,7 @@
 import * as React from "react"
 import * as THREE from "three"
 import { Canvas, useFrame, useThree } from "@react-three/fiber"
-import {
-  CameraControls,
-  CameraControlsImpl,
-  Edges,
-  PivotControls,
-} from "@react-three/drei"
+import { Edges, PivotControls } from "@react-three/drei"
 import { LineMaterial } from "three/addons/lines/LineMaterial.js"
 import { LineSegments2 } from "three/addons/lines/LineSegments2.js"
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js"
@@ -15,21 +10,11 @@ import { acceleratedRaycast } from "three-mesh-bvh"
 import type { PartRef, Vec3 } from "@shared/api"
 import { useThemeColors, type ThemeColors } from "@/lib/css-color"
 import type { Keepout } from "@/lib/model"
-import { nearestTurn, viewFrom, type Turn } from "@/lib/orient"
+import type { Turn } from "@/lib/orient"
 import type { Section, Selection, View } from "@/lib/store"
-import { bridge, publishOrientation } from "./bridge"
+import { bridge } from "./bridge"
 import type { LoadedModel, LoadedPart } from "./load"
-
-// The model is Z-up; three.js is Y-up. Everything inside the root group is in model mm.
-const MODEL_TO_WORLD: [number, number, number] = [-Math.PI / 2, 0, 0]
-const MODEL_TO_WORLD_TURN = new THREE.Quaternion().setFromEuler(
-  new THREE.Euler(...MODEL_TO_WORLD)
-)
-const toWorld = (v: THREE.Vector3) => new THREE.Vector3(v.x, v.z, -v.y)
-
-/** Where the camera sits when a model opens: front right, looking down on it. */
-const HOME_DIRECTION = new THREE.Vector3(0.5, -0.62, 0.6).normalize()
-const FOV = 30
+import { FOV, MODEL_TO_WORLD, REACH, Rig, toWorld } from "./rig"
 
 const UNCOLOURED = "#aeb2b9"
 // near-black metal would vanish on the dark theme; it goes steel instead
@@ -41,13 +26,6 @@ const BEHIND_EDGES = {
   polygonOffsetFactor: 1.5,
   polygonOffsetUnits: 1.5,
 }
-/** How close the camera gets to what it looks at, and how far, in model radii. */
-const REACH = { nearest: 0.02, furthest: 40 }
-/** How hard a scroll zooms, against the controls' own pace; and a pinch, against a scroll. */
-const ZOOM_SPEED = 3
-const PINCH = 2.25
-/** Seconds for the camera to settle: quick behind a zoom, unhurried for a turn. */
-const SMOOTH = { zoom: 0.1, turn: 0.3 }
 const NO_CLIP = { normal: new THREE.Vector3(0, 1, 0), constant: 1e6 }
 const ONE = new THREE.Vector3(1, 1, 1)
 /** A shell part smaller than this share of the model stays solid in glass mode: buttons, feet. */
@@ -243,161 +221,6 @@ function KeepoutBox({
         clippingPlanes={planes}
       />
     </mesh>
-  )
-}
-
-/** The camera: orbit, pan, zoom, and a home view that frames the whole model. */
-function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
-  const controls = React.useRef<CameraControls>(null)
-  const latest = React.useRef(box)
-  React.useEffect(() => {
-    latest.current = box
-  }, [box])
-  const radius = box.getSize(new THREE.Vector3()).length() / 2
-  const first = React.useRef(true)
-
-  const size = useThree((state) => state.size)
-  const aspect = size.width / size.height
-  // true until the user moves the camera themselves
-  const atHome = React.useRef(true)
-
-  const frame = React.useCallback((animate: boolean, ratio: number) => {
-    const reach = latest.current.getSize(new THREE.Vector3()).length() / 2
-    const target = toWorld(latest.current.getCenter(new THREE.Vector3()))
-    // fit the narrower of the view's two angles, so a tall window does not crop the sides
-    const vertical = Math.tan(THREE.MathUtils.degToRad(FOV / 2))
-    const angle = Math.atan(Math.min(vertical, vertical * ratio))
-    // a little inside the bounding sphere: models are rarely as tall as they are wide
-    const distance = (reach / Math.sin(angle)) * 0.94
-    const eye = toWorld(HOME_DIRECTION).multiplyScalar(distance).add(target)
-    if (controls.current) controls.current.smoothTime = SMOOTH.turn
-    void controls.current?.setLookAt(
-      eye.x,
-      eye.y,
-      eye.z,
-      target.x,
-      target.y,
-      target.z,
-      animate
-    )
-    atHome.current = true
-  }, [])
-
-  // reframes when a different model opens or home is asked for - not when the same
-  // model is rebuilt, which should not move the camera
-  const shape = React.useRef(aspect)
-  React.useEffect(() => {
-    frame(!first.current, shape.current)
-    first.current = false
-  }, [homeKey, frame])
-
-  // the view changed shape (a panel opened, the window was resized): keep the model
-  // framed, unless the user has already chosen their own angle
-  React.useEffect(() => {
-    shape.current = aspect
-    if (atHome.current && !first.current) frame(false, aspect)
-  }, [aspect, frame])
-
-  // Holding Shift turns orbiting into panning: for a drag, and for a two-finger scroll
-  // on a trackpad, which otherwise zooms.
-  const gl = useThree((state) => state.gl)
-  React.useEffect(() => {
-    const canvas = gl.domElement
-    const around = canvas.parentElement
-    if (!around) return
-    const { ACTION } = CameraControlsImpl
-    const choose = (event: WheelEvent | PointerEvent) => {
-      const { mouseButtons } = controls.current ?? {}
-      if (!mouseButtons) return
-      mouseButtons.left = event.shiftKey ? ACTION.TRUCK : ACTION.ROTATE
-      mouseButtons.wheel = event.shiftKey ? ACTION.TRUCK : ACTION.DOLLY
-    }
-    const wheel = (event: WheelEvent) => {
-      const camera = controls.current
-      if (!camera) return
-      choose(event)
-      // a zoom should keep up with the fingers; a turn from a button stays unhurried
-      camera.smoothTime = SMOOTH.zoom
-      // A pinch arrives as a scroll with Ctrl held, which the controls would answer by
-      // changing the lens instead of moving the camera. Pass it on as a plain scroll, so
-      // every zoom is the same kind: towards the pointer, within the same limits.
-      if (!event.ctrlKey) return
-      event.preventDefault()
-      event.stopPropagation()
-      canvas.dispatchEvent(
-        new WheelEvent("wheel", {
-          deltaY: event.deltaY * PINCH,
-          deltaMode: event.deltaMode,
-          clientX: event.clientX,
-          clientY: event.clientY,
-          bubbles: true,
-          cancelable: true,
-        })
-      )
-    }
-    // capturing, one element up: these run before the controls' own listeners on the canvas
-    around.addEventListener("wheel", wheel, { capture: true, passive: false })
-    around.addEventListener("pointerdown", choose, { capture: true })
-    return () => {
-      around.removeEventListener("wheel", wheel, { capture: true })
-      around.removeEventListener("pointerdown", choose, { capture: true })
-    }
-  }, [gl])
-
-  // what the axis gizmo and the section planes, drawn outside the view, turn the camera with
-  React.useEffect(() => {
-    bridge.lookFrom = (axis, sign) => {
-      const camera = controls.current
-      if (!camera) return
-      const { azimuth, polar } = viewFrom(axis, sign)
-      atHome.current = false
-      camera.smoothTime = SMOOTH.turn
-      void camera.rotateTo(
-        nearestTurn(camera.azimuthAngle, azimuth),
-        polar,
-        true
-      )
-    }
-    bridge.orbit = (dx, dy) => {
-      atHome.current = false
-      void controls.current?.rotate(-dx * 0.012, -dy * 0.012, false)
-    }
-    bridge.eye = () => {
-      const camera = controls.current
-      if (!camera) return [0, -1, 0]
-      const eye = camera
-        .getPosition(new THREE.Vector3())
-        .sub(camera.getTarget(new THREE.Vector3()))
-        .normalize()
-      return [eye.x, -eye.z, eye.y]
-    }
-    return () => {
-      bridge.lookFrom = bridge.orbit = bridge.eye = null
-    }
-  }, [])
-
-  // tell those widgets how the camera is turned, every frame it is drawn
-  const scratch = React.useMemo(() => new THREE.Quaternion(), [])
-  useFrame(({ camera }) => {
-    publishOrientation(
-      scratch.copy(camera.quaternion).invert().multiply(MODEL_TO_WORLD_TURN)
-    )
-  })
-
-  return (
-    <CameraControls
-      ref={controls}
-      makeDefault
-      onControl={() => {
-        atHome.current = false
-      }}
-      minDistance={radius * REACH.nearest}
-      maxDistance={radius * REACH.furthest}
-      dollySpeed={ZOOM_SPEED}
-      dollyToCursor
-      smoothTime={SMOOTH.turn}
-      draggingSmoothTime={0.08}
-    />
   )
 }
 

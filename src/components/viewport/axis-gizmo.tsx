@@ -2,7 +2,14 @@ import * as React from "react"
 import * as THREE from "three"
 import { cn } from "cn"
 
-import { AXES, UNIT, nearestAxis, type Axis, type Sign } from "@/lib/orient"
+import {
+  AXES,
+  UNIT,
+  VIEWS,
+  nearestAxis,
+  type Axis,
+  type Sign,
+} from "@/lib/orient"
 import { bridge, useOrientation } from "./bridge"
 
 /** How far an axis reaches from the middle, in the widget's 100-unit square. */
@@ -60,7 +67,7 @@ export function AxisGizmo({ className }: { className?: string }) {
       role="group"
       aria-label="View direction"
       className={cn(
-        "pointer-events-auto size-28 touch-none rounded-full transition-colors select-none hover:bg-foreground/10",
+        "pointer-events-auto size-22 touch-none rounded-full transition-colors select-none hover:bg-foreground/10",
         className
       )}
       onPointerDown={(event) => {
@@ -102,16 +109,19 @@ export function AxisGizmo({ className }: { className?: string }) {
     >
       {ends.map(({ axis, sign, key, x, y, depth }) => {
         const front = sign > 0
+        const lit = hot === key
+        // the same view has a name and a shortcut
+        const view = VIEWS.findIndex((v) => v.axis === axis && v.sign === sign)
         return (
           <g
             key={key}
             data-end={key}
             className="cursor-pointer"
             // the ends pointing away sit back a little
-            opacity={0.72 + 0.28 * ((depth + 1) / 2)}
+            opacity={lit ? 1 : 0.72 + 0.28 * ((depth + 1) / 2)}
             onPointerEnter={() => setHot(key)}
           >
-            <title>{`Look from ${front ? "+" : "-"}${axis.toUpperCase()}`}</title>
+            <title>{`${VIEWS[view].name} (\u2318${view + 2})`}</title>
             {front && (
               <line
                 x2={x}
@@ -126,14 +136,16 @@ export function AxisGizmo({ className }: { className?: string }) {
               cy={y}
               r={front ? 10.5 : 8.5}
               fill={
-                front
-                  ? COLOR[axis]
-                  : `color-mix(in oklch, ${COLOR[axis]} 28%, var(--sidebar))`
+                lit
+                  ? "white"
+                  : front
+                    ? COLOR[axis]
+                    : `color-mix(in oklch, ${COLOR[axis]} 28%, var(--sidebar))`
               }
-              stroke={COLOR[axis]}
+              stroke={lit ? "white" : COLOR[axis]}
               strokeWidth={front ? 0 : 1.75}
             />
-            {(front || hot === key) && (
+            {(front || lit) && (
               <text
                 x={x}
                 y={y}
@@ -141,7 +153,9 @@ export function AxisGizmo({ className }: { className?: string }) {
                 dominantBaseline="central"
                 fontSize={front ? 12 : 8.5}
                 fontWeight={700}
-                fill={front ? "black" : "white"}
+                fill="black"
+                // lets the press through to the dot under the letter
+                pointerEvents="none"
               >
                 {front ? axis.toUpperCase() : `-${axis.toUpperCase()}`}
               </text>

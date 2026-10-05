@@ -72,3 +72,16 @@ export function nearestTurn(from: number, to: number): number {
   const full = Math.PI * 2
   return from + ((((to - from + Math.PI) % full) + full) % full) - Math.PI
 }
+
+/**
+ * The set views, in the order of their shortcuts: Cmd+2 is the first. (Cmd+1 is the view
+ * a model opens with, which is not along an axis.) Front is the model's -Y side.
+ */
+export const VIEWS: { name: string; axis: Axis; sign: Sign }[] = [
+  { name: "Front", axis: "y", sign: -1 },
+  { name: "Back", axis: "y", sign: 1 },
+  { name: "Top", axis: "z", sign: 1 },
+  { name: "Bottom", axis: "z", sign: -1 },
+  { name: "Right", axis: "x", sign: 1 },
+  { name: "Left", axis: "x", sign: -1 },
+]

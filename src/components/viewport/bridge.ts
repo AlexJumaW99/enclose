@@ -17,6 +17,8 @@ export const bridge: {
   orbit: ((dx: number, dy: number) => void) | null
   /** where the camera is from what it looks at, as a direction in the model's frame */
   eye: (() => Vec3) | null
+  /** whether the view is a flat one, with no perspective */
+  flat: (() => boolean) | null
   /** true while a handle in the view is being dragged: not the moment to pick a part */
   handling: boolean
 } = {
@@ -25,6 +27,7 @@ export const bridge: {
   lookFrom: null,
   orbit: null,
   eye: null,
+  flat: null,
   handling: false,
 }
 

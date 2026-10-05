@@ -45,9 +45,21 @@ wrote, which is what keeps large assemblies smooth (the benchmark behind that is
 [`spikes/draw-calls`](spikes/draw-calls)).
 
 Moving around: drag to orbit, scroll or pinch to zoom in on whatever is under the
-pointer, and hold Shift to pan, with a drag or with a two-finger scroll on a trackpad. A right-button drag pans too. The axes in
-the bottom right corner turn with the camera: click the end of one to look at the model
-from there, click it again for the opposite side.
+pointer, and hold Shift to pan, with a drag or with a two-finger scroll on a trackpad.
+A right-button drag pans too.
+
+The axes in the bottom right corner turn with the camera. Click the end of one to look at
+the model from there, click it again for the opposite side, or drag inside it to orbit.
+Those six views are flat: drawn with no perspective, so a side is seen exactly side-on,
+centred and fitted to the window. Panning and zooming keep a view flat; orbiting brings
+the perspective back.
+
+| | |
+|---|---|
+| Cmd+1 | The view a model opens with |
+| Cmd+2, Cmd+3 | Front, back |
+| Cmd+4, Cmd+5 | Top, bottom |
+| Cmd+6, Cmd+7 | Right, left |
 
 Down the right-hand edge:
 
