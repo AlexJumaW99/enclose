@@ -12,6 +12,7 @@ import { CameraControls, CameraControlsImpl } from "@react-three/drei"
 
 import type { Vec3 } from "@shared/api"
 import { nearestTurn, viewFrom, type Axis, type Sign } from "@/lib/orient"
+import { SCROLL_PAUSE, scrollSource } from "@/lib/scroll"
 import { bridge, publishOrientation } from "./bridge"
 
 // The model is Z-up; three.js is Y-up. Everything inside the root group is in model mm.
@@ -28,9 +29,16 @@ export const REACH = { nearest: 0.02, furthest: 40 }
 
 /** Where the camera sits when a model opens: front right, looking down on it. */
 const HOME_DIRECTION = new THREE.Vector3(0.5, -0.62, 0.6).normalize()
-/** How hard a scroll zooms, against the controls' own pace; and a pinch, against a scroll. */
+/** How hard a wheel zooms, against the controls' own pace; and a pinch, against a wheel. */
 const ZOOM_SPEED = 3
 const PINCH = 2.25
+/**
+ * How far the view turns, in radians a pixel: under a drag on the axes in the corner,
+ * which are small, and under fingers moving across a trackpad.
+ */
+const TURN = { axes: 0.012, swipe: 0.006 }
+/** How far a swipe has to go, in pixels, before it turns a flat view. */
+const GRIP = 16
 /**
  * Seconds for the camera to settle: quick behind a zoom, unhurried for a turn, a little
  * brisker for a flight to a set view.
@@ -62,6 +70,8 @@ function direct(stage: {
   let atHome = true
   /** counts the moves asked for, so that one overtaken by another can tell */
   let flight = 0
+  /** counts the times the camera was sent to a set view */
+  let sent = 0
   /** the scale the flat view is at, or on its way to, in pixels per mm */
   let goal = 1
   /** a flight into a flat view that is under way: where it is headed */
@@ -152,10 +162,12 @@ function direct(stage: {
 
   return {
     isFlat: () => mode === "flat",
+    sends: () => sent,
 
     /** The view a model opens with, framing all of it. */
     home(animate: boolean, ratio: number) {
       ++flight
+      ++sent
       narrow()
       narrowed = false
       // fit the narrower of the view's two angles, so a tall window does not crop the sides
@@ -204,6 +216,7 @@ function direct(stage: {
       const turn = nearestTurn(controls.azimuthAngle, azimuth)
 
       ++flight
+      ++sent
       atHome = false
       controls.smoothTime = SMOOTH.flight
       void controls.rotateTo(turn, polar, true)
@@ -254,14 +267,14 @@ function direct(stage: {
       stage.redraw()
     },
 
-    /** Orbit, as a drag of this many pixels on the view would. */
-    orbit(dx: number, dy: number) {
+    /** Orbit by these angles, the way a drag to the right and down turns the view. */
+    orbit(right: number, down: number) {
       atHome = false
       if (mode === "flat" || narrowed) {
         ++flight
         open(true)
       }
-      void controls.rotate(-dx * 0.012, -dy * 0.012, false)
+      void controls.rotate(-right, -down, false)
       stage.redraw()
     },
 
@@ -373,7 +386,7 @@ export function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
     director.current = made
     // what the axis gizmo, the section planes and the keyboard move the camera with
     bridge.lookFrom = (axis, sign) => made.lookFrom(axis, sign)
-    bridge.orbit = (dx, dy) => made.orbit(dx, dy)
+    bridge.orbit = (dx, dy) => made.orbit(dx * TURN.axes, dy * TURN.axes)
     bridge.eye = () => made.eye()
     bridge.flat = () => made.isFlat()
     return () => {
@@ -397,35 +410,78 @@ export function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
     if (!first.current) director.current?.reshape(aspect)
   }, [aspect])
 
-  // Holding Shift turns orbiting into panning: for a drag, and for a two-finger scroll
-  // on a trackpad, which otherwise zooms.
+  // What the hand does on the view. Fingers moving across a trackpad turn the model, a
+  // pinch zooms, and so does a mouse wheel. Holding Shift pans instead: with the fingers,
+  // and with a drag.
   React.useEffect(() => {
     const canvas = gl.domElement
     const around = canvas.parentElement
     if (!around) return
+    const source = scrollSource()
+    /** scrolls made here for the controls: not to be read a second time */
+    const passed = new WeakSet<Event>()
+    /** when the last pinch came */
+    let pinched = -Infinity
+    /** the swipe under way: when it last moved, how far it has gone, and `sends` then */
+    const swipe = { at: -Infinity, travel: 0, sends: 0 }
+
     const choose = (event: WheelEvent | PointerEvent) => {
       const camera = controls.current
       if (!camera) return
       camera.mouseButtons.left = event.shiftKey ? ACTION.TRUCK : ACTION.ROTATE
       camera.mouseButtons.wheel = event.shiftKey ? ACTION.TRUCK : ACTION.DOLLY
     }
+    const swallow = (event: Event) => {
+      event.preventDefault()
+      event.stopPropagation()
+    }
+
+    const turn = (event: WheelEvent, now: number) => {
+      const camera = controls.current
+      const made = director.current
+      if (!camera || !made) return
+      // one that follows the last without a pause is the same movement
+      if (now - swipe.at > SCROLL_PAUSE) {
+        swipe.travel = 0
+        swipe.sends = made.sends()
+      }
+      swipe.at = now
+      // Fingers drift as they pinch, and a swipe coasts on after they lift. Neither
+      // should turn a view that is being zoomed, or one sent to a set view since.
+      if (now - pinched < SCROLL_PAUSE || swipe.sends !== made.sends()) return
+      // a flat view is exact: it gives way only to a swipe that means it
+      swipe.travel += Math.hypot(event.deltaX, event.deltaY)
+      if (made.isFlat() && swipe.travel < GRIP) return
+      camera.smoothTime = SMOOTH.turn
+      // the model goes the way the fingers do, as it does under a drag
+      made.orbit(-event.deltaX * TURN.swipe, -event.deltaY * TURN.swipe)
+    }
+
     const wheel = (event: WheelEvent) => {
       const camera = controls.current
-      if (!camera) return
+      const made = director.current
+      if (!camera || !made || passed.has(event)) return
       choose(event)
-      // a zoom should keep up with the fingers; a turn from a button stays unhurried
+      // a zoom or a pan should keep up with the fingers
       camera.smoothTime = SMOOTH.zoom
       if (event.shiftKey) return
-      // a pinch arrives as a scroll with Ctrl held; a mouse wheel may count in lines
+      const now = performance.now()
+      // a pinch arrives as a scroll with Ctrl held
+      if (!event.ctrlKey && source(event, now) === "fingers") {
+        swallow(event)
+        turn(event, now)
+        return
+      }
+      if (event.ctrlKey) pinched = now
+      // a mouse wheel may count in lines
       const delta =
         event.deltaY *
         (event.ctrlKey ? PINCH : 1) *
         (event.deltaMode === 1 ? 10 : 1)
-      if (director.current?.isFlat()) {
-        event.preventDefault()
-        event.stopPropagation()
+      if (made.isFlat()) {
+        swallow(event)
         const rect = canvas.getBoundingClientRect()
-        director.current.zoomFlat(
+        made.zoomFlat(
           delta,
           ((event.clientX - rect.left) / rect.width) * 2 - 1,
           1 - ((event.clientY - rect.top) / rect.height) * 2
@@ -433,21 +489,20 @@ export function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
         return
       }
       // The controls would answer a pinch by changing the lens instead of moving the
-      // camera. Pass it on as a plain scroll, so every zoom is the same kind: towards
+      // camera. Pass it on as a turn of a wheel, so every zoom is the same kind: towards
       // the pointer, within the same limits.
       if (!event.ctrlKey) return
-      event.preventDefault()
-      event.stopPropagation()
-      canvas.dispatchEvent(
-        new WheelEvent("wheel", {
-          deltaY: event.deltaY * PINCH,
-          deltaMode: event.deltaMode,
-          clientX: event.clientX,
-          clientY: event.clientY,
-          bubbles: true,
-          cancelable: true,
-        })
-      )
+      swallow(event)
+      const plain = new WheelEvent("wheel", {
+        deltaY: event.deltaY * PINCH,
+        deltaMode: event.deltaMode,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        bubbles: true,
+        cancelable: true,
+      })
+      passed.add(plain)
+      canvas.dispatchEvent(plain)
     }
     // capturing, one element up: these run before the controls' own listeners on the canvas
     around.addEventListener("wheel", wheel, { capture: true, passive: false })

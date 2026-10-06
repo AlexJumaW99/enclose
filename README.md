@@ -44,9 +44,13 @@ that lists parts is used.
 wrote, which is what keeps large assemblies smooth (the benchmark behind that is in
 [`spikes/draw-calls`](spikes/draw-calls)).
 
-Moving around: drag to orbit, scroll or pinch to zoom in on whatever is under the
-pointer, and hold Shift to pan, with a drag or with a two-finger scroll on a trackpad.
-A right-button drag pans too.
+Moving around on a trackpad: move two fingers across it to orbit, pinch to zoom in on
+whatever is under the pointer, and hold Shift to pan. With a mouse: drag to orbit, turn
+the wheel to zoom, and drag with Shift held, or with the right button, to pan.
+
+A trackpad and a wheel send the same scroll, so which one it was is read from how the
+scroll moves ([`src/lib/scroll.ts`](src/lib/scroll.ts)). Holding Ctrl makes any scroll
+zoom, whatever it was taken for.
 
 The axes in the bottom right corner turn with the camera. Click the end of one to look at
 the model from there, click it again for the opposite side, or drag inside it to orbit.
