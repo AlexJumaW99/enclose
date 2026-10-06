@@ -1,4 +1,5 @@
 import * as React from "react"
+import { cn } from "cn"
 import { BoxIcon, TriangleAlertIcon } from "lucide-react"
 
 import type { Project } from "@shared/api"
@@ -210,7 +211,11 @@ function Model({ project }: { project: Project }) {
       {loaded && layersOpen && (
         <LayersPanel
           loaded={loaded}
-          className="absolute top-1/2 right-15 max-h-[70%] -translate-y-1/2"
+          // further in while the section's second button stands where it would be
+          className={cn(
+            "absolute top-1/2 max-h-[70%] -translate-y-1/2 transition-[right]",
+            view.section ? "right-25.5" : "right-15"
+          )}
         />
       )}
       {loaded && view.exploded && (

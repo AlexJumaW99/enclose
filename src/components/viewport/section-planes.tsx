@@ -1,14 +1,7 @@
 import * as THREE from "three"
 import { cn } from "cn"
-import { FlipHorizontal2Icon } from "lucide-react"
 
 import type { Vec3 } from "@shared/api"
-import { Button } from "@/components/ui/button"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
 import { nearestAxis, normalOf, turnTo, type Axis } from "@/lib/orient"
 import { useStore } from "@/lib/store"
 import { bridge, useOrientation } from "./bridge"
@@ -78,7 +71,7 @@ export function sectionFacing(box: THREE.Box3) {
 
 /**
  * Shown while a section is on: the three ways to cut, turning with the camera so each
- * square lies the way its cut would, and a button to see the other half.
+ * square lies the way its cut would.
  */
 export function SectionPlanes({
   middle,
@@ -108,71 +101,51 @@ export function SectionPlanes({
   }).sort((a, b) => a.depth - b.depth)
 
   return (
-    <div className={cn("pointer-events-auto flex items-end gap-2", className)}>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              variant="outline"
-              size="icon"
-              className="glass bg-background/60 shadow-sm"
-              onClick={() =>
-                setView({ section: { ...section, flipped: !section.flipped } })
-              }
+    <svg
+      viewBox="-50 -50 100 100"
+      role="group"
+      aria-label="Section plane"
+      className={cn("pointer-events-auto size-28 select-none", className)}
+    >
+      {walls.map(({ axis, points, x, y }) => {
+        const chosen = across.exact && across.axis === axis
+        return (
+          <g
+            key={axis}
+            className="group/wall cursor-pointer"
+            onClick={() => setView({ section: sectionAcross(axis, middle) })}
+          >
+            <title>{`Cut across ${axis.toUpperCase()} (${axis.toUpperCase()})`}</title>
+            <polygon
+              points={points}
+              fill={COLOR[axis]}
+              stroke={COLOR[axis]}
+              strokeWidth={chosen ? 2 : 1}
+              strokeLinejoin="round"
+              className={cn(
+                "transition-[fill-opacity,stroke-opacity]",
+                chosen
+                  ? "[fill-opacity:0.55] [stroke-opacity:1]"
+                  : "[fill-opacity:0.14] [stroke-opacity:0.45] group-hover/wall:[fill-opacity:0.3]"
+              )}
             />
-          }
-        >
-          <FlipHorizontal2Icon />
-          <span className="sr-only">Show the other side</span>
-        </TooltipTrigger>
-        <TooltipContent>Show the other side</TooltipContent>
-      </Tooltip>
-      <svg
-        viewBox="-50 -50 100 100"
-        role="group"
-        aria-label="Section plane"
-        className="size-28 select-none"
-      >
-        {walls.map(({ axis, points, x, y }) => {
-          const chosen = across.exact && across.axis === axis
-          return (
-            <g
-              key={axis}
-              className="group/wall cursor-pointer"
-              onClick={() => setView({ section: sectionAcross(axis, middle) })}
+            <text
+              x={x}
+              y={y}
+              textAnchor="middle"
+              dominantBaseline="central"
+              fontSize={11}
+              fontWeight={700}
+              className={cn(
+                "fill-foreground",
+                chosen ? "opacity-100" : "opacity-60"
+              )}
             >
-              <title>{`Cut across ${axis.toUpperCase()} (${axis.toUpperCase()})`}</title>
-              <polygon
-                points={points}
-                fill={COLOR[axis]}
-                stroke={COLOR[axis]}
-                strokeWidth={chosen ? 2 : 1}
-                strokeLinejoin="round"
-                className={cn(
-                  "transition-[fill-opacity,stroke-opacity]",
-                  chosen
-                    ? "[fill-opacity:0.55] [stroke-opacity:1]"
-                    : "[fill-opacity:0.14] [stroke-opacity:0.45] group-hover/wall:[fill-opacity:0.3]"
-                )}
-              />
-              <text
-                x={x}
-                y={y}
-                textAnchor="middle"
-                dominantBaseline="central"
-                fontSize={11}
-                fontWeight={700}
-                className={cn(
-                  "fill-foreground",
-                  chosen ? "opacity-100" : "opacity-60"
-                )}
-              >
-                {axis.toUpperCase()}
-              </text>
-            </g>
-          )
-        })}
-      </svg>
-    </div>
+              {axis.toUpperCase()}
+            </text>
+          </g>
+        )
+      })}
+    </svg>
   )
 }

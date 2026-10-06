@@ -76,8 +76,8 @@ Down the right-hand edge:
   marks as `shell`, or everything if it marks none); wireframe draws edges only.
 - **Section** (S) cuts the model open. Three squares appear by the axes, one per direction
   to cut across, which the X, Y and Z keys choose too; in the view, drag the arrow to push
-  the cut through the model and the arcs to tilt it. The button beside the squares shows
-  the other half.
+  the cut through the model and the arcs to tilt it. A second button appears to the left
+  of this one, and shows the other half.
 - **Explode** (E) pulls the parts apart by the distances the manifest gives (or straight
   out from the middle, if it gives none), and a slider along the bottom pulls them
   further.

@@ -1,6 +1,7 @@
 import * as React from "react"
 import { cn } from "cn"
 import {
+  FlipHorizontal2Icon,
   LayersIcon,
   MessageSquareIcon,
   RotateCcwIcon,
@@ -40,10 +41,48 @@ function Stack({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+type Side = React.ComponentProps<typeof TooltipContent>["side"]
+
+// The tooltips here are names, with nothing in them to reach for: they go as soon as the
+// pointer leaves their button, so one never lies over the button beside it.
+
+/** A button that does one thing, named by its tooltip. */
+function Press({
+  label,
+  onClick,
+  className,
+  children,
+}: {
+  label: string
+  onClick: () => void
+  className?: string
+  children: React.ReactNode
+}) {
+  return (
+    <Tooltip disableHoverablePopup>
+      <TooltipTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(ROUND, className)}
+            onClick={onClick}
+          />
+        }
+      >
+        {children}
+        <span className="sr-only">{label}</span>
+      </TooltipTrigger>
+      <TooltipContent side="left">{label}</TooltipContent>
+    </Tooltip>
+  )
+}
+
 /** A button that is either on or off, named by its tooltip. */
 function Switch({
   label,
   shortcut,
+  side = "left",
   on,
   onChange,
   children,
@@ -51,12 +90,14 @@ function Switch({
   label: string
   /** the key that does the same, shown beside the name */
   shortcut?: string
+  /** where the tooltip goes, when something else has the left */
+  side?: Side
   on: boolean
   onChange: (on: boolean) => void
   children: React.ReactNode
 }) {
   return (
-    <Tooltip>
+    <Tooltip disableHoverablePopup>
       <TooltipTrigger
         render={
           <Toggle
@@ -74,7 +115,7 @@ function Switch({
         <span className="sr-only">{label}</span>
       </TooltipTrigger>
       {/* a little room on the right, or the arrow bites into the key */}
-      <TooltipContent side="left" className="has-data-[slot=kbd]:pr-2.5">
+      <TooltipContent side={side} className="has-data-[slot=kbd]:pr-2.5">
         {label}
         {shortcut && <Kbd>{shortcut}</Kbd>}
       </TooltipContent>
@@ -100,6 +141,7 @@ export function Tools({
   projectId: string
 }) {
   const view = useStore((state) => state.view)
+  const { section } = view
   const setView = useStore((state) => state.setView)
   const goHome = useStore((state) => state.goHome)
   const threadOpen = useStore((state) => state.threadOpen)
@@ -126,22 +168,9 @@ export function Tools({
       {loaded && (
         <div className="absolute top-1/2 right-3 flex -translate-y-1/2 flex-col gap-4">
           <Stack>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={ROUND}
-                    onClick={goHome}
-                  />
-                }
-              >
-                <RotateCcwIcon />
-                <span className="sr-only">Reset the view</span>
-              </TooltipTrigger>
-              <TooltipContent side="left">Reset the view</TooltipContent>
-            </Tooltip>
+            <Press label="Reset the view" onClick={goHome}>
+              <RotateCcwIcon />
+            </Press>
           </Stack>
           <Stack>
             {MODES.map(({ mode, label, icon }) => (
@@ -156,16 +185,34 @@ export function Tools({
             ))}
           </Stack>
           <Stack>
-            <Switch
-              label="Section"
-              shortcut="S"
-              on={view.section !== null}
-              onChange={(on) =>
-                setView({ section: on ? sectionFacing(loaded.box) : null })
-              }
-            >
-              <SectionIcon />
-            </Switch>
+            <div className="relative">
+              {/* while the model is cut open: which half of it to show, alongside */}
+              {section && (
+                <Press
+                  label="Show the other side"
+                  onClick={() =>
+                    setView({
+                      section: { ...section, flipped: !section.flipped },
+                    })
+                  }
+                  className="absolute top-0 right-full mr-1.5"
+                >
+                  <FlipHorizontal2Icon />
+                </Press>
+              )}
+              <Switch
+                label="Section"
+                shortcut="S"
+                // its neighbour has the left
+                side={section ? "top" : "left"}
+                on={section !== null}
+                onChange={(on) =>
+                  setView({ section: on ? sectionFacing(loaded.box) : null })
+                }
+              >
+                <SectionIcon />
+              </Switch>
+            </div>
             <Switch
               label="Explode"
               shortcut="E"
