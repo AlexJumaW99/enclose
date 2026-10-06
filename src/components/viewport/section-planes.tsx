@@ -6,11 +6,6 @@ import { nearestAxis, normalOf, turnTo, type Axis } from "@/lib/orient"
 import { useStore } from "@/lib/store"
 import { bridge, useOrientation } from "./bridge"
 
-const COLOR: Record<Axis, string> = {
-  x: "var(--axis-x)",
-  y: "var(--axis-y)",
-  z: "var(--axis-z)",
-}
 /** Half the side of each square, on a cube of side 1; a little short, so they stay apart. */
 const H = 0.4
 /** How large the cube is drawn in the widget's 100-unit square. */
@@ -117,17 +112,17 @@ export function SectionPlanes({
             onClick={() => setView({ section: sectionAcross(axis, middle) })}
           >
             <title>{`Cut across ${axis.toUpperCase()} (${axis.toUpperCase()})`}</title>
+            {/* greys, and the chosen one lit like a button that is on: the colours are
+                left to the axes alongside, so the two are not taken for each other */}
             <polygon
               points={points}
-              fill={COLOR[axis]}
-              stroke={COLOR[axis]}
               strokeWidth={chosen ? 2 : 1}
               strokeLinejoin="round"
               className={cn(
-                "transition-[fill-opacity,stroke-opacity]",
+                "transition-[fill,fill-opacity,stroke-opacity]",
                 chosen
-                  ? "[fill-opacity:0.55] [stroke-opacity:1]"
-                  : "[fill-opacity:0.14] [stroke-opacity:0.45] group-hover/wall:[fill-opacity:0.3]"
+                  ? "fill-primary stroke-primary [fill-opacity:0.92]"
+                  : "fill-foreground stroke-foreground [fill-opacity:0.12] [stroke-opacity:0.4] group-hover/wall:[fill-opacity:0.28]"
               )}
             />
             <text
@@ -137,10 +132,11 @@ export function SectionPlanes({
               dominantBaseline="central"
               fontSize={12}
               fontWeight={700}
-              className={cn(
-                "fill-foreground",
-                chosen ? "opacity-100" : "opacity-60"
-              )}
+              className={
+                chosen
+                  ? "fill-primary-foreground"
+                  : "fill-foreground opacity-60"
+              }
             >
               {axis.toUpperCase()}
             </text>
