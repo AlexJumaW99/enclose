@@ -2,7 +2,7 @@
 // being looked at.
 import { create } from "zustand"
 
-import { stackOf, type Stack } from "@/lib/conversations"
+import { finishedNow, stackOf, type Stack } from "@/lib/conversations"
 import { cutsOf, readCuts } from "@/lib/cuts"
 import { mannerOf, savedAccess } from "@/lib/manner"
 import { usePreferences } from "@/lib/preferences"
@@ -79,6 +79,7 @@ const EFFORT_KEY = "enclose:effort"
 const MODE_KEY = "enclose:mode"
 const THREAD_WIDTH_KEY = "enclose:thread-width"
 const CUTS_KEY = "enclose:cuts"
+const FINISHED_KEY = "enclose:finished"
 
 /** What was saved under a key, or under the name the app had before it was Enclose. */
 const saved = (key: string) =>
@@ -94,6 +95,16 @@ const savedMode = (): DisplayMode => {
 const savedThreadWidth = (): number => {
   const width = Number(saved(THREAD_WIDTH_KEY))
   return width >= THREAD_WIDTH.min ? width : THREAD_WIDTH.initial
+}
+const savedFinished = (): string[] => {
+  try {
+    const kept: unknown = JSON.parse(saved(FINISHED_KEY) ?? "[]")
+    return Array.isArray(kept)
+      ? kept.filter((id): id is string => typeof id === "string")
+      : []
+  } catch {
+    return []
+  }
 }
 /** How a model is looked at when it opens: whole, assembled, in the mode last used. */
 const homeView = (): View => ({
@@ -132,6 +143,11 @@ type State = {
    * a new one (null). A project not in here shows the one on its card.
    */
   picked: Record<string, string | null>
+  /**
+   * The conversations Claude has got to the end of a turn in without anyone seeing it:
+   * what a card says "Done" of, until it is looked at.
+   */
+  finished: string[]
   threadOpen: boolean
   /** how wide the conversation was dragged to, px; a narrow window may show it narrower */
   threadWidth: number
@@ -209,6 +225,7 @@ export const useStore = create<State>()((set, get) => ({
   activeId: null,
   items: {},
   picked: {},
+  finished: savedFinished(),
   threadOpen: false,
   threadWidth: savedThreadWidth(),
   partsOpen: false,
@@ -407,10 +424,11 @@ function withItem(items: ThreadItem[], item: ThreadItem): ThreadItem[] {
 }
 
 function reconcile(projects: Project[]) {
-  const { activeId, activate, cuts } = useStore.getState()
+  const { activeId, activate, cuts, projects: before } = useStore.getState()
   const kept = cutsOf(cuts, projects)
   if (kept !== cuts) localStorage.setItem(CUTS_KEY, JSON.stringify(kept))
   useStore.setState({ projects, cuts: kept })
+  tally(before)
   if (activeId && projects.some((p) => p.id === activeId)) return
   // the open project is gone, or nothing was open yet: fall back to one that exists
   const wanted = /^#project=(.+)$/.exec(location.hash)?.[1] ?? saved(ACTIVE_KEY)
@@ -419,10 +437,53 @@ function reconcile(projects: Project[]) {
   else useStore.setState({ activeId: null, selection: null, prompting: false })
 }
 
+/** The conversation in front of the user: the one the panel shows, while it is up. */
+function inView(): string | null {
+  const { threadOpen, activeId, projects, picked } = useStore.getState()
+  const project = projects.find((p) => p.id === activeId)
+  if (!threadOpen || !project) return null
+  return (
+    stackOf(
+      project.conversations,
+      picked[project.id],
+      usePreferences.getState().settleDays,
+      Date.now()
+    ).open?.id ?? null
+  )
+}
+
+/**
+ * Bring the list of conversations finished and not yet seen up to date: with what has
+ * just come to an end, given the projects as they were a moment ago, and without what
+ * is now being looked at.
+ */
+function tally(before?: Project[]) {
+  const { finished, projects } = useStore.getState()
+  const now = projects.flatMap((p) => p.conversations)
+  const next = finishedNow(
+    finished,
+    before ? before.flatMap((p) => p.conversations) : now,
+    now,
+    inView()
+  )
+  if (next === finished) return
+  localStorage.setItem(FINISHED_KEY, JSON.stringify(next))
+  useStore.setState({ finished: next })
+}
+
 /** Connect the store to the app's own process. Call once, before the first render. */
 export function connect() {
   const { cad } = window
   cad.projects.onChange(reconcile)
+  // turning to a conversation, or bringing the panel up, is looking at what is in it
+  useStore.subscribe((state, was) => {
+    if (
+      state.activeId !== was.activeId ||
+      state.picked !== was.picked ||
+      state.threadOpen !== was.threadOpen
+    )
+      tally()
+  })
   cad.thread.onItem((_projectId, conversationId, item) => {
     useStore.setState((state) => ({
       items: {

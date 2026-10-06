@@ -150,6 +150,12 @@ earlier ones, and the card offers a new session. The edge of the card that shows
 is what spreads them out, and any of them can be opened and carried on where it left off.
 One thing at a time is done in a project's folder, so only one of them runs at once.
 
+A card says the last of its conversation in two lines: what was asked, while Claude is at
+work on it, and otherwise what was last said. A message too long for that is summed up
+in a few words by the quickest of your Claude Code's models, which is given the message
+and nothing else. If Claude is at work in a conversation under the card, the edge of the
+card says so.
+
 On top of what Claude Code can already do, the app gives Claude three tools: a screenshot
 of the view as you see it, the list of parts with their groups and sizes, and your current
 selection.

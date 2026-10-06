@@ -12,6 +12,8 @@ export type Conversation = {
   /** the Claude Code session that carries it on, once it has one */
   sessionId: string | null
   items: ThreadItem[]
+  /** what one of its messages comes to in a few words, and which message: see gist.ts */
+  gist: { of: string; text: string } | null
 }
 
 /**
@@ -31,7 +33,12 @@ function settled(item: ThreadItem): ThreadItem {
 
 /** A conversation that is about to have its first thing said in it. */
 export function newConversation(): Conversation {
-  return { id: randomBytes(6).toString("hex"), sessionId: null, items: [] }
+  return {
+    id: randomBytes(6).toString("hex"),
+    sessionId: null,
+    items: [],
+    gist: null,
+  }
 }
 
 const folder = (dir: string, projectId: string) => path.join(dir, projectId)
@@ -42,12 +49,12 @@ const single = (dir: string, projectId: string) =>
 export function writeConversation(
   dir: string,
   projectId: string,
-  { id, sessionId, items }: Conversation
+  { id, sessionId, items, gist }: Conversation
 ) {
   fs.mkdirSync(folder(dir, projectId), { recursive: true })
   fs.writeFileSync(
     path.join(folder(dir, projectId), `${id}.json`),
-    JSON.stringify({ sessionId, items })
+    JSON.stringify({ sessionId, items, gist })
   )
 }
 
@@ -94,14 +101,19 @@ export function readConversations(
   for (const name of names) {
     if (!name.endsWith(".json")) continue
     try {
-      const { sessionId, items } = JSON.parse(
+      const { sessionId, items, gist } = JSON.parse(
         fs.readFileSync(path.join(folder(dir, projectId), name), "utf8")
-      ) as { sessionId?: unknown; items?: unknown }
+      ) as { sessionId?: unknown; items?: unknown; gist?: unknown }
       if (!Array.isArray(items) || items.length === 0) continue
+      const { of, text } = (gist ?? {}) as { of?: unknown; text?: unknown }
       found.push({
         id: name.slice(0, -".json".length),
         sessionId: typeof sessionId === "string" ? sessionId : null,
         items: (items as ThreadItem[]).map(settled),
+        gist:
+          typeof of === "string" && typeof text === "string"
+            ? { of, text }
+            : null,
       })
     } catch {
       // not one of ours, or cut short while being written: passed over, and left alone

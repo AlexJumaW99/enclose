@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import type { ConversationSummary } from "@shared/api"
-import { stackOf } from "./conversations"
+import { finishedNow, stackOf } from "./conversations"
 
 const DAY = 86_400_000
 const NOW = 100 * DAY
@@ -17,6 +17,8 @@ const left = (
   status,
   since: null,
   lastMessage: null,
+  gist: null,
+  failed: false,
   updatedAt: NOW - days * DAY,
 })
 
@@ -90,5 +92,46 @@ describe("stackOf", () => {
       ["a"],
       "b",
     ])
+  })
+})
+
+describe("finishedNow", () => {
+  const idle = (id: string) => left(id, 0)
+  const busy = (id: string) => left(id, 0, "working")
+  const asking = (id: string) => left(id, 0, "asking")
+
+  it("takes note of a conversation Claude has just got to the end of", () => {
+    expect(
+      finishedNow([], [busy("a"), idle("b")], [idle("a"), idle("b")], null)
+    ).toEqual(["a"])
+    expect(finishedNow([], [asking("a")], [idle("a")], null)).toEqual(["a"])
+  })
+
+  it("takes none of one that is in front of the user as it ends", () => {
+    expect(finishedNow([], [busy("a")], [idle("a")], "a")).toEqual([])
+  })
+
+  it("keeps it noted until it is looked at", () => {
+    const now = [idle("a"), idle("b")]
+    expect(finishedNow(["a"], now, now, "b")).toEqual(["a"])
+    expect(finishedNow(["a"], now, now, "a")).toEqual([])
+  })
+
+  it("lets go of one that is carried on, or is gone", () => {
+    expect(finishedNow(["a"], [idle("a")], [busy("a")], null)).toEqual([])
+    expect(
+      finishedNow(["a", "b"], [idle("a"), idle("b")], [idle("b")], null)
+    ).toEqual(["b"])
+  })
+
+  it("makes nothing of a conversation that was never seen at work", () => {
+    expect(finishedNow([], [], [idle("a")], null)).toEqual([])
+    expect(finishedNow([], [idle("a")], [idle("a")], null)).toEqual([])
+  })
+
+  it("is the same list while nothing about it has changed", () => {
+    const finished = ["a"]
+    const now = [idle("a"), busy("b")]
+    expect(finishedNow(finished, now, now, null)).toBe(finished)
   })
 })

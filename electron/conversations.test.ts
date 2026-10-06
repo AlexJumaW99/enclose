@@ -66,10 +66,29 @@ describe("conversations on disk", () => {
     fs.writeFileSync(path.join(dir, "p1.json"), JSON.stringify(items))
 
     const read = readConversations(dir, "p1", () => "session-1")
-    expect(read).toEqual([{ id: read[0].id, sessionId: "session-1", items }])
+    expect(read).toEqual([
+      { id: read[0].id, sessionId: "session-1", items, gist: null },
+    ])
     // moved, not copied: reading again finds the same one, not a second
     expect(fs.existsSync(path.join(dir, "p1.json"))).toBe(false)
     expect(readConversations(dir, "p1", none)).toEqual(read)
+  })
+
+  it("keeps what a message was summed up as, and drops what does not read as that", () => {
+    const summed = {
+      ...newConversation(),
+      items: [said("a", "A cube")],
+      gist: { of: "a", text: "A cube, summed up" },
+    }
+    writeConversation(dir, "p1", summed)
+    expect(readConversations(dir, "p1", none)).toEqual([summed])
+    fs.writeFileSync(
+      path.join(dir, "p1", `${summed.id}.json`),
+      JSON.stringify({ sessionId: null, items: summed.items, gist: { of: 3 } })
+    )
+    expect(readConversations(dir, "p1", none)).toEqual([
+      { ...summed, gist: null },
+    ])
   })
 
   it("makes no conversation of one in which nothing was said", () => {

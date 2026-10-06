@@ -348,6 +348,8 @@ function wire() {
   )
 
   const claudeFound = findClaude().then((status) => (claude = status))
+  // with Claude Code found, what the cards say can be summed up: have them asked for
+  void claudeFound.then(broadcast)
   ipcMain.handle(CHANNEL.claudeStatus, () => claudeFound)
   // asked of Claude Code once; if it would not say, it is asked again the next time
   let models: Promise<ModelChoice[]> | null = null

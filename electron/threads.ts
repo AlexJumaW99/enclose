@@ -25,6 +25,7 @@ import type {
 } from "../shared/api"
 import { MANIFEST_FORMAT } from "../shared/manifest-format"
 import { claudeEnv } from "./claude"
+import { GIST_FROM, gistOf, plain } from "./gist"
 import {
   forgetConversations,
   newConversation,
@@ -234,6 +235,21 @@ function withSelection(text: string, part: PartRef | null): string {
     .join("\n")
 }
 
+/**
+ * The message a conversation's card is about: what was asked, while Claude is at work on
+ * it, and otherwise the last thing said by either.
+ */
+function said(conversation: Conversation, working: boolean) {
+  const spoken = conversation.items.filter(
+    (item) => item.kind === "user" || item.kind === "assistant"
+  )
+  return (
+    (working
+      ? spoken.findLast((item) => item.kind === "user")
+      : spoken.at(-1)) ?? null
+  )
+}
+
 function firstLine(text: string): string {
   const line = text.trim().split("\n")[0] ?? ""
   return line.length > 140 ? `${line.slice(0, 140)}…` : line
@@ -249,6 +265,9 @@ export class Threads {
   /** conversations with something not yet written down, by conversation id */
   private saving = new Map<string, NodeJS.Timeout>()
   private counter = 0
+  /** the messages put to be summed up: one at a time, and none of them twice */
+  private gists: Promise<void> = Promise.resolve()
+  private asked = new Set<string>()
 
   constructor(deps: ThreadsDeps) {
     this.deps = deps
@@ -328,9 +347,9 @@ export class Threads {
         const { items } = conversation
         const running = run?.conversation === conversation ? run : null
         const first = items.find((i) => i.kind === "user")
-        const last = items.findLast(
-          (i) => i.kind === "user" || i.kind === "assistant"
-        )
+        const last = said(conversation, running !== null)
+        const latest = items.at(-1)
+        this.sumUp(projectId, conversation)
         return {
           id: conversation.id,
           title: first ? firstLine(first.text) : "",
@@ -340,10 +359,54 @@ export class Threads {
               ? "asking"
               : "working",
           since: running?.since ?? null,
-          lastMessage: last && "text" in last ? firstLine(last.text) : null,
+          lastMessage: last ? plain(last.text) : null,
+          gist:
+            last && conversation.gist?.of === last.id
+              ? conversation.gist.text
+              : null,
+          failed: latest?.kind === "notice" && latest.tone === "error",
           updatedAt: lastAt(conversation),
         }
       })
+  }
+
+  /**
+   * Have the message a conversation's card is about summed up, if it is too long for the
+   * card and has not been. It is done in its own time; the card is redrawn when it is.
+   */
+  private sumUp(projectId: string, conversation: Conversation) {
+    const working =
+      this.books.get(projectId)?.run?.conversation === conversation
+    const message = said(conversation, working)
+    if (
+      !message ||
+      conversation.gist?.of === message.id ||
+      this.asked.has(message.id) ||
+      // one still being written is not yet what it will be
+      (message.kind === "assistant" && message.streaming) ||
+      plain(message.text).length <= GIST_FROM
+    )
+      return
+    this.asked.add(message.id)
+    this.gists = this.gists.then(async () => {
+      const claude = this.deps.claude()
+      // asked before Claude Code was found: it is asked again the next time round
+      if (!claude.path) {
+        this.asked.delete(message.id)
+        return
+      }
+      const text = await gistOf(claude, message.kind, message.text)
+      // nothing came back, or the project has been taken off the list meanwhile
+      if (
+        !text ||
+        this.books.get(projectId)?.conversations.get(conversation.id) !==
+          conversation
+      )
+        return
+      conversation.gist = { of: message.id, text }
+      this.keep(projectId, conversation)
+      this.deps.onSummary()
+    })
   }
 
   answer(projectId: string, permissionId: string, answer: PermissionAnswer) {

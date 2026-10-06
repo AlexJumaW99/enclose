@@ -47,3 +47,33 @@ export function stackOf(
     open: chosen ?? (picked === null ? null : cover),
   }
 }
+
+/**
+ * The conversations Claude has got to the end of a turn in without anyone seeing it: what
+ * a card says "Done" of. Given the ones that were so, the conversations as they were and
+ * as they now are, and the one in front of the user (if any), which is seen as it happens.
+ * One comes off the list when it is looked at, when it is carried on, and when it is gone.
+ */
+export function finishedNow(
+  finished: string[],
+  before: ConversationSummary[],
+  now: ConversationSummary[],
+  inView: string | null
+): string[] {
+  const was = new Map(before.map((c) => [c.id, c.status]))
+  const next = now
+    .filter(
+      (c) =>
+        c.status === "idle" &&
+        c.id !== inView &&
+        (finished.includes(c.id) ||
+          // Claude was in the middle of it a moment ago, and is not now
+          (was.get(c.id) ?? "idle") !== "idle")
+    )
+    .map((c) => c.id)
+  // the same list is the same thing: nothing that watches it need look again
+  return next.length === finished.length &&
+    next.every((id) => finished.includes(id))
+    ? finished
+    : next
+}

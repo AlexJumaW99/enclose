@@ -14,7 +14,15 @@ export type ConversationSummary = {
   status: ThreadStatus
   /** when the current turn started (ms), while one is running */
   since: number | null
+  /**
+   * What the card says: what was asked, while Claude is at work on it, and otherwise the
+   * last thing said by either. In one line, as it was said.
+   */
   lastMessage: string | null
+  /** the same in a few words, where it was too long for a card and has been summed up */
+  gist: string | null
+  /** the last thing in it is something having gone wrong: its last turn did not get through */
+  failed: boolean
   /** when something was last said or done in it (ms) */
   updatedAt: number
 }
