@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
 
-import type { Project, ThreadSummary } from "../shared/api"
+import type { ConversationSummary, Project } from "../shared/api"
 import { CONFIG_NAMES, MANIFEST_NAMES } from "../shared/manifest-format"
 
 type Saved = {
@@ -15,9 +15,13 @@ type Saved = {
   made?: boolean
   /** `name` is a stand-in, until what is being made gives the project a name of its own */
   standIn?: boolean
-  sessionId: string | null
   addedAt: number
-  /** taken off the list, but remembered: adding the folder again brings back its conversation */
+  /**
+   * From when a project had one conversation: the Claude Code session that carried it on.
+   * That conversation takes it with it when it is moved in with the others.
+   */
+  sessionId?: string | null
+  /** from when a project taken off the list was remembered: such a one is now forgotten */
   closed?: boolean
 }
 
@@ -199,16 +203,13 @@ export class Projects {
       const state = JSON.parse(fs.readFileSync(file, "utf8")) as {
         projects?: Saved[]
       }
-      this.saved = (state.projects ?? []).filter((p) => fs.existsSync(p.path))
+      this.saved = (state.projects ?? []).filter(
+        (p) => !p.closed && fs.existsSync(p.path)
+      )
     } catch {
       // first run
     }
-    for (const project of this.open()) this.locate(project)
-  }
-
-  /** The projects on the list. */
-  private open(): Saved[] {
-    return this.saved.filter((p) => !p.closed)
+    for (const project of this.saved) this.locate(project)
   }
 
   private save() {
@@ -264,8 +265,8 @@ export class Projects {
     this.revisions.set(id, (this.revisions.get(id) ?? 0) + 1)
   }
 
-  list(summary: (id: string) => ThreadSummary): Project[] {
-    return this.open().map((p) => {
+  list(conversations: (id: string) => ConversationSummary[]): Project[] {
+    return this.saved.map((p) => {
       const manifest = this.found.get(p.id)?.manifest ?? null
       return {
         id: p.id,
@@ -274,13 +275,13 @@ export class Projects {
         branch: readBranch(p.path),
         manifest: manifest && path.relative(p.path, manifest),
         revision: this.revisions.get(p.id) ?? 0,
-        thread: summary(p.id),
+        conversations: conversations(p.id),
       }
     })
   }
 
   get(id: string): (Saved & Found) | null {
-    const project = this.open().find((p) => p.id === id)
+    const project = this.saved.find((p) => p.id === id)
     if (!project) return null
     return {
       ...project,
@@ -289,22 +290,14 @@ export class Projects {
   }
 
   /**
-   * Add a folder, or return the project it already is - or was, before it was closed.
-   * `made` says the app has just made the folder itself, under what name the project
-   * goes, and whether that name is only a stand-in.
+   * Add a folder, or return the project it already is. `made` says the app has just made
+   * the folder itself, under what name the project goes, and whether that name is only a
+   * stand-in.
    */
   add(dir: string, made?: { name: string; standIn?: boolean }): string {
     const real = fs.realpathSync(dir)
     const existing = this.saved.find((p) => p.path === real)
-    if (existing) {
-      if (existing.closed) {
-        existing.closed = false
-        this.locate(existing)
-        this.save()
-        this.onChange()
-      }
-      return existing.id
-    }
+    if (existing) return existing.id
     // lower-case hex: the id is used as a host name in model URLs
     const project: Saved = {
       id: randomBytes(6).toString("hex"),
@@ -316,7 +309,6 @@ export class Projects {
             ...(made.standIn ? { standIn: true } : {}),
           }
         : {}),
-      sessionId: null,
       addedAt: Date.now(),
     }
     this.saved.push(project)
@@ -327,29 +319,25 @@ export class Projects {
   }
 
   /**
-   * Take a project off the list. Nothing of the user's is deleted: the folder stays and
-   * the project is remembered. The one exception is a project that came to nothing - a
-   * folder the app made, with nothing put in it and (`unused`) nothing said about it -
-   * which is cleared away, folder and all, rather than left lying about for good.
+   * Take a project off the list, and forget it: added again, its folder is a new project.
+   * Nothing in the folder is touched. The one exception is a folder that came to nothing
+   * - one the app made, with nothing put in it - which is cleared away rather than left
+   * lying about for good.
    */
-  remove(id: string, unused: boolean) {
+  remove(id: string) {
     const project = this.saved.find((p) => p.id === id)
     if (!project) return
     this.watchers.get(id)?.close()
     this.watchers.delete(id)
+    clearTimeout(this.timers.get(id))
+    this.timers.delete(id)
     this.found.delete(id)
-    if (unused && this.cameToNothing(project))
-      this.saved = this.saved.filter((p) => p !== project)
-    else project.closed = true
+    this.revisions.delete(id)
+    this.saved = this.saved.filter((p) => p !== project)
+    // projects made before `made` was kept are known by having a name of their own
+    if (project.made ?? project.name !== undefined) removeIfEmpty(project.path)
     this.save()
     this.onChange()
-  }
-
-  /** Whether a project was only ever an empty folder of the app's making, now deleted. */
-  private cameToNothing(project: Saved): boolean {
-    // projects made before `made` was kept are known by having a name of their own
-    const ours = project.made ?? project.name !== undefined
-    return ours && removeIfEmpty(project.path)
   }
 
   /**
@@ -358,7 +346,7 @@ export class Projects {
    * on. To be called when nothing is at work in the folder. `moved` hears of the rename.
    */
   christen(id: string, moved: (from: string, to: string) => void) {
-    const project = this.open().find((p) => p.id === id)
+    const project = this.saved.find((p) => p.id === id)
     const manifest = this.found.get(id)?.manifest
     if (!project?.standIn || !manifest) return
     let title: unknown
@@ -404,20 +392,18 @@ export class Projects {
     this.onChange()
   }
 
-  /** Clear away closed projects that came to nothing before this was done on closing. */
-  sweep(unused: (id: string) => boolean) {
-    const before = this.saved.length
-    this.saved = this.saved.filter(
-      (p) => !(p.closed && unused(p.id) && this.cameToNothing(p))
-    )
-    if (this.saved.length !== before) this.save()
-  }
-
-  setSession(id: string, sessionId: string | null) {
+  /**
+   * The Claude Code session of the one conversation a project used to have, handed over
+   * for good to whoever asks: the conversation keeps it from here on.
+   */
+  takeSession(id: string): string | null {
     const project = this.saved.find((p) => p.id === id)
-    if (!project || project.sessionId === sessionId) return
-    project.sessionId = sessionId
-    this.save()
+    const sessionId = project?.sessionId ?? null
+    if (project && "sessionId" in project) {
+      delete project.sessionId
+      this.save()
+    }
+    return sessionId
   }
 
   /** Look again for the model: Claude may just have created or moved it. */
@@ -427,7 +413,7 @@ export class Projects {
   }
 
   refreshAll() {
-    for (const project of this.open()) this.locate(project)
+    for (const project of this.saved) this.locate(project)
   }
 
   close() {

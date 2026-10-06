@@ -2,6 +2,9 @@
 // being looked at.
 import { create } from "zustand"
 
+import { stackOf, type Stack } from "@/lib/conversations"
+import { usePreferences } from "@/lib/preferences"
+
 import type {
   Access,
   ClaudeStatus,
@@ -44,6 +47,17 @@ export type Only = { kind: "part" | "group" | "keepouts"; id: string }
 /** Exploding starts at the model's own distances and can be pushed this much further. */
 export const SPREAD = { min: 1, max: 4 }
 
+/** How wide the conversation is, px: at the least, and until its edge is dragged. */
+export const THREAD_WIDTH = { min: 320, initial: 400 }
+/** How much of the window's width the conversation leaves the view, at the least. */
+export const VIEW_MIN = 480
+
+/** The nearest to a width that the conversation can have in a window this wide. */
+export function fitThread(width: number, windowWidth: number): number {
+  const most = Math.max(THREAD_WIDTH.min, windowWidth - VIEW_MIN)
+  return Math.round(Math.min(most, Math.max(THREAD_WIDTH.min, width)))
+}
+
 /**
  * A part that is picked out. `at` is where on screen it was clicked, and is what the
  * prompt opens beside.
@@ -53,6 +67,7 @@ export type Selection = { part: PartRef; at: { x: number; y: number } | null }
 const ACTIVE_KEY = "enclose:project"
 const ACCESS_KEY = "enclose:access"
 const MODE_KEY = "enclose:mode"
+const THREAD_WIDTH_KEY = "enclose:thread-width"
 
 /** What was saved under a key, or under the name the app had before it was Enclose. */
 const saved = (key: string) =>
@@ -62,6 +77,10 @@ const saved = (key: string) =>
 const savedMode = (): DisplayMode => {
   const mode = saved(MODE_KEY)
   return mode === "glass" || mode === "wireframe" ? mode : "solid"
+}
+const savedThreadWidth = (): number => {
+  const width = Number(saved(THREAD_WIDTH_KEY))
+  return width >= THREAD_WIDTH.min ? width : THREAD_WIDTH.initial
 }
 /** How a model is looked at when it opens: whole, assembled, in the mode last used. */
 const homeView = (): View => ({
@@ -93,8 +112,16 @@ type State = {
   ready: boolean
   projects: Project[]
   activeId: string | null
+  /** what has been said in the conversations that have been looked at, by conversation */
   items: Record<string, ThreadItem[]>
+  /**
+   * The conversation turned to in each project, by project: one of its conversations, or
+   * a new one (null). A project not in here shows the one on its card.
+   */
+  picked: Record<string, string | null>
   threadOpen: boolean
+  /** how wide the conversation was dragged to, px; a narrow window may show it narrower */
+  threadWidth: number
   /** whether the list of parts is up */
   partsOpen: boolean
   /** whether the settings are over the window */
@@ -113,6 +140,13 @@ type State = {
   homeRequests: number
 
   activate(id: string): void
+  /**
+   * Turn to one of a project's conversations, or to a new one (null): the project is
+   * opened, and the conversation panel with it.
+   */
+  openConversation(projectId: string, conversationId: string | null): void
+  /** Fetch what has been said in a conversation, the first time it is looked at. */
+  load(projectId: string, conversationId: string): void
   /** Pick a folder to add; true if one was added. */
   addProject(): Promise<boolean>
   /** Add folders dropped on the window, and open the last of them. */
@@ -126,6 +160,7 @@ type State = {
   hover(partId: string | null): void
   closePrompt(): void
   setThreadOpen(open: boolean): void
+  setThreadWidth(width: number): void
   setPartsOpen(open: boolean): void
   setSettingsOpen(open: boolean): void
   /**
@@ -137,12 +172,17 @@ type State = {
   send(text: string, part: PartRef | null): void
 }
 
+/** The conversations whose items have been asked for, so that none is asked for twice. */
+const fetched = new Set<string>()
+
 export const useStore = create<State>()((set, get) => ({
   ready: false,
   projects: [],
   activeId: null,
   items: {},
+  picked: {},
   threadOpen: false,
+  threadWidth: savedThreadWidth(),
   partsOpen: false,
   settingsOpen: false,
   access: saved(ACCESS_KEY) === "full" ? "full" : "ask",
@@ -165,11 +205,22 @@ export const useStore = create<State>()((set, get) => ({
       view: homeView(),
       entered: enteredNow(homeView(), state.entered),
     }))
-    if (!get().items[id]) {
-      void window.cad.thread.items(id).then((items) => {
-        set((state) => ({ items: { ...state.items, [id]: items } }))
-      })
-    }
+  },
+
+  openConversation(projectId, conversationId) {
+    get().activate(projectId)
+    set((state) => ({
+      picked: { ...state.picked, [projectId]: conversationId },
+      threadOpen: true,
+    }))
+  },
+
+  load(projectId, conversationId) {
+    if (fetched.has(conversationId)) return
+    fetched.add(conversationId)
+    void window.cad.thread.items(projectId, conversationId).then((items) => {
+      set((state) => ({ items: { ...state.items, [conversationId]: items } }))
+    })
   },
 
   async addProject() {
@@ -224,6 +275,11 @@ export const useStore = create<State>()((set, get) => ({
     set({ threadOpen })
   },
 
+  setThreadWidth(threadWidth) {
+    localStorage.setItem(THREAD_WIDTH_KEY, String(threadWidth))
+    set({ threadWidth })
+  },
+
   setPartsOpen(partsOpen) {
     set({ partsOpen })
   },
@@ -253,11 +309,26 @@ export const useStore = create<State>()((set, get) => ({
   },
 
   send(text, part) {
-    const { activeId, access } = get()
+    const { activeId, access, projects, picked } = get()
+    const project = projects.find((p) => p.id === activeId)
     const message = text.trim()
-    if (!activeId || !message) return
+    if (!project || !message) return
+    // into the conversation the panel is showing; if that is a new one, this begins it
+    const { open } = stackOf(
+      project.conversations,
+      picked[project.id],
+      usePreferences.getState().settleDays,
+      Date.now()
+    )
     set({ threadOpen: true, prompting: false })
-    void window.cad.thread.send(activeId, message, part, access)
+    void window.cad.thread
+      .send(project.id, open?.id ?? null, message, part, access)
+      .then((id) => {
+        // stay with it: a conversation that has just begun is not yet the one on the
+        // card, and one that had settled is turned back to by being carried on
+        if (id)
+          set((state) => ({ picked: { ...state.picked, [project.id]: id } }))
+      })
   },
 }))
 
@@ -285,17 +356,12 @@ function reconcile(projects: Project[]) {
 export function connect() {
   const { cad } = window
   cad.projects.onChange(reconcile)
-  cad.thread.onItem((projectId, item) => {
+  cad.thread.onItem((_projectId, conversationId, item) => {
     useStore.setState((state) => ({
       items: {
         ...state.items,
-        [projectId]: withItem(state.items[projectId] ?? [], item),
+        [conversationId]: withItem(state.items[conversationId] ?? [], item),
       },
-    }))
-  })
-  cad.thread.onReset((projectId) => {
-    useStore.setState((state) => ({
-      items: { ...state.items, [projectId]: [] },
     }))
   })
   void cad.projects.list().then((projects) => {
@@ -312,3 +378,15 @@ export const useActiveProject = () =>
   useStore(
     (state) => state.projects.find((p) => p.id === state.activeId) ?? null
   )
+
+/**
+ * How a project's conversations are laid out at a given moment: which is on its card,
+ * which are under it, and which the conversation panel shows.
+ */
+export function useStack(project: Project | null, now: number): Stack {
+  const picked = useStore((state) =>
+    project ? state.picked[project.id] : undefined
+  )
+  const settleDays = usePreferences((state) => state.settleDays)
+  return stackOf(project?.conversations ?? [], picked, settleDays, now)
+}

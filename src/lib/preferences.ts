@@ -1,7 +1,9 @@
-// What the user has chosen about how the view answers the hand. These are the window's
-// own, kept in its storage; what the app's own process has to know (where new projects
-// go) is kept by that process instead.
+// What the user has chosen about how the view answers the hand, and how the window lays
+// out what it shows. These are the window's own, kept in its storage; what the app's own
+// process has to know (where new projects go) is kept by that process instead.
 import { create } from "zustand"
+
+import { SETTLE_DAYS } from "@/lib/conversations"
 
 /** auto: told apart by how the scroll moves. Or always the one, or always the other. */
 export type Scrolling = "auto" | "trackpad" | "wheel"
@@ -11,10 +13,16 @@ export type Preferences = {
   scrolling: Scrolling
   /** how fast the view turns under the hand, against the speed it comes with */
   turnSpeed: number
+  /** how many days a conversation is left alone before it goes under its project's card */
+  settleDays: number
 }
 
 export const TURN_SPEED = { min: 0.4, max: 2.5 }
-const DEFAULTS: Preferences = { scrolling: "auto", turnSpeed: 1 }
+const DEFAULTS: Preferences = {
+  scrolling: "auto",
+  turnSpeed: 1,
+  settleDays: SETTLE_DAYS.initial,
+}
 const KEY = "enclose:preferences"
 
 function saved(): Preferences {
@@ -30,7 +38,11 @@ function saved(): Preferences {
       typeof read.turnSpeed === "number" && Number.isFinite(read.turnSpeed)
         ? Math.min(TURN_SPEED.max, Math.max(TURN_SPEED.min, read.turnSpeed))
         : DEFAULTS.turnSpeed
-    return { scrolling, turnSpeed }
+    const settleDays =
+      typeof read.settleDays === "number" && Number.isInteger(read.settleDays)
+        ? Math.min(SETTLE_DAYS.max, Math.max(SETTLE_DAYS.min, read.settleDays))
+        : DEFAULTS.settleDays
+    return { scrolling, turnSpeed, settleDays }
   } catch {
     return DEFAULTS
   }
@@ -42,7 +54,10 @@ export const usePreferences = create<
   ...saved(),
   change(patch) {
     set(patch)
-    const { scrolling, turnSpeed } = get()
-    localStorage.setItem(KEY, JSON.stringify({ scrolling, turnSpeed }))
+    const { scrolling, turnSpeed, settleDays } = get()
+    localStorage.setItem(
+      KEY,
+      JSON.stringify({ scrolling, turnSpeed, settleDays })
+    )
   },
 }))

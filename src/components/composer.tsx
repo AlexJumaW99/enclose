@@ -18,7 +18,8 @@ import {
   InputGroupButton,
   InputGroupTextarea,
 } from "@/components/ui/input-group"
-import { useActiveProject, useStore } from "@/lib/store"
+import { useActiveProject, useStack, useStore } from "@/lib/store"
+import { useNow } from "@/lib/time"
 
 const ACCESS: Record<Access, { label: string; detail: string }> = {
   ask: {
@@ -77,12 +78,17 @@ export function Composer({
   autoFocus?: boolean
 }) {
   const project = useActiveProject()
+  const { open } = useStack(project, useNow(60_000))
   const send = useStore((state) => state.send)
   const [text, setText] = React.useState("")
-  const busy = project ? project.thread.status !== "idle" : true
+  // one thing at a time is done in a project's folder: Claude is at work in the
+  // conversation this writes to, which can be stopped, or in another of the project's
+  const running = project?.conversations.find((c) => c.status !== "idle")
+  const busy = !project || (running !== undefined && running.id === open?.id)
+  const elsewhere = running !== undefined && !busy
 
   const submit = () => {
-    if (busy || !text.trim()) return
+    if (busy || elsewhere || !text.trim()) return
     send(text, part)
     setText("")
   }
@@ -136,7 +142,7 @@ export function Composer({
             variant="default"
             size="icon-xs"
             className="ml-auto"
-            disabled={!text.trim()}
+            disabled={!text.trim() || elsewhere}
             onClick={submit}
           >
             <ArrowUpIcon />

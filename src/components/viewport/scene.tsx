@@ -521,6 +521,10 @@ export function Scene({
     <Canvas
       className={hoveredId ? "cursor-pointer" : undefined}
       frameloop="demand"
+      // Keep to the view's size as it changes, not once it has stopped changing. Left
+      // alone, the canvas waits for a pause whenever it is not the window that is
+      // resized, and so would lag behind the conversation's edge as that is dragged.
+      resize={{ debounce: 0 }}
       camera={{
         fov: FOV,
         // drawn from just in front of the nearest the camera gets, to past the furthest

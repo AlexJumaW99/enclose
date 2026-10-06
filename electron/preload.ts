@@ -33,15 +33,21 @@ const api: CadApi = {
       ipcRenderer.invoke(CHANNEL.modelSaveCopy, projectId, file, name),
   },
   thread: {
-    items: (projectId) => ipcRenderer.invoke(CHANNEL.threadItems, projectId),
-    send: (projectId, text, part, access) =>
-      ipcRenderer.invoke(CHANNEL.threadSend, projectId, text, part, access),
+    items: (projectId, conversationId) =>
+      ipcRenderer.invoke(CHANNEL.threadItems, projectId, conversationId),
+    send: (projectId, conversationId, text, part, access) =>
+      ipcRenderer.invoke(
+        CHANNEL.threadSend,
+        projectId,
+        conversationId,
+        text,
+        part,
+        access
+      ),
     stop: (projectId) => ipcRenderer.invoke(CHANNEL.threadStop, projectId),
     answer: (projectId, permissionId, answer) =>
       ipcRenderer.invoke(CHANNEL.threadAnswer, projectId, permissionId, answer),
-    reset: (projectId) => ipcRenderer.invoke(CHANNEL.threadReset, projectId),
     onItem: (listener) => on(CHANNEL.threadItem, listener),
-    onReset: (listener) => on(CHANNEL.threadWasReset, listener),
   },
   claude: {
     status: () => ipcRenderer.invoke(CHANNEL.claudeStatus),

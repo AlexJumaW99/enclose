@@ -1,16 +1,15 @@
 import * as React from "react"
 import {
   BoxIcon,
-  CheckIcon,
   PanelRightCloseIcon,
   SquarePenIcon,
   TriangleAlertIcon,
-  XIcon,
 } from "lucide-react"
 
 import type { Project, ThreadItem } from "@shared/api"
 import { Composer } from "@/components/composer"
 import { Markdown } from "@/components/markdown"
+import { Steps } from "@/components/steps"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -21,13 +20,20 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Spinner } from "@/components/ui/spinner"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { useStore } from "@/lib/store"
+import { inBlocks, type Block } from "@/lib/steps"
+import {
+  fitThread,
+  THREAD_WIDTH,
+  useStack,
+  useStore,
+  VIEW_MIN,
+} from "@/lib/store"
+import { useNow } from "@/lib/time"
 
 type Of<Kind extends ThreadItem["kind"]> = Extract<ThreadItem, { kind: Kind }>
 
@@ -43,27 +49,6 @@ function UserMessage({ item }: { item: Of<"user"> }) {
       <div className="max-w-[85%] rounded-2xl bg-muted px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap">
         {item.text}
       </div>
-    </div>
-  )
-}
-
-/** One thing Claude did: read a file, ran a command, looked at the viewport. */
-function ToolRow({ item }: { item: Of<"tool"> }) {
-  return (
-    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-      <span className="flex size-3.5 shrink-0 items-center justify-center">
-        {item.state === "running" && <Spinner className="size-3" />}
-        {item.state === "done" && <CheckIcon className="size-3" />}
-        {item.state === "failed" && (
-          <XIcon className="size-3 text-destructive" />
-        )}
-      </span>
-      <span className="shrink-0 font-medium text-foreground/80">
-        {item.name}
-      </span>
-      <span className="truncate font-mono" title={item.detail}>
-        {item.detail}
-      </span>
     </div>
   )
 }
@@ -112,14 +97,18 @@ function PermissionCard({
   )
 }
 
-function Item({ item, project }: { item: ThreadItem; project: Project }) {
+function Item({
+  item,
+  project,
+}: {
+  item: Exclude<Block, { kind: "steps" }>
+  project: Project
+}) {
   switch (item.kind) {
     case "user":
       return <UserMessage item={item} />
     case "assistant":
       return <Markdown>{item.text}</Markdown>
-    case "tool":
-      return <ToolRow item={item} />
     case "permission":
       return <PermissionCard item={item} project={project} />
     case "notice":
@@ -138,14 +127,113 @@ function Item({ item, project }: { item: ThreadItem; project: Project }) {
   }
 }
 
-/** The conversation with Claude about the open project. */
+/** How far an arrow key moves the conversation's edge, px. */
+const NUDGE = 16
+
+/**
+ * The edge between the view and the conversation: dragged, it makes the conversation
+ * wider or narrower. Double-clicked, it goes back to where it started. The panel it is
+ * the edge of is the one it is put in.
+ */
+function Edge() {
+  const width = useStore((state) => state.threadWidth)
+  const setWidth = useStore((state) => state.setThreadWidth)
+  const [dragging, setDragging] = React.useState(false)
+  /** where the drag took hold, how wide the panel was then, and how wide it is now */
+  const drag = React.useRef<{ x: number; from: number; to: number } | null>(
+    null
+  )
+
+  const end = () => {
+    const done = drag.current
+    drag.current = null
+    setDragging(false)
+    // a press that went nowhere changes nothing: a narrow window may be showing the
+    // panel narrower than it was dragged to, and that is not what was asked for
+    if (done && done.to !== done.from) setWidth(done.to)
+  }
+
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Width of the conversation"
+      aria-valuenow={width}
+      aria-valuemin={THREAD_WIDTH.min}
+      aria-valuemax={fitThread(Infinity, window.innerWidth)}
+      tabIndex={0}
+      data-dragging={dragging || undefined}
+      // astride the panel's border, and a few pixels either side of it to catch
+      className="group/edge no-drag absolute inset-y-0 -left-[5px] z-10 w-[9px] cursor-col-resize touch-none outline-none select-none"
+      onPointerDown={(event) => {
+        const panel = event.currentTarget.parentElement
+        if (event.button !== 0 || !panel) return
+        // nothing under the pointer is to be selected on the way
+        event.preventDefault()
+        try {
+          event.currentTarget.setPointerCapture(event.pointerId)
+        } catch {
+          // not a live pointer
+        }
+        const from = panel.offsetWidth
+        drag.current = { x: event.clientX, from, to: from }
+        setDragging(true)
+      }}
+      onPointerMove={(event) => {
+        const held = drag.current
+        const panel = event.currentTarget.parentElement
+        if (!held || !panel) return
+        held.to = fitThread(
+          held.from + held.x - event.clientX,
+          window.innerWidth
+        )
+        // set on the panel itself, and kept only once let go: drawing the whole
+        // conversation again at every pixel on the way would drag behind the hand
+        panel.style.width = `${held.to}px`
+      }}
+      onPointerUp={end}
+      onPointerCancel={end}
+      onDoubleClick={() => setWidth(THREAD_WIDTH.initial)}
+      onKeyDown={(event) => {
+        // the edge goes the way the arrow points: to the left is wider
+        const by =
+          event.key === "ArrowLeft"
+            ? NUDGE
+            : event.key === "ArrowRight"
+              ? -NUDGE
+              : 0
+        const panel = event.currentTarget.parentElement
+        if (!by || !panel) return
+        event.preventDefault()
+        setWidth(fitThread(panel.offsetWidth + by, window.innerWidth))
+      }}
+    >
+      <div className="mx-auto h-full w-px transition-colors group-hover/edge:bg-foreground/30 group-focus-visible/edge:bg-ring group-data-dragging/edge:bg-foreground/50" />
+    </div>
+  )
+}
+
+/**
+ * The conversation with Claude about the open project: the one turned to, of however
+ * many it has had, or a new one with nothing said in it yet.
+ */
 export function Thread({ project }: { project: Project }) {
-  const items = useStore((state) => state.items[project.id])
+  // a conversation settles in days: once a minute is often enough to notice
+  const { open } = useStack(project, useNow(60_000))
+  const items = useStore((state) => (open ? state.items[open.id] : undefined))
+  const load = useStore((state) => state.load)
+  const openConversation = useStore((state) => state.openConversation)
   const claude = useStore((state) => state.claude)
   const selection = useStore((state) => state.selection)
   const select = useStore((state) => state.select)
   const setThreadOpen = useStore((state) => state.setThreadOpen)
+  const width = useStore((state) => state.threadWidth)
   const end = React.useRef<HTMLDivElement>(null)
+
+  const openId = open?.id
+  React.useEffect(() => {
+    if (openId) load(project.id, openId)
+  }, [project.id, openId, load])
 
   // follow the conversation as it grows
   const last = items?.at(-1)
@@ -154,14 +242,28 @@ export function Thread({ project }: { project: Project }) {
     end.current?.scrollIntoView({ block: "end" })
   }, [items?.length, tail])
 
-  const working = project.thread.status === "working"
+  const blocks = React.useMemo(() => inBlocks(items ?? []), [items])
+  const working = open?.status === "working"
+  // one thing at a time is done in a project's folder
+  const elsewhere = project.conversations.some(
+    (c) => c.status !== "idle" && c.id !== openId
+  )
+  // a stretch of steps says for itself that there is more to come
+  const latest = blocks.at(-1)
   const quiet =
-    working &&
-    last?.kind !== "assistant" &&
-    !(last?.kind === "tool" && last.state === "running")
+    working && latest?.kind !== "assistant" && latest?.kind !== "steps"
 
   return (
-    <aside className="flex w-100 shrink-0 flex-col border-l bg-background">
+    <aside
+      className="relative flex shrink-0 flex-col border-l bg-background"
+      // however wide it was dragged, the view keeps its share of a narrower window
+      style={{
+        width,
+        minWidth: THREAD_WIDTH.min,
+        maxWidth: `calc(100vw - ${VIEW_MIN}px)`,
+      }}
+    >
+      <Edge />
       <header className="drag flex h-12 shrink-0 items-center justify-between gap-2 pr-2 pl-4">
         <h2 className="truncate text-sm font-medium">{project.name}</h2>
         <div className="no-drag flex items-center">
@@ -171,8 +273,9 @@ export function Thread({ project }: { project: Project }) {
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  disabled={!items?.length}
-                  onClick={() => void window.cad.thread.reset(project.id)}
+                  // from a new one there is nowhere newer to go
+                  disabled={!open}
+                  onClick={() => openConversation(project.id, null)}
                 />
               }
             >
@@ -202,18 +305,30 @@ export function Thread({ project }: { project: Project }) {
       {items?.length ? (
         <ScrollArea className="min-h-0 flex-1">
           <div className="flex flex-col gap-3.5 px-4 pt-2 pb-4">
-            {items.map((item) => (
-              <Item key={item.id} item={item} project={project} />
-            ))}
+            {blocks.map((block) =>
+              block.kind === "steps" ? (
+                <Steps
+                  key={block.id}
+                  steps={block.steps}
+                  working={working && block === latest}
+                />
+              ) : (
+                <Item key={block.id} item={block} project={project} />
+              )
+            )}
             {quiet && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Spinner className="size-3" />
-                Working
+              <div className="flex h-5 items-center text-xs text-muted-foreground">
+                <span className="shimmer shimmer-color-foreground">
+                  Working
+                </span>
               </div>
             )}
             <div ref={end} />
           </div>
         </ScrollArea>
+      ) : open ? (
+        // what was said in it is on its way
+        <div className="flex-1" />
       ) : (
         <Empty className="flex-1">
           {project.manifest ? (
@@ -250,11 +365,13 @@ export function Thread({ project }: { project: Project }) {
           autoFocus
         />
         <p className="px-1 text-xs text-muted-foreground">
-          {!claude
-            ? "Looking for Claude Code…"
-            : claude.path
-              ? `Using your Claude Code${claude.version ? ` ${claude.version}` : ""} and its login`
-              : "Claude Code was not found on this machine. Install it and sign in there."}
+          {elsewhere
+            ? "Claude is at work in another of this project's conversations."
+            : !claude
+              ? "Looking for Claude Code…"
+              : claude.path
+                ? `Using your Claude Code${claude.version ? ` ${claude.version}` : ""} and its login`
+                : "Claude Code was not found on this machine. Install it and sign in there."}
         </p>
       </div>
     </aside>

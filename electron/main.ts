@@ -69,7 +69,7 @@ let threads: Threads
 let settings: SettingsStore
 let claude: ClaudeStatus = { path: null, version: null }
 
-const list = (): Project[] => projects.list((id) => threads.summary(id))
+const list = (): Project[] => projects.list((id) => threads.summaries(id))
 const send = (channel: string, ...args: unknown[]) => {
   if (win && !win.isDestroyed()) win.webContents.send(channel, ...args)
 }
@@ -253,9 +253,28 @@ function wire() {
     const id = projects.add(made.dir, { name: made.name, standIn: true })
     return list().find((p) => p.id === id) ?? null
   })
-  ipcMain.handle(CHANNEL.projectsRemove, (_, id: string) => {
-    threads.stop(id)
-    projects.remove(id, threads.items(id).length === 0)
+  ipcMain.handle(CHANNEL.projectsRemove, async (_, id: string) => {
+    const project = projects.get(String(id))
+    if (!project) return
+    // What has been said about it goes with it, and cannot be had back: that is asked
+    // about first. (A run with nobody at it has nobody to ask.)
+    const said = threads.count(project.id)
+    if (said > 0 && win && !CAPTURE) {
+      const name = project.name ?? path.basename(project.path)
+      const { response } = await dialog.showMessageBox(win, {
+        type: "warning",
+        message: `Remove “${name}” from Enclose?`,
+        detail: `${
+          said === 1 ? "Its conversation" : `Its ${said} conversations`
+        } will be forgotten. The folder stays where it is, with everything in it.`,
+        buttons: ["Remove", "Cancel"],
+        defaultId: 0,
+        cancelId: 1,
+      })
+      if (response !== 0) return
+    }
+    threads.forget(project.id)
+    projects.remove(project.id)
   })
   ipcMain.handle(CHANNEL.projectsReveal, (_, id: string) => {
     const project = projects.get(id)
@@ -289,18 +308,28 @@ function wire() {
     }
   )
 
-  ipcMain.handle(CHANNEL.threadItems, (_, id: string) => threads.items(id))
+  ipcMain.handle(CHANNEL.threadItems, (_, id: string, conversationId: string) =>
+    threads.items(String(id), String(conversationId))
+  )
   ipcMain.handle(
     CHANNEL.threadSend,
-    (_, id: string, text: string, part: PartRef | null, access: Access) => {
-      // not awaited: the turn runs for as long as it runs, and reports through thread items
-      void threads.send(
-        id,
+    (
+      _,
+      id: string,
+      conversationId: string | null,
+      text: string,
+      part: PartRef | null,
+      access: Access
+    ) =>
+      // answers at once, with the conversation it went into: the turn runs for as long
+      // as it runs, and reports through thread items
+      threads.send(
+        String(id),
+        conversationId === null ? null : String(conversationId),
         String(text),
         part,
         access === "full" ? "full" : "ask"
       )
-    }
   )
   ipcMain.handle(CHANNEL.threadStop, (_, id: string) => threads.stop(id))
   ipcMain.handle(
@@ -308,7 +337,6 @@ function wire() {
     (_, id: string, permissionId: string, answer: PermissionAnswer) =>
       threads.answer(id, permissionId, answer)
   )
-  ipcMain.handle(CHANNEL.threadReset, (_, id: string) => threads.reset(id))
 
   const claudeFound = findClaude().then((status) => (claude = status))
   ipcMain.handle(CHANNEL.claudeStatus, () => claudeFound)
@@ -370,11 +398,10 @@ if (!app.requestSingleInstanceLock()) {
       kit: path.join(app.getAppPath(), "kit", "enclose.py"),
       onRenamed: followRename,
       viewport: askViewport,
-      onItem: (projectId, item) => send(CHANNEL.threadItem, projectId, item),
-      onReset: (projectId) => send(CHANNEL.threadWasReset, projectId),
+      onItem: (projectId, conversationId, item) =>
+        send(CHANNEL.threadItem, projectId, conversationId, item),
       onSummary: broadcast,
     })
-    projects.sweep((id) => threads.items(id).length === 0)
     wire()
 
     // a folder on the command line is added and opened, like `code <folder>`

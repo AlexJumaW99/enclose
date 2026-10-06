@@ -6,15 +6,20 @@ export type Vec3 = [number, number, number]
 /** idle: nothing running. working: Claude is on a turn. asking: waiting on a yes/no from you. */
 export type ThreadStatus = "idle" | "working" | "asking"
 
-export type ThreadSummary = {
+/** One conversation about a project, in as much as a card in the sidebar has room for. */
+export type ConversationSummary = {
+  id: string
+  /** what it set out to do: the first thing said in it */
+  title: string
   status: ThreadStatus
   /** when the current turn started (ms), while one is running */
   since: number | null
   lastMessage: string | null
-  updatedAt: number | null
+  /** when something was last said or done in it (ms) */
+  updatedAt: number
 }
 
-/** A folder on disk, and the conversation about it. */
+/** A folder on disk, and the conversations about it. */
 export type Project = {
   id: string
   path: string
@@ -24,7 +29,11 @@ export type Project = {
   manifest: string | null
   /** goes up each time the manifest is rewritten, so the window knows to reload */
   revision: number
-  thread: ThreadSummary
+  /**
+   * The conversations had about it, the latest first. One that is over is kept: only
+   * taking the project off the list forgets them. At most one is running at a time.
+   */
+  conversations: ConversationSummary[]
 }
 
 /** The part someone clicked, and where on it. Coordinates are the model's own, in mm. */
@@ -117,7 +126,10 @@ export type CadApi = {
     create(): Promise<Project>
     /** where on disk something dropped on the window is */
     pathOf(file: File): string
-    /** take the project off the list; its folder and its conversation are kept */
+    /**
+     * Take the project off the list and forget its conversations, asking first if it has
+     * any. Its folder is kept, with everything in it.
+     */
     remove(id: string): Promise<void>
     reveal(id: string): Promise<void>
     onChange(listener: (projects: Project[]) => void): () => void
@@ -128,23 +140,32 @@ export type CadApi = {
     saveCopy(projectId: string, file: string, name: string): Promise<boolean>
   }
   thread: {
-    items(projectId: string): Promise<ThreadItem[]>
+    items(projectId: string, conversationId: string): Promise<ThreadItem[]>
+    /**
+     * Say something in a conversation, or begin a new one with it (null). Resolves to
+     * the conversation it went into, or to null if it could not be said.
+     */
     send(
       projectId: string,
+      conversationId: string | null,
       text: string,
       part: PartRef | null,
       access: Access
-    ): Promise<void>
+    ): Promise<string | null>
+    /** stop whatever Claude is doing in the project */
     stop(projectId: string): Promise<void>
     answer(
       projectId: string,
       permissionId: string,
       answer: PermissionAnswer
     ): Promise<void>
-    /** forget the conversation and start a new one */
-    reset(projectId: string): Promise<void>
-    onItem(listener: (projectId: string, item: ThreadItem) => void): () => void
-    onReset(listener: (projectId: string) => void): () => void
+    onItem(
+      listener: (
+        projectId: string,
+        conversationId: string,
+        item: ThreadItem
+      ) => void
+    ): () => void
   }
   claude: {
     status(): Promise<ClaudeStatus>
@@ -176,9 +197,7 @@ export const CHANNEL = {
   threadSend: "thread:send",
   threadStop: "thread:stop",
   threadAnswer: "thread:answer",
-  threadReset: "thread:reset",
   threadItem: "thread:item",
-  threadWasReset: "thread:was-reset",
   claudeStatus: "claude:status",
   settingsGet: "settings:get",
   settingsChooseProjectsFolder: "settings:choose-projects-folder",

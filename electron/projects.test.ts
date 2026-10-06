@@ -114,41 +114,77 @@ describe("readBranch", () => {
 })
 
 describe("Projects", () => {
-  const idle = () => ({
-    status: "idle" as const,
-    since: null,
-    updatedAt: null,
-    lastMessage: null,
-  })
+  const idle = () => []
 
-  it("remembers a closed project, so adding its folder again is the same project", () => {
+  it("forgets a project taken off the list, so adding its folder again is a new one", () => {
     write("thing/model.json", MANIFEST)
     const file = path.join(root, "state/projects.json")
     const projects = new Projects(file, () => {})
     const id = projects.add(path.join(root, "thing"), { name: "The Thing" })
-    projects.setSession(id, "session-1")
     expect(projects.list(idle).map((p) => [p.id, p.name])).toEqual([
       [id, "The Thing"],
     ])
+    // adding a folder that is already a project is that project
+    expect(projects.add(path.join(root, "thing"))).toBe(id)
+    // and it is the same one after a restart
+    expect(new Projects(file, () => {}).list(idle)[0]).toMatchObject({ id })
 
-    projects.remove(id, true)
+    projects.remove(id)
     expect(projects.list(idle)).toEqual([])
     expect(projects.get(id)).toBeNull()
-    // and it stays closed across a restart
     expect(new Projects(file, () => {}).list(idle)).toEqual([])
+    // what is in the folder is no business of the list's
+    expect(fs.existsSync(path.join(root, "thing/model.json"))).toBe(true)
 
-    // and comes back under the name it was given, which is not its folder's
-    expect(projects.add(path.join(root, "thing"))).toBe(id)
-    expect(projects.get(id)).toMatchObject({ sessionId: "session-1" })
-    expect(projects.list(idle)[0]).toMatchObject({
-      id,
-      name: "The Thing",
-      manifest: "model.json",
+    // it comes back clean: another project, by its folder's name
+    const again = projects.add(path.join(root, "thing"))
+    expect(again).not.toBe(id)
+    expect(projects.list(idle)).toMatchObject([
+      { id: again, name: "thing", manifest: "model.json" },
+    ])
+    projects.close()
+  })
+
+  it("forgets the projects that an earlier version only closed", () => {
+    write("open/model.json", MANIFEST)
+    write("shut/model.json", MANIFEST)
+    const file = path.join(root, "state/projects.json")
+    const saved = (name: string, extra: object) => ({
+      id: name,
+      path: path.join(root, name),
+      addedAt: 1,
+      ...extra,
     })
-    // a folder that is only opened goes by its own name
-    write("other/model.json", MANIFEST)
-    const other = projects.add(path.join(root, "other"))
-    expect(projects.list(idle).find((p) => p.id === other)?.name).toBe("other")
+    write("state/projects.json", {
+      projects: [
+        saved("open", { sessionId: "session-1" }),
+        saved("shut", { closed: true, sessionId: "session-2" }),
+      ],
+    })
+    const projects = new Projects(file, () => {})
+    expect(projects.list(idle).map((p) => p.id)).toEqual(["open"])
+    expect(projects.add(path.join(root, "shut"))).not.toBe("shut")
+    projects.close()
+  })
+
+  it("hands over the session of the one conversation a project used to have, once", () => {
+    write("thing/model.json", MANIFEST)
+    const file = path.join(root, "state/projects.json")
+    write("state/projects.json", {
+      projects: [
+        {
+          id: "thing",
+          path: path.join(root, "thing"),
+          addedAt: 1,
+          sessionId: "session-1",
+        },
+      ],
+    })
+    const projects = new Projects(file, () => {})
+    expect(projects.takeSession("thing")).toBe("session-1")
+    expect(projects.takeSession("thing")).toBeNull()
+    expect(new Projects(file, () => {}).takeSession("thing")).toBeNull()
+    expect(projects.takeSession("no-such-project")).toBeNull()
     projects.close()
   })
 
@@ -159,38 +195,24 @@ describe("Projects", () => {
       fs.mkdirSync(path.join(root, name), { recursive: true })
       return path.join(root, name)
     }
-    const names = () => projects.list(idle).map((p) => p.name)
 
-    // made here and never used: the folder goes, and the project is forgotten
+    // made here and nothing put in it: the folder goes with the project
     const blank = projects.add(dir("made-blank"), { name: "Blank" })
     fs.writeFileSync(path.join(root, "made-blank/.DS_Store"), "")
-    projects.remove(blank, true)
+    projects.remove(blank)
     expect(fs.existsSync(path.join(root, "made-blank"))).toBe(false)
-    expect(projects.add(dir("made-blank"))).not.toBe(blank)
-
-    // made here, but something was said about it: kept
-    const talked = projects.add(dir("made-talked"), { name: "Talked" })
-    projects.remove(talked, false)
-    expect(fs.existsSync(path.join(root, "made-talked"))).toBe(true)
 
     // made here, and something is in it: kept
     const filled = projects.add(dir("made-filled"), { name: "Filled" })
     write("made-filled/model.py", "")
-    projects.remove(filled, true)
+    projects.remove(filled)
     expect(fs.existsSync(path.join(root, "made-filled/model.py"))).toBe(true)
 
     // an empty folder of the user's own is never deleted
     const theirs = projects.add(dir("their-empty"))
-    projects.remove(theirs, true)
+    projects.remove(theirs)
     expect(fs.existsSync(path.join(root, "their-empty"))).toBe(true)
-    expect(projects.add(dir("their-empty"))).toBe(theirs)
-
-    // what an earlier version left closed and empty is cleared when asked
-    projects.remove(projects.add(dir("old-blank"), { name: "Old" }), false)
-    projects.sweep(() => true)
-    expect(fs.existsSync(path.join(root, "old-blank"))).toBe(false)
-    expect(fs.existsSync(path.join(root, "made-filled"))).toBe(true)
-    expect(names()).toContain("their-empty")
+    expect(projects.list(idle)).toEqual([])
     projects.close()
   })
 

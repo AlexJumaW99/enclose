@@ -33,9 +33,10 @@ in lower case with dashes. Once something has been made in it, the project takes
 of its model, and when Claude has finished the folder is renamed to match:
 `2026-10-05-2336-pill-box`. A folder you opened yourself is never renamed.
 
-The × on a card closes the project, which deletes nothing of yours: open the folder again
-and its conversation is still there. The one thing it clears away is a project that came
-to nothing, a folder the app made that is still empty and was never talked about.
+The × on a card removes the project from the app. Its folder stays, with everything in
+it, but what was said about it is forgotten, which the app asks about first: open the
+folder again and it is a new project. The one folder it clears away is one that came to
+nothing, which the app made and nothing was put in.
 
 The app looks in the folder for a
 model manifest: a JSON file listing the parts, the mesh file of each, and the groups they
@@ -130,8 +131,14 @@ it puts each where a person would look for it, and makes a group when none fits.
 **Claude** is the Claude Code already on your machine, run through the
 [Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview) in the project's folder.
 The app has no login of its own and stores no credentials; if you need to sign in again,
-do it in Claude Code. Each project has one conversation, which resumes where it left off.
-Cmd+B shows the conversation, and puts it away again.
+do it in Claude Code. Cmd+B shows the conversation, and puts it away again.
+
+A project can have any number of conversations, and none of them is deleted while the
+project is in the app. Its card is the one being carried on. A conversation left alone
+for three days (the settings say how many) settles: it goes under the card with the
+earlier ones, and the card offers a new session. The edge of the card that shows beneath
+is what spreads them out, and any of them can be opened and carried on where it left off.
+One thing at a time is done in a project's folder, so only one of them runs at once.
 
 On top of what Claude Code can already do, the app gives Claude three tools: a screenshot
 of the view as you see it, the list of parts with their groups and sizes, and your current
@@ -169,6 +176,5 @@ npm test
 - It cannot open a STEP file by itself: something has to turn the CAD into a manifest
   first. Claude can write that build script when asked, but there is no ready-made one.
 - Only tried on macOS.
-- One conversation per project, and no way to answer Claude's multiple-choice questions
-  (it asks in plain text instead).
+- No way to answer Claude's multiple-choice questions (it asks in plain text instead).
 - A section shows the cut as hollow shells; cut faces are not filled in.

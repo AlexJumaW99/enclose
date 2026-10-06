@@ -14,9 +14,11 @@ import {
 import type { Settings as AppSettings } from "@shared/api"
 import { useTheme } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Kbd } from "@/components/ui/kbd"
 import { Slider } from "@/components/ui/slider"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { SETTLE_DAYS } from "@/lib/conversations"
 import { MAC } from "@/lib/platform"
 import { TURN_SPEED, usePreferences } from "@/lib/preferences"
 import { useStore } from "@/lib/store"
@@ -114,9 +116,53 @@ function Choice<Value extends string>({
   )
 }
 
+/** A whole number of days, typed in. What is typed counts as soon as it is one. */
+function Days({
+  value,
+  onChange,
+  label,
+}: {
+  value: number
+  onChange: (days: number) => void
+  label: string
+}) {
+  const [typed, setTyped] = React.useState(String(value))
+  return (
+    <>
+      <Input
+        type="number"
+        inputMode="numeric"
+        aria-label={label}
+        min={SETTLE_DAYS.min}
+        max={SETTLE_DAYS.max}
+        step={1}
+        value={typed}
+        onChange={(event) => {
+          setTyped(event.target.value)
+          const days = Number(event.target.value)
+          if (
+            Number.isInteger(days) &&
+            days >= SETTLE_DAYS.min &&
+            days <= SETTLE_DAYS.max
+          )
+            onChange(days)
+        }}
+        // what was left half-typed gives way to what stands
+        onBlur={() => setTyped(String(value))}
+        className="h-8 w-16 text-right tabular-nums"
+      />
+      <span className="text-sm text-muted-foreground">
+        {value === 1 ? "day" : "days"}
+      </span>
+    </>
+  )
+}
+
 function General() {
   const access = useStore((state) => state.access)
   const setAccess = useStore((state) => state.setAccess)
+  const settleDays = usePreferences((state) => state.settleDays)
+  const change = usePreferences((state) => state.change)
   const [settings, setSettings] = React.useState<AppSettings | null>(null)
   React.useEffect(() => {
     void window.cad.settings.get().then(setSettings)
@@ -168,6 +214,16 @@ function General() {
               { value: "ask", label: "Ask first" },
               { value: "full", label: "Full access" },
             ]}
+          />
+        </Row>
+        <Row
+          title="Earlier conversations"
+          detail="A conversation left alone for this long goes under its project's card, and the card offers a new one. None is deleted: they stay under the card until the project is removed."
+        >
+          <Days
+            label="Days before a conversation settles"
+            value={settleDays}
+            onChange={(days) => change({ settleDays: days })}
           />
         </Row>
       </Group>

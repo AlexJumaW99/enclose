@@ -1,7 +1,7 @@
-// One conversation with Claude per project. Each message starts the user's own Claude
-// Code in the project folder, resuming the conversation, and turns what it reports into
-// the items the window shows.
-import fs from "node:fs"
+// The conversations with Claude about each project. Each message starts the user's own
+// Claude Code in the project folder, resuming the conversation it belongs to, and turns
+// what it reports into the items the window shows. A project can have had any number of
+// conversations, and all of them are kept; only one of them is carried on at a time.
 import path from "node:path"
 
 import {
@@ -17,17 +17,28 @@ import {
 import type {
   Access,
   ClaudeStatus,
+  ConversationSummary,
   PartRef,
   PermissionAnswer,
   ThreadItem,
-  ThreadSummary,
   ViewportRequest,
 } from "../shared/api"
 import { MANIFEST_FORMAT } from "../shared/manifest-format"
 import { claudeEnv } from "./claude"
+import {
+  forgetConversations,
+  newConversation,
+  readConversations,
+  writeConversation,
+  type Conversation,
+} from "./conversations"
 import type { Projects } from "./projects"
 
 type Run = {
+  /** the conversation being carried on */
+  conversation: Conversation
+  /** when the turn started (ms) */
+  since: number
   abort: AbortController
   /** ends the turn's input, which lets Claude Code exit */
   finish: () => void
@@ -35,7 +46,8 @@ type Run = {
   pending: Map<string, (answer: PermissionAnswer) => void>
 }
 
-type Thread = { items: ThreadItem[]; run: Run | null; since: number | null }
+/** What has been said about one project, and what is being said now. */
+type Book = { conversations: Map<string, Conversation>; run: Run | null }
 
 export type ThreadsDeps = {
   dir: string
@@ -50,9 +62,8 @@ export type ThreadsDeps = {
     projectId: string,
     kind: ViewportRequest["kind"]
   ) => Promise<unknown>
-  onItem: (projectId: string, item: ThreadItem) => void
-  onReset: (projectId: string) => void
-  /** a thread's status or last message changed: the sidebar needs redrawing */
+  onItem: (projectId: string, conversationId: string, item: ThreadItem) => void
+  /** a conversation's status or last message changed: the sidebar needs redrawing */
   onSummary: () => void
 }
 
@@ -221,24 +232,14 @@ function firstLine(text: string): string {
   return line.length > 140 ? `${line.slice(0, 140)}…` : line
 }
 
-/**
- * An item as it should read once nothing is running any more. The app can be closed in
- * the middle of a turn; what was in flight then did not finish, and must not come back
- * looking as if it were still going.
- */
-function settled(item: ThreadItem): ThreadItem {
-  if (item.kind === "tool" && item.state === "running")
-    return { ...item, state: "failed" }
-  if (item.kind === "permission" && item.state === "pending")
-    return { ...item, state: "denied" }
-  if (item.kind === "assistant" && item.streaming)
-    return { ...item, streaming: false }
-  return item
-}
+/** When something was last said or done in a conversation. */
+const lastAt = (conversation: Conversation) =>
+  conversation.items.at(-1)?.at ?? 0
 
 export class Threads {
   private readonly deps: ThreadsDeps
-  private threads = new Map<string, Thread>()
+  private books = new Map<string, Book>()
+  /** conversations with something not yet written down, by conversation id */
   private saving = new Map<string, NodeJS.Timeout>()
   private counter = 0
 
@@ -246,55 +247,54 @@ export class Threads {
     this.deps = deps
   }
 
-  private file(projectId: string) {
-    return path.join(this.deps.dir, `${projectId}.json`)
-  }
-
-  private thread(projectId: string): Thread {
-    let thread = this.threads.get(projectId)
-    if (!thread) {
-      let items: ThreadItem[] = []
-      try {
-        items = (
-          JSON.parse(
-            fs.readFileSync(this.file(projectId), "utf8")
-          ) as ThreadItem[]
-        ).map(settled)
-      } catch {
-        // no conversation yet
+  private book(projectId: string): Book {
+    let book = this.books.get(projectId)
+    if (!book) {
+      const read = readConversations(this.deps.dir, projectId, () =>
+        this.deps.projects.takeSession(projectId)
+      )
+      book = {
+        conversations: new Map(read.map((c) => [c.id, c])),
+        run: null,
       }
-      thread = { items, run: null, since: null }
-      this.threads.set(projectId, thread)
+      this.books.set(projectId, book)
     }
-    return thread
+    return book
   }
 
-  private write(projectId: string) {
-    clearTimeout(this.saving.get(projectId))
-    this.saving.delete(projectId)
-    const thread = this.threads.get(projectId)
-    if (!thread) return
-    fs.mkdirSync(this.deps.dir, { recursive: true })
-    fs.writeFileSync(this.file(projectId), JSON.stringify(thread.items))
+  private write(projectId: string, conversation: Conversation) {
+    clearTimeout(this.saving.get(conversation.id))
+    this.saving.delete(conversation.id)
+    // a project taken off the list in the middle of a turn has nothing left to keep
+    if (this.books.get(projectId)?.conversations.get(conversation.id))
+      writeConversation(this.deps.dir, projectId, conversation)
+  }
+
+  /** Have a conversation written down soon: often enough, without doing it at every word. */
+  private keep(projectId: string, conversation: Conversation) {
+    if (this.saving.has(conversation.id)) return
+    this.saving.set(
+      conversation.id,
+      setTimeout(() => this.write(projectId, conversation), 800)
+    )
   }
 
   /** Add an item, or replace the one with the same id. */
-  private put(projectId: string, item: ThreadItem) {
-    const thread = this.thread(projectId)
-    const index = thread.items.findIndex((i) => i.id === item.id)
-    if (index < 0) thread.items.push(item)
-    else thread.items[index] = item
-    this.deps.onItem(projectId, item)
-    if (!this.saving.has(projectId)) {
-      this.saving.set(
-        projectId,
-        setTimeout(() => this.write(projectId), 800)
-      )
-    }
+  private put(projectId: string, conversation: Conversation, item: ThreadItem) {
+    const index = conversation.items.findIndex((i) => i.id === item.id)
+    if (index < 0) conversation.items.push(item)
+    else conversation.items[index] = item
+    this.deps.onItem(projectId, conversation.id, item)
+    this.keep(projectId, conversation)
   }
 
-  private notice(projectId: string, tone: "error" | "info", text: string) {
-    this.put(projectId, {
+  private notice(
+    projectId: string,
+    conversation: Conversation,
+    tone: "error" | "info",
+    text: string
+  ) {
+    this.put(projectId, conversation, {
       kind: "notice",
       id: `note-${++this.counter}-${Date.now()}`,
       at: Date.now(),
@@ -303,56 +303,89 @@ export class Threads {
     })
   }
 
-  items(projectId: string): ThreadItem[] {
-    return this.thread(projectId).items
+  items(projectId: string, conversationId: string): ThreadItem[] {
+    return this.book(projectId).conversations.get(conversationId)?.items ?? []
   }
 
-  summary(projectId: string): ThreadSummary {
-    const thread = this.thread(projectId)
-    const last = thread.items.findLast(
-      (i) => i.kind === "user" || i.kind === "assistant"
-    )
-    return {
-      status: !thread.run
-        ? "idle"
-        : thread.run.pending.size > 0
-          ? "asking"
-          : "working",
-      since: thread.since,
-      lastMessage: last && "text" in last ? firstLine(last.text) : null,
-      updatedAt: thread.items.at(-1)?.at ?? null,
-    }
+  /** How many conversations a project has had. */
+  count(projectId: string): number {
+    return this.book(projectId).conversations.size
+  }
+
+  /** A project's conversations as the sidebar shows them, the latest first. */
+  summaries(projectId: string): ConversationSummary[] {
+    const { conversations, run } = this.book(projectId)
+    return [...conversations.values()]
+      .sort((a, b) => lastAt(b) - lastAt(a))
+      .map((conversation) => {
+        const { items } = conversation
+        const running = run?.conversation === conversation ? run : null
+        const first = items.find((i) => i.kind === "user")
+        const last = items.findLast(
+          (i) => i.kind === "user" || i.kind === "assistant"
+        )
+        return {
+          id: conversation.id,
+          title: first ? firstLine(first.text) : "",
+          status: !running
+            ? "idle"
+            : running.pending.size > 0
+              ? "asking"
+              : "working",
+          since: running?.since ?? null,
+          lastMessage: last && "text" in last ? firstLine(last.text) : null,
+          updatedAt: lastAt(conversation),
+        }
+      })
   }
 
   answer(projectId: string, permissionId: string, answer: PermissionAnswer) {
-    this.thread(projectId).run?.pending.get(permissionId)?.(answer)
+    this.book(projectId).run?.pending.get(permissionId)?.(answer)
   }
 
   stop(projectId: string) {
-    this.thread(projectId).run?.abort.abort()
+    this.book(projectId).run?.abort.abort()
   }
 
-  reset(projectId: string) {
-    this.stop(projectId)
-    this.threads.set(projectId, { items: [], run: null, since: null })
-    this.deps.projects.setSession(projectId, null)
-    this.write(projectId)
-    this.deps.onReset(projectId)
-    this.deps.onSummary()
+  /** Forget everything said about a project: it is being taken off the list. */
+  forget(projectId: string) {
+    const book = this.book(projectId)
+    book.run?.abort.abort()
+    for (const { id } of book.conversations.values()) {
+      clearTimeout(this.saving.get(id))
+      this.saving.delete(id)
+    }
+    this.books.delete(projectId)
+    forgetConversations(this.deps.dir, projectId)
   }
 
-  async send(
+  /**
+   * Say something in one of a project's conversations, or begin a new one with it
+   * (null), and set Claude to work on it. Returns the conversation it went into, or null
+   * if it could not be said: one thing at a time is done in a project's folder.
+   */
+  send(
     projectId: string,
+    conversationId: string | null,
     text: string,
     part: PartRef | null,
     access: Access
-  ) {
+  ): string | null {
     const project = this.deps.projects.get(projectId)
-    const thread = this.thread(projectId)
-    if (!project || thread.run) return
+    const book = this.book(projectId)
+    if (!project || book.run) return null
+    let conversation: Conversation
+    if (conversationId === null) {
+      conversation = newConversation()
+      book.conversations.set(conversation.id, conversation)
+    } else {
+      const found = book.conversations.get(conversationId)
+      if (!found) return null
+      conversation = found
+    }
 
     const now = Date.now()
-    this.put(projectId, {
+    this.put(projectId, conversation, {
       kind: "user",
       id: `user-${now}`,
       at: now,
@@ -360,14 +393,39 @@ export class Threads {
       part,
     })
 
-    const abort = new AbortController()
     let finish = () => {}
     const finished = new Promise<void>((resolve) => (finish = resolve))
-    const run: Run = { abort, finish, pending: new Map() }
-    thread.run = run
-    thread.since = now
+    const run: Run = {
+      conversation,
+      since: now,
+      abort: new AbortController(),
+      finish,
+      pending: new Map(),
+    }
+    book.run = run
     this.deps.onSummary()
+    void this.turn(projectId, project, book, run, finished, text, part, access)
+    return conversation.id
+  }
 
+  /** One turn of a conversation: from what the user said to Claude having done with it. */
+  private async turn(
+    projectId: string,
+    project: NonNullable<ReturnType<Projects["get"]>>,
+    book: Book,
+    run: Run,
+    finished: Promise<void>,
+    text: string,
+    part: PartRef | null,
+    access: Access
+  ) {
+    const { conversation, abort, finish } = run
+    /** The session Claude Code says this conversation now is: what carries it on next time. */
+    const session = (sessionId: string) => {
+      if (conversation.sessionId === sessionId) return
+      conversation.sessionId = sessionId
+      this.keep(projectId, conversation)
+    }
     // Keep the input open until the turn is over: approvals and viewport tools are
     // answered over the same channel the message went in on.
     const prompt = withSelection(text, part)
@@ -394,7 +452,7 @@ export class Threads {
         }
         const settle = (answer: PermissionAnswer) => {
           if (!run.pending.delete(id)) return
-          this.put(projectId, {
+          this.put(projectId, conversation, {
             ...item,
             state: answer === "deny" ? "denied" : "allowed",
           })
@@ -415,7 +473,7 @@ export class Threads {
         options.signal.addEventListener("abort", () => settle("deny"), {
           once: true,
         })
-        this.put(projectId, { ...item, state: "pending" })
+        this.put(projectId, conversation, { ...item, state: "pending" })
         this.deps.onSummary()
       })
 
@@ -489,7 +547,7 @@ export class Threads {
 
     const handle = (message: SDKMessage) => {
       if (message.type === "system" && message.subtype === "init") {
-        this.deps.projects.setSession(projectId, message.session_id)
+        session(message.session_id)
         return
       }
       if (message.type === "stream_event") {
@@ -513,13 +571,13 @@ export class Threads {
           }
           item.text += event.delta.text
           live.set(id, item)
-          this.put(projectId, { ...item })
+          this.put(projectId, conversation, { ...item })
         } else if (event.type === "content_block_stop" && messageId) {
           const id = `${messageId}:${event.index}`
           const item = live.get(id)
           if (item) {
             live.delete(id)
-            this.put(projectId, { ...item, streaming: false })
+            this.put(projectId, conversation, { ...item, streaming: false })
             this.deps.onSummary()
           }
         }
@@ -530,6 +588,7 @@ export class Threads {
         if (message.error)
           this.notice(
             projectId,
+            conversation,
             "error",
             `Claude could not answer: ${message.error.replaceAll("_", " ")}.`
           )
@@ -539,7 +598,7 @@ export class Threads {
             block.text.trim() &&
             !streamed.has(message.message.id)
           ) {
-            this.put(projectId, {
+            this.put(projectId, conversation, {
               kind: "assistant",
               id: `${message.message.id}:${index}:whole`,
               at: Date.now(),
@@ -556,7 +615,7 @@ export class Threads {
               state: "running" as const,
             }
             tools.set(block.id, item)
-            this.put(projectId, item)
+            this.put(projectId, conversation, item)
           }
         })
         return
@@ -569,7 +628,7 @@ export class Threads {
           const item = tools.get(block.tool_use_id)
           if (!item) continue
           tools.delete(block.tool_use_id)
-          this.put(projectId, {
+          this.put(projectId, conversation, {
             ...item,
             state: block.is_error ? "failed" : "done",
           })
@@ -581,10 +640,11 @@ export class Threads {
         return
       }
       if (message.type === "result") {
-        this.deps.projects.setSession(projectId, message.session_id)
+        session(message.session_id)
         if (message.subtype !== "success") {
           this.notice(
             projectId,
+            conversation,
             "error",
             message.errors.join("\n") ||
               `Stopped: ${message.subtype.replaceAll("_", " ")}.`
@@ -592,6 +652,7 @@ export class Threads {
         } else if (message.is_error) {
           this.notice(
             projectId,
+            conversation,
             "error",
             message.result || "Claude Code reported an error."
           )
@@ -607,7 +668,7 @@ export class Threads {
         prompt: input(),
         options: {
           cwd: project.path,
-          resume: project.sessionId ?? undefined,
+          resume: conversation.sessionId ?? undefined,
           pathToClaudeCodeExecutable: claude.path ?? undefined,
           env: claudeEnv(),
           abortController: abort,
@@ -643,11 +704,12 @@ export class Threads {
       for await (const message of session) handle(message)
     } catch (error) {
       if (abort.signal.aborted) {
-        this.notice(projectId, "info", "Stopped.")
+        this.notice(projectId, conversation, "info", "Stopped.")
       } else {
         const reason = error instanceof Error ? error.message : String(error)
         this.notice(
           projectId,
+          conversation,
           "error",
           [reason, stderr.trim()].filter(Boolean).join("\n")
         )
@@ -656,12 +718,11 @@ export class Threads {
       finish()
       for (const settle of [...run.pending.values()]) settle("deny")
       for (const item of live.values())
-        this.put(projectId, { ...item, streaming: false })
+        this.put(projectId, conversation, { ...item, streaming: false })
       for (const item of tools.values())
-        this.put(projectId, { ...item, state: "failed" })
-      thread.run = null
-      thread.since = null
-      this.write(projectId)
+        this.put(projectId, conversation, { ...item, state: "failed" })
+      if (book.run === run) book.run = null
+      this.write(projectId, conversation)
       // Claude may have created, moved or rebuilt the model
       this.deps.projects.refresh(projectId)
       // and with nothing at work in the folder any more, a project that has just been
@@ -672,9 +733,11 @@ export class Threads {
   }
 
   close() {
-    for (const [projectId, thread] of this.threads) {
-      thread.run?.abort.abort()
-      if (this.saving.has(projectId)) this.write(projectId)
+    for (const [projectId, book] of this.books) {
+      book.run?.abort.abort()
+      for (const conversation of book.conversations.values())
+        if (this.saving.has(conversation.id))
+          this.write(projectId, conversation)
     }
   }
 }
