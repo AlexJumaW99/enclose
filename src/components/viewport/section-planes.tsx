@@ -141,7 +141,7 @@ export function SectionPlanes({
               className="group/wall cursor-pointer"
               onClick={() => setView({ section: sectionAcross(axis, middle) })}
             >
-              <title>{`Cut across ${axis.toUpperCase()}`}</title>
+              <title>{`Cut across ${axis.toUpperCase()} (${axis.toUpperCase()})`}</title>
               <polygon
                 points={points}
                 fill={COLOR[axis]}

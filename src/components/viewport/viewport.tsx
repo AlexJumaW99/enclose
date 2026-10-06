@@ -17,14 +17,14 @@ import {
 } from "@/components/ui/empty"
 import { Spinner } from "@/components/ui/spinner"
 import { readModel } from "@/lib/model"
-import { VIEWS } from "@/lib/orient"
+import { AXES, VIEWS, type Axis } from "@/lib/orient"
 import { SPREAD, useStore } from "@/lib/store"
 import { AxisGizmo } from "./axis-gizmo"
 import { bridge } from "./bridge"
 import { ExplodeSlider } from "./explode-slider"
 import { disposeModel, loadModel, type LoadedModel } from "./load"
 import { appearance, Scene } from "./scene"
-import { sectionFacing, SectionPlanes } from "./section-planes"
+import { sectionAcross, sectionFacing, SectionPlanes } from "./section-planes"
 
 /** Whether a key pressed here is on its way into some text, or a menu's own. */
 const spokenFor = (target: EventTarget | null) =>
@@ -103,8 +103,14 @@ function Model({ project }: { project: Project }) {
   const layersOpen = useStore((s) => s.layersOpen)
   const goHome = useStore((s) => s.goHome)
 
+  const middle = React.useMemo(
+    () => loaded?.box.getCenter(loaded.box.min.clone()).toArray() ?? null,
+    [loaded]
+  )
+
   // Cmd+1 is the view the model opened with; Cmd+2 to 7 are the six flat ones. S cuts
-  // the model open and E pulls it apart, both again to undo.
+  // the model open and E pulls it apart, both again to undo. While it is cut open, X, Y
+  // and Z choose the axis the cut goes across.
   React.useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.altKey || event.shiftKey) return
@@ -118,19 +124,21 @@ function Model({ project }: { project: Project }) {
         return
       }
       // a letter on its own: not one held down, and not one being typed somewhere
-      if (!loaded || event.repeat || spokenFor(event.target)) return
+      if (!loaded || !middle || event.repeat || spokenFor(event.target)) return
       const { view, setView } = useStore.getState()
       const letter = event.key.toLowerCase()
       if (letter === "s")
         setView({ section: view.section ? null : sectionFacing(loaded.box) })
       else if (letter === "e")
         setView({ exploded: !view.exploded, spread: SPREAD.min })
+      else if (view.section && AXES.includes(letter as Axis))
+        setView({ section: sectionAcross(letter as Axis, middle) })
       else return
       event.preventDefault()
     }
     window.addEventListener("keydown", key)
     return () => window.removeEventListener("keydown", key)
-  }, [goHome, loaded])
+  }, [goHome, loaded, middle])
 
   // what Claude gets when it asks which parts are on screen
   React.useEffect(() => {
@@ -161,11 +169,6 @@ function Model({ project }: { project: Project }) {
       if (section) setView({ section: { ...section, ...moved } })
     },
     [setView]
-  )
-
-  const middle = React.useMemo(
-    () => loaded?.box.getCenter(loaded.box.min.clone()).toArray() ?? null,
-    [loaded]
   )
 
   return (
