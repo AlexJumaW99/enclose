@@ -42,6 +42,14 @@ Without it, the nearest file named `enclose.model.json`, `report.json` or `model
 that lists parts is used. (Files named `cad-ai.json` and `cad-ai.model.json`, from before
 the app had its name, are still read.)
 
+**Starting from nothing.** A project can be an empty folder. Say what you want made and
+Claude sets it up: it copies the app's exporter, [`kit/enclose.py`](kit/enclose.py), into
+the folder, writes a `model.py` that builds the parts with
+[build123d](https://build123d.readthedocs.io) and hands them to it, and runs it. The
+exporter writes the meshes, the edges, a STEP file of each part and the manifest, and the
+model appears as soon as it has. A machine that has Python but not build123d gets a
+virtual environment in the folder first.
+
 **The view** draws each part as one mesh per colour, however many faces the CAD export
 wrote, which is what keeps large assemblies smooth (the benchmark behind that is in
 [`spikes/draw-calls`](spikes/draw-calls)).
@@ -125,6 +133,7 @@ else, such as running the build. "Full access" in the message box turns the aski
 
 ```
 electron/    the app's own process: window, project list, the line to Claude
+kit/         the exporter a project copies in to write its model (Python)
 shared/      types and the manifest format, used by both sides
 src/         the window: project cards, 3D view and its tools, conversation
 scripts/     dev loop and production build

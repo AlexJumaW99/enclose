@@ -366,6 +366,7 @@ if (!app.requestSingleInstanceLock()) {
       dir: path.join(data, "threads"),
       projects,
       claude: () => claude,
+      kit: path.join(app.getAppPath(), "kit", "enclose.py"),
       viewport: askViewport,
       onItem: (projectId, item) => send(CHANNEL.threadItem, projectId, item),
       onReset: (projectId) => send(CHANNEL.threadWasReset, projectId),

@@ -41,6 +41,8 @@ export type ThreadsDeps = {
   dir: string
   projects: Projects
   claude: () => ClaudeStatus
+  /** where the app keeps the exporter a project copies to write its model */
+  kit: string
   /** ask the window something about the viewport it is showing */
   viewport: (
     projectId: string,
@@ -138,7 +140,8 @@ function question(toolName: string): string {
 function guide(
   root: string,
   manifest: string | null,
-  build: string | null
+  build: string | null,
+  kit: string
 ): string {
   const lines = [
     "You are running inside Enclose, a desktop app for designing physical things in code. The user is looking at a 3D view of this project's model while they talk to you, and can click a part to ask about it.",
@@ -154,12 +157,22 @@ function guide(
       build
         ? `- The build command is: ${build}`
         : "- Find how the model is built from the project's README or scripts before changing geometry.",
+      "- If the project has an enclose.py, that is the app's exporter, copied in: read its docstring for how parts and groups are declared, and do not edit it.",
       '- The groups are what the manifest says they are: its "groups" list, and the "group" each part names. Like the rest of the manifest they are written by the build.',
       "- After a change to geometry: rebuild, take a screenshot, and check the result yourself before you report it."
     )
   } else {
     lines.push(
-      '- This folder has no model the app can show yet. If the user wants one, write a build script (build123d is the usual choice) that produces a manifest in this format, and add an enclose.json at the top of the folder naming the manifest and the build command, like { "model": "model/enclose.model.json", "build": "python3 make.py" }.',
+      "- This folder has no model the app can show yet. When the user asks for something to be made, set the project up yourself, in this way, without asking them how:",
+      `  1. Copy the app's exporter into the folder as enclose.py: cp "${kit}" enclose.py. Leave the copy as it is. Its docstring shows how it is used.`,
+      "  2. Write model.py. Build each part with build123d, in millimetres with Z up, each part where it sits in the assembly, and hand the parts to enclose.Model as the docstring shows: one part for each separate component, in groups. If the folder already holds CAD files (STEP), start from them: build123d's import_step reads them.",
+      '  3. Find a Python that has build123d: try python3 -c "import build123d". If it has not, make a virtual environment in the folder (python3 -m venv .venv, then .venv/bin/pip install build123d; or uv if it is installed) and use that one.',
+      '  4. Write enclose.json at the top of the folder, naming the model and the build command: { "model": "build/enclose.model.json", "build": "python3 model.py" }, with the Python you found.',
+      "  5. Run the build. The model shows in the app by itself once build/enclose.model.json is written. Then take a screenshot and check the result before you report it.",
+      "- Keep the folder plain: model.py, enclose.py, enclose.json, and build/, which is output and never edited by hand (if the folder is a git repository, ignore build/ and .venv/).",
+      "- Start with the simplest thing that is what they asked for, show it, and say in a sentence or two what you assumed (sizes, wall thickness) so that they can correct it.",
+      "",
+      "A project that cannot use build123d can write the model's files some other way, as long as they come out in this format:",
       "",
       MANIFEST_FORMAT
     )
@@ -543,6 +556,10 @@ export class Threads {
             state: block.is_error ? "failed" : "done",
           })
         }
+        // What Claude just did may have written the model for the first time, or moved
+        // it: look again now, so the view has it before Claude asks to see it.
+        this.deps.projects.refresh(projectId)
+        this.deps.onSummary()
         return
       }
       if (message.type === "result") {
@@ -581,7 +598,12 @@ export class Threads {
           systemPrompt: {
             type: "preset",
             preset: "claude_code",
-            append: guide(project.path, project.manifest, project.build),
+            append: guide(
+              project.path,
+              project.manifest,
+              project.build,
+              this.deps.kit
+            ),
           },
           mcpServers: { viewport },
           allowedTools: VIEWPORT_TOOLS,

@@ -23,21 +23,30 @@ function useViewportRequests() {
             "The app is showing a different project right now, so this one is not on screen."
           )
         }
-        try {
-          if (request.kind === "selection") {
-            return window.cad.viewport.respond({
-              id,
-              ok: true,
-              data: selection?.part ?? null,
-            })
-          }
-          const answer =
-            request.kind === "parts" ? bridge.parts : bridge.screenshot
-          if (!answer) return fail("No model is on screen.")
-          window.cad.viewport.respond({ id, ok: true, data: answer() })
-        } catch (error) {
-          fail(error instanceof Error ? error.message : String(error))
+        if (request.kind === "selection") {
+          return window.cad.viewport.respond({
+            id,
+            ok: true,
+            data: selection?.part ?? null,
+          })
         }
+        // A model that has only just been built is still being read in when Claude
+        // first asks to see it: give it a few seconds to arrive before saying no.
+        const answer = (tries: number) => {
+          const ask =
+            request.kind === "parts" ? bridge.parts : bridge.screenshot
+          const { projects } = useStore.getState()
+          const coming = projects.find((p) => p.id === activeId)?.manifest
+          if (!ask && coming && tries > 0)
+            return void setTimeout(() => answer(tries - 1), 250)
+          if (!ask) return fail("No model is on screen.")
+          try {
+            window.cad.viewport.respond({ id, ok: true, data: ask() })
+          } catch (error) {
+            fail(error instanceof Error ? error.message : String(error))
+          }
+        }
+        answer(40)
       }),
     []
   )
