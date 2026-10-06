@@ -70,14 +70,19 @@ is turning, never while it is still.
 From above and from below alike, the model's back is at the top of the view: the bottom
 view turns the model over sideways, not end over end.
 
+**Shading** is on Z, the way it is in Blender: the key brings solid, glass and wireframe
+up round the pointer. Hold it, flick towards one and let go; or tap it, and click one.
+A choice is pointed at by direction, so the pointer need not reach it. Esc, Z again or a
+right-click puts the menu away. Glass makes the outside see-through (the layers a
+manifest marks as `shell`, or everything if it marks none); wireframe draws edges only.
+
 Down the right-hand edge:
 
-- **Solid, glass, wireframe.** Glass makes the outside see-through (the layers a manifest
-  marks as `shell`, or everything if it marks none); wireframe draws edges only.
 - **Section** (S) cuts the model open. Three squares appear by the axes, one per direction
   to cut across, which the X, Y and Z keys choose too; in the view, drag the arrow to push
   the cut through the model and the arcs to tilt it. A second button appears to the left
-  of this one, and shows the other half.
+  of this one, and shows the other half. While the model is cut open a tap of Z is the
+  cut across Z, and holding the key, or flicking with it down, brings up the shading.
 - **Explode** (E) pulls the parts apart by the distances the manifest gives (or straight
   out from the middle, if it gives none), and a slider along the bottom pulls them
   further.

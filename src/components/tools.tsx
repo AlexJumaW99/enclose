@@ -8,12 +8,7 @@ import {
 } from "lucide-react"
 
 import { DownloadMenu } from "@/components/download-menu"
-import {
-  GlassIcon,
-  SectionIcon,
-  SolidIcon,
-  WireframeIcon,
-} from "@/components/icons"
+import { SectionIcon } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Kbd } from "@/components/ui/kbd"
 import { Toggle } from "@/components/ui/toggle"
@@ -23,7 +18,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { MAC } from "@/lib/platform"
-import { SPREAD, useStore, type DisplayMode } from "@/lib/store"
+import { SPREAD, useStore } from "@/lib/store"
 import type { LoadedModel } from "./viewport/load"
 import { sectionFacing } from "./viewport/section-planes"
 
@@ -125,12 +120,6 @@ function Switch({
   )
 }
 
-const MODES: { mode: DisplayMode; label: string; icon: React.ReactNode }[] = [
-  { mode: "solid", label: "Solid", icon: <SolidIcon /> },
-  { mode: "glass", label: "Glass: see inside", icon: <GlassIcon /> },
-  { mode: "wireframe", label: "Wireframe", icon: <WireframeIcon /> },
-]
-
 /**
  * The buttons down the right-hand edge. At the top, what leaves the view: the
  * conversation and the downloads. In the middle, how the model is looked at.
@@ -173,18 +162,6 @@ export function Tools({
       {/* how the model is looked at: a little air between the kinds of control */}
       {loaded && (
         <div className="absolute top-1/2 right-3 flex -translate-y-1/2 flex-col gap-4">
-          <Stack>
-            {MODES.map(({ mode, label, icon }) => (
-              <Switch
-                key={mode}
-                label={label}
-                on={view.mode === mode}
-                onChange={() => setView({ mode })}
-              >
-                {icon}
-              </Switch>
-            ))}
-          </Stack>
           <Stack>
             <div className="relative">
               {/* while the model is cut open: which half of it to show, alongside */}

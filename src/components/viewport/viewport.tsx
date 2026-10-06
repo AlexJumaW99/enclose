@@ -18,20 +18,16 @@ import {
 } from "@/components/ui/empty"
 import { Spinner } from "@/components/ui/spinner"
 import { readModel } from "@/lib/model"
-import { AXES, VIEWS, type Axis } from "@/lib/orient"
+import { spokenFor } from "@/lib/keys"
+import { VIEWS } from "@/lib/orient"
 import { SPREAD, useStore } from "@/lib/store"
 import { AxisGizmo } from "./axis-gizmo"
 import { bridge } from "./bridge"
 import { ExplodeSlider } from "./explode-slider"
 import { disposeModel, loadModel, type LoadedModel } from "./load"
 import { appearance, Scene } from "./scene"
+import { ShadingPie } from "./shading-pie"
 import { sectionAcross, sectionFacing, SectionPlanes } from "./section-planes"
-
-/** Whether a key pressed here is on its way into some text, or a menu's own. */
-const spokenFor = (target: EventTarget | null) =>
-  target instanceof HTMLElement &&
-  (target.isContentEditable ||
-    target.closest("input, textarea, select, [role=menu]") !== null)
 
 type Loading =
   | { status: "loading"; done: number; total: number }
@@ -110,9 +106,9 @@ function Model({ project }: { project: Project }) {
   )
 
   // Cmd+1 is the view the model opened with; Cmd+2 to 7 are the six flat ones. S cuts
-  // the model open and E pulls it apart, both again to undo. While it is cut open, X, Y
-  // and Z choose the axis the cut goes across. Esc gets out of the section, the explode
-  // or the layers, whichever was gone into last.
+  // the model open and E pulls it apart, both again to undo. While it is cut open, X and
+  // Y choose the axis the cut goes across (and Z, which the shading menu passes on). Esc
+  // gets out of the section, the explode or the layers, whichever was gone into last.
   React.useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.altKey || event.shiftKey) return
@@ -142,14 +138,25 @@ function Model({ project }: { project: Project }) {
         setView({ section: view.section ? null : sectionFacing(loaded.box) })
       else if (letter === "e")
         setView({ exploded: !view.exploded, spread: SPREAD.min })
-      else if (view.section && AXES.includes(letter as Axis))
-        setView({ section: sectionAcross(letter as Axis, middle) })
+      else if (view.section && (letter === "x" || letter === "y"))
+        setView({ section: sectionAcross(letter, middle) })
       else return
       event.preventDefault()
     }
     window.addEventListener("keydown", key)
     return () => window.removeEventListener("keydown", key)
   }, [goHome, loaded, middle])
+
+  // Z is the shading menu's key. While the model is cut open a tap of it still chooses
+  // the cut across Z, and the menu comes up when the key is held instead.
+  const cut = view.section !== null
+  const cutAcrossZ = React.useMemo(
+    () =>
+      cut && middle
+        ? () => setView({ section: sectionAcross("z", middle) })
+        : null,
+    [cut, middle, setView]
+  )
 
   // what Claude gets when it asks which parts are on screen
   React.useEffect(() => {
@@ -240,6 +247,7 @@ function Model({ project }: { project: Project }) {
         </div>
       )}
       {loaded && <PartPrompt model={loaded.model} projectId={project.id} />}
+      <ShadingPie enabled={loaded !== null} tap={cutAcrossZ} />
     </>
   )
 }
