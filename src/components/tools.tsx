@@ -159,53 +159,49 @@ export function Tools({
         )}
       </Stack>
 
-      {/* how the model is looked at: a little air between the kinds of control */}
+      {/* how the model is looked at */}
       {loaded && (
-        <div className="absolute top-1/2 right-3 flex -translate-y-1/2 flex-col gap-4">
-          <Stack>
-            <div className="relative">
-              {/* while the model is cut open: which half of it to show, alongside */}
-              {section && (
-                <Press
-                  label="Show the other side"
-                  onClick={() =>
-                    setView({
-                      section: { ...section, flipped: !section.flipped },
-                    })
-                  }
-                  className="absolute top-0 right-full mr-1.5"
-                >
-                  <FlipHorizontal2Icon />
-                </Press>
-              )}
-              <Switch
-                label="Section"
-                shortcut="S"
-                // its neighbour has the left
-                side={section ? "top" : "left"}
-                on={section !== null}
-                onChange={(on) =>
-                  setView({ section: on ? sectionFacing(loaded.box) : null })
+        <Stack className="absolute top-1/2 right-3 -translate-y-1/2">
+          <div className="relative">
+            {/* while the model is cut open: which half of it to show, alongside */}
+            {section && (
+              <Press
+                label="Show the other side"
+                onClick={() =>
+                  setView({
+                    section: { ...section, flipped: !section.flipped },
+                  })
                 }
+                className="absolute top-0 right-full mr-1.5"
               >
-                <SectionIcon />
-              </Switch>
-            </div>
+                <FlipHorizontal2Icon />
+              </Press>
+            )}
             <Switch
-              label="Explode"
-              shortcut="E"
-              on={view.exploded}
-              onChange={(exploded) => setView({ exploded, spread: SPREAD.min })}
+              label="Section"
+              shortcut="S"
+              // its neighbour has the left
+              side={section ? "top" : "left"}
+              on={section !== null}
+              onChange={(on) =>
+                setView({ section: on ? sectionFacing(loaded.box) : null })
+              }
             >
-              <UnfoldVerticalIcon />
+              <SectionIcon />
             </Switch>
-          </Stack>
-          <Stack>
-            <Switch label="Layers" on={layersOpen} onChange={setLayersOpen}>
-              <LayersIcon />
-            </Switch>
-          </Stack>
-        </div>
+          </div>
+          <Switch
+            label="Explode"
+            shortcut="E"
+            on={view.exploded}
+            onChange={(exploded) => setView({ exploded, spread: SPREAD.min })}
+          >
+            <UnfoldVerticalIcon />
+          </Switch>
+          <Switch label="Layers" on={layersOpen} onChange={setLayersOpen}>
+            <LayersIcon />
+          </Switch>
+        </Stack>
       )}
     </div>
   )
