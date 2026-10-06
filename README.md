@@ -68,6 +68,13 @@ virtual environment in the folder first.
 wrote, which is what keeps large assemblies smooth (the benchmark behind that is in
 [`spikes/draw-calls`](spikes/draw-calls)).
 
+Parts are drawn in the app's own colours: ten light ones round the whole circle of colour
+(red, orange, yellow, lime, green, cyan, blue, indigo, violet, pink) and a grey. A model
+can name one for a part; any other colour it gives, or its files carry, is drawn as the
+nearest of them, except greys, white and black, which are drawn as they are, and bare
+metal. A part given no colour takes the one that falls to its group. Nothing in the
+project's files is changed by this: it is only how the app draws them.
+
 Moving around on a trackpad: move two fingers across it to orbit, pinch to zoom in on
 whatever is under the pointer, and hold Shift to pan. With a mouse: drag to orbit, turn
 the wheel to zoom, and drag with Shift held, or with the right button, to pan.
@@ -149,6 +156,8 @@ for three days (the settings say how many) settles: it goes under the card with 
 earlier ones, and the card offers a new session. The edge of the card that shows beneath
 is what spreads them out, and any of them can be opened and carried on where it left off.
 One thing at a time is done in a project's folder, so only one of them runs at once.
+A conversation goes by the first thing said in it, until it is given a name: click the
+name at the top of the conversation and write another.
 
 A card says the last of its conversation in two lines: what was asked, while Claude is at
 work on it, and otherwise what was last said. A message too long for that is summed up

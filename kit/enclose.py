@@ -160,7 +160,11 @@ class Model:
     ) -> None:
         """One part: a thing made, bought or fitted on its own. `id` is short, unique and
         stays the same between builds. `shape` is the build123d shape, already where it
-        sits in the assembly. `color` is "#rrggbb"; `finish="metal"` draws bare metal.
+        sits in the assembly. Leave `color` out and the app gives each group a colour of
+        its own. Give one to have a part some other colour: by name, from the app's own
+        (red, orange, yellow, lime, green, cyan, blue, indigo, violet, pink, grey), or as
+        "#rrggbb", which is drawn as the nearest of those unless it is a grey.
+        `finish="metal"` draws bare metal.
         `explode` is where the part goes when the model is pulled apart, in mm; leave
         it out and the app works one out."""
         if id in self._shapes:

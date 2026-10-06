@@ -1,12 +1,13 @@
 import * as React from "react"
+import { cn } from "cn"
 import {
   BoxIcon,
   PanelRightCloseIcon,
-  SquarePenIcon,
+  PlusIcon,
   TriangleAlertIcon,
 } from "lucide-react"
 
-import type { Project, ThreadItem } from "@shared/api"
+import type { ConversationSummary, Project, ThreadItem } from "@shared/api"
 import { Composer } from "@/components/composer"
 import { Markdown } from "@/components/markdown"
 import { Steps } from "@/components/steps"
@@ -125,6 +126,74 @@ function Item({
         </div>
       )
   }
+}
+
+/**
+ * What the conversation goes by, at the top of it. Clicked, it is written over: Enter,
+ * or clicking away, keeps what is written, and Esc leaves it as it was. Left empty, the
+ * conversation goes back to going by the first thing said in it.
+ */
+function Name({
+  projectId,
+  conversation,
+}: {
+  projectId: string
+  /** the one the panel shows; null is a new one, which has no name to change yet */
+  conversation: ConversationSummary | null
+}) {
+  const [written, setWritten] = React.useState<string | null>(null)
+  const left = React.useRef(false)
+  const NAME = "truncate text-sm font-medium"
+  if (!conversation) return <h2 className={NAME}>New conversation</h2>
+  if (written === null)
+    return (
+      <h2 className="no-drag -ml-1.5 flex min-w-0">
+        <button
+          type="button"
+          title="Rename"
+          onClick={() => {
+            left.current = false
+            setWritten(conversation.title)
+          }}
+          className={cn(
+            NAME,
+            "h-7 cursor-text rounded-md px-1.5 text-left outline-none hover:bg-muted focus-visible:bg-muted"
+          )}
+        >
+          {conversation.title}
+        </button>
+      </h2>
+    )
+  // done with once, however it is left: Enter and Esc are both followed by the box
+  // losing the caret, which on its own would be clicking away
+  const leave = (keep: boolean) => {
+    if (left.current) return
+    left.current = true
+    setWritten(null)
+    if (keep && written.trim() !== conversation.title)
+      void window.cad.thread.rename(projectId, conversation.id, written)
+  }
+  return (
+    <input
+      autoFocus
+      aria-label="The conversation's name"
+      value={written}
+      onChange={(event) => setWritten(event.target.value)}
+      onFocus={(event) => event.target.select()}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") leave(true)
+        if (event.key !== "Escape") return
+        // not kept, and not taken for leaving anything else
+        event.stopPropagation()
+        leave(false)
+      }}
+      onBlur={() => leave(true)}
+      className={cn(
+        NAME,
+        "no-drag -ml-1.5 h-7 min-w-0 flex-1 rounded-md bg-muted px-1.5 outline-none"
+      )}
+    />
+  )
 }
 
 /** How far an arrow key moves the conversation's edge, px. */
@@ -264,22 +333,24 @@ export function Thread({ project }: { project: Project }) {
       }}
     >
       <Edge />
-      <header className="drag flex h-12 shrink-0 items-center justify-between gap-2 pr-2.5 pl-5">
-        <h2 className="truncate text-sm font-medium">{project.name}</h2>
-        <div className="no-drag flex items-center">
+      <header className="drag flex h-12 shrink-0 items-center justify-between gap-2 pr-3 pl-8">
+        <Name key={open?.id} projectId={project.id} conversation={open} />
+        {/* quiet until the pointer is on them */}
+        <div className="no-drag flex items-center text-muted-foreground">
           <Tooltip>
             <TooltipTrigger
               render={
                 <Button
                   variant="ghost"
                   size="icon-sm"
+                  className="hover:text-foreground"
                   // from a new one there is nowhere newer to go
                   disabled={!open}
                   onClick={() => openConversation(project.id, null)}
                 />
               }
             >
-              <SquarePenIcon />
+              <PlusIcon />
               <span className="sr-only">New conversation</span>
             </TooltipTrigger>
             <TooltipContent>New conversation</TooltipContent>
@@ -290,6 +361,7 @@ export function Thread({ project }: { project: Project }) {
                 <Button
                   variant="ghost"
                   size="icon-sm"
+                  className="hover:text-foreground"
                   onClick={() => setThreadOpen(false)}
                 />
               }
@@ -305,7 +377,7 @@ export function Thread({ project }: { project: Project }) {
       {items?.length ? (
         <ScrollArea className="min-h-0 flex-1">
           {/* everything said here breaks its lines so that none ends on a word alone */}
-          <div className="flex flex-col gap-3.5 px-5 pt-2 pb-5 text-pretty">
+          <div className="flex flex-col gap-4 px-8 pt-2 pb-6 text-pretty">
             {blocks.map((block) =>
               block.kind === "steps" ? (
                 <Steps
@@ -354,7 +426,7 @@ export function Thread({ project }: { project: Project }) {
         </Empty>
       )}
 
-      <div className="flex flex-col gap-2 p-3 pt-0">
+      <div className="flex flex-col gap-2 p-3.5 pt-0">
         <Composer
           part={selection?.part ?? null}
           onClearPart={() => select(null)}

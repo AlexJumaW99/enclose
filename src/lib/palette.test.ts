@@ -1,0 +1,43 @@
+import { describe, expect, it } from "vitest"
+
+import { PALETTE } from "@shared/palette"
+import { drawnIn } from "./palette"
+
+describe("drawnIn", () => {
+  it("draws a colour named in the palette as that colour", () => {
+    expect(drawnIn("blue", 0)).toBe(PALETTE.blue)
+    expect(drawnIn(" Grey ", 3)).toBe(PALETTE.grey)
+  })
+
+  it("draws any other colour as the nearest of the palette's", () => {
+    expect(drawnIn("#e0892f", 0)).toBe(PALETTE.orange)
+    expect(drawnIn("#4a7fb5", 0)).toBe(PALETTE.blue)
+    expect(drawnIn("#ff0000", 0)).toBe(PALETTE.red)
+    expect(drawnIn("#00a040", 0)).toBe(PALETTE.green)
+    expect(drawnIn("#7a1fd0", 0)).toBe(PALETTE.violet)
+    // near the top of the circle, the nearest may be round the other way
+    expect(drawnIn("#f01060", 0)).toBe(PALETTE.pink)
+    expect(drawnIn("#f02040", 0)).toBe(PALETTE.red)
+  })
+
+  it("is already at home with its own colours", () => {
+    for (const colour of Object.values(PALETTE))
+      expect(drawnIn(colour, 0)).toBe(colour)
+  })
+
+  it("leaves a grey, a white or a black as it is", () => {
+    for (const grey of ["#d9d9d4", "#ffffff", "#000000", "#aeb2b9"])
+      expect(drawnIn(grey, 0)).toBe(grey)
+  })
+
+  it("gives what has no colour the palette's colours in turn, never the grey", () => {
+    const given = Array.from({ length: 10 }, (_, turn) => drawnIn(null, turn))
+    expect(new Set(given).size).toBe(10)
+    expect(given).not.toContain(PALETTE.grey)
+    expect(drawnIn(null, 10)).toBe(given[0])
+  })
+
+  it("leaves alone what it cannot read as a colour", () => {
+    expect(drawnIn("rebeccapurple", 0)).toBe("rebeccapurple")
+  })
+})

@@ -24,6 +24,7 @@ import type {
   ViewportRequest,
 } from "../shared/api"
 import { MANIFEST_FORMAT } from "../shared/manifest-format"
+import { PALETTE_NAMES } from "../shared/palette"
 import { claudeEnv } from "./claude"
 import { GIST_FROM, gistOf, plain } from "./gist"
 import {
@@ -186,6 +187,7 @@ function guide(
     "- You can see what they see. mcp__viewport__screenshot returns the current view as an image, mcp__viewport__parts lists the parts with their groups and sizes, mcp__viewport__selection returns the current selection.",
     "- The model is made of parts. Each separate component is one part: a thing that is made, bought or fitted on its own, such as a lid, a board or a screw. Whatever the user asks you to add as a thing of its own is a part of its own. The app lists the parts under groups, and the user can pick one part or one group to look at alone.",
     "- Grouping the parts is your job, not the user's. Whenever you add, split, merge or remove parts, put each one in the group a person would look for it in, by what it belongs to or what it does (the enclosure, the electronics, the fasteners), and add a group when none fits. Keep group and part labels short and plain. Do this without being asked and without asking. Regroup only when the user asks for a different arrangement, or when the model has changed so much that the old one no longer makes sense; if the user arranges the groups themselves, keep to their arrangement.",
+    `- Colour is the app's job. It draws every part in one of its own colours (${PALETTE_NAMES.join(", ")}), and a part given no colour takes the one that falls to its group, so parts that belong together match and groups differ. Leave colour out unless the user asks for one or parts within a group need telling apart; then name one of those. Any other colour is drawn as the nearest of them, unless it is a grey, white or black, which is drawn as it is.`,
   ]
   if (manifest) {
     lines.push(
@@ -254,6 +256,9 @@ function firstLine(text: string): string {
   const line = text.trim().split("\n")[0] ?? ""
   return line.length > 140 ? `${line.slice(0, 140)}…` : line
 }
+
+/** The most letters a conversation's name can have. */
+const NAME_LENGTH = 80
 
 /** When something was last said or done in a conversation. */
 const lastAt = (conversation: Conversation) =>
@@ -352,7 +357,7 @@ export class Threads {
         this.sumUp(projectId, conversation)
         return {
           id: conversation.id,
-          title: first ? firstLine(first.text) : "",
+          title: conversation.name ?? (first ? firstLine(first.text) : ""),
           status: !running
             ? "idle"
             : running.pending.size > 0
@@ -415,6 +420,16 @@ export class Threads {
 
   stop(projectId: string) {
     this.book(projectId).run?.abort.abort()
+  }
+
+  /** Call a conversation something. Called nothing, it goes by what was first said in it. */
+  rename(projectId: string, conversationId: string, name: string) {
+    const conversation = this.book(projectId).conversations.get(conversationId)
+    if (!conversation) return
+    conversation.name =
+      name.replace(/\s+/g, " ").trim().slice(0, NAME_LENGTH) || null
+    this.write(projectId, conversation)
+    this.deps.onSummary()
   }
 
   /** Forget everything said about a project: it is being taken off the list. */

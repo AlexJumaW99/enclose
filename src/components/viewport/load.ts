@@ -32,6 +32,8 @@ export type LoadedPart = {
   contours: Contours
   /** its surfaces close a volume, so a cut through it leaves a face to fill in */
   solid: boolean
+  /** its group's place among the model's groups: what gives a part with no colour one */
+  turn: number
   /** in the part's own frame */
   box: THREE.Box3
   /** where the part sits in the model */
@@ -174,6 +176,7 @@ async function loadPart(
     edges: edges ?? creases(skins),
     contours: contours(skins, edges !== null),
     solid: enclose(skins),
+    turn: 0,
     box,
     home,
     away: new THREE.Vector3(...part.explode),
@@ -273,6 +276,11 @@ export async function loadModel(
       return loaded
     })
   )
+  for (const part of parts)
+    part.turn = Math.max(
+      0,
+      model.groups.findIndex((group) => group.id === part.part.group)
+    )
   const box = new THREE.Box3()
   for (const part of parts) box.union(part.box.clone().applyMatrix4(part.home))
 
@@ -311,7 +319,8 @@ export function standInModel(): LoadedModel {
     group: "stand-in",
     file: "",
     edges: null,
-    color: null,
+    // a plain grey: it is nothing yet, and is not to look like something
+    color: "#aeb2b9",
     paint: "all",
     matrix: null,
     explode: [0, 0, 0],
@@ -339,6 +348,7 @@ export function standInModel(): LoadedModel {
         edges: creases([skin]),
         contours: contours([skin], false),
         solid: enclose([skin]),
+        turn: 0,
         box,
         home: new THREE.Matrix4(),
         away: new THREE.Vector3(),

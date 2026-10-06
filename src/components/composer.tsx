@@ -1,4 +1,5 @@
 import * as React from "react"
+import { cn } from "cn"
 import {
   ArrowUpIcon,
   CheckIcon,
@@ -48,6 +49,9 @@ import { useNow } from "@/lib/time"
 
 /** What the choices under a message go without, one after another, as room runs out. */
 const GIVEN_UP = ["arrows", "access", "effort", "model"]
+
+/** One of the choices: small print, with its pictures to match, and never squeezed. */
+const CHOICE = "shrink-0 text-[11px] [&>svg]:size-3!"
 
 /** The arrow of a choice that can do without one. */
 const ARROW = "opacity-60 group-data-[short~=arrows]/bar:hidden"
@@ -106,7 +110,12 @@ function ModelMenu() {
     >
       <PopoverTrigger
         render={
-          <InputGroupButton className="min-w-0 shrink-0 group-data-[short~=model]/bar:shrink" />
+          <InputGroupButton
+            className={cn(
+              CHOICE,
+              "min-w-0 group-data-[short~=model]/bar:shrink"
+            )}
+          />
         }
       >
         <ClaudeIcon className="shrink-0" />
@@ -174,9 +183,7 @@ function EffortMenu() {
       <Divider />
       <DropdownMenu>
         <DropdownMenuTrigger
-          render={
-            <InputGroupButton className="shrink-0" title={EFFORT_TITLE} />
-          }
+          render={<InputGroupButton className={CHOICE} title={EFFORT_TITLE} />}
         >
           <GaugeIcon />
           <span className="group-data-[short~=effort]/bar:sr-only">
@@ -231,9 +238,7 @@ function AccessMenu() {
       <Divider />
       <DropdownMenu>
         <DropdownMenuTrigger
-          render={
-            <InputGroupButton className="shrink-0" title={ACCESS_TITLE} />
-          }
+          render={<InputGroupButton className={CHOICE} title={ACCESS_TITLE} />}
         >
           <Icon />
           <span className="group-data-[short~=access]/bar:sr-only">
@@ -289,6 +294,9 @@ export function Composer({
   const { open } = useStack(project, useNow(60_000))
   const send = useStore((state) => state.send)
   const [text, setText] = React.useState("")
+  // a line high until it is being written in: then it has room for what is written
+  const [within, setWithin] = React.useState(false)
+  const roomy = within || text !== ""
   const choices = useFit(
     useStore((state) =>
       [state.models.length, state.model, state.effort, state.access].join()
@@ -307,8 +315,21 @@ export function Composer({
   }
 
   return (
-    // being written in does not change the box: the caret says where the typing goes
-    <InputGroup className="has-[[data-slot=input-group-control]:focus-visible]:border-input has-[[data-slot=input-group-control]:focus-visible]:ring-0">
+    // being written in does not change how the box is drawn: the caret says where the
+    // typing goes
+    <InputGroup
+      className="has-[[data-slot=input-group-control]:focus-visible]:border-input has-[[data-slot=input-group-control]:focus-visible]:ring-0"
+      onFocus={() => setWithin(true)}
+      onBlur={(event) => {
+        // one of its own choices being made, in the list that opens for it, is not leaving
+        const next = event.relatedTarget as Element | null
+        const stays =
+          next !== null &&
+          (event.currentTarget.contains(next) ||
+            next.closest("[role=menu], [role=dialog]") !== null)
+        if (!stays) setWithin(false)
+      }}
+    >
       {part && onClearPart && (
         <InputGroupAddon align="block-start" className="pb-0">
           <Badge variant="secondary" className="max-w-full gap-1">
@@ -338,10 +359,17 @@ export function Composer({
         }}
         placeholder={placeholder}
         autoFocus={autoFocus}
-        rows={2}
+        rows={1}
         // a little more room over the words than the box gives, to match what is under
         // the words of the choices below
-        className="max-h-48 min-h-14 pt-3"
+        className={cn(
+          "pt-3 transition-[min-height] duration-150",
+          // with nothing written and nobody writing, the one line is all there is of
+          // it, however long what it suggests is
+          roomy
+            ? "max-h-48 min-h-14"
+            : "max-h-10 min-h-10 overflow-hidden whitespace-nowrap placeholder:text-ellipsis"
+        )}
       />
       {/* by which model, thinking how hard, asking how much: each says what it is set
           to, in fewer words where there is less room */}

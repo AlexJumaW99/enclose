@@ -11,6 +11,8 @@ export type Conversation = {
   id: string
   /** the Claude Code session that carries it on, once it has one */
   sessionId: string | null
+  /** what the user has called it; until they do, it goes by the first thing said in it */
+  name: string | null
   items: ThreadItem[]
   /** what one of its messages comes to in a few words, and which message: see gist.ts */
   gist: { of: string; text: string } | null
@@ -36,6 +38,7 @@ export function newConversation(): Conversation {
   return {
     id: randomBytes(6).toString("hex"),
     sessionId: null,
+    name: null,
     items: [],
     gist: null,
   }
@@ -49,12 +52,12 @@ const single = (dir: string, projectId: string) =>
 export function writeConversation(
   dir: string,
   projectId: string,
-  { id, sessionId, items, gist }: Conversation
+  { id, sessionId, name, items, gist }: Conversation
 ) {
   fs.mkdirSync(folder(dir, projectId), { recursive: true })
   fs.writeFileSync(
     path.join(folder(dir, projectId), `${id}.json`),
-    JSON.stringify({ sessionId, items, gist })
+    JSON.stringify({ sessionId, name, items, gist })
   )
 }
 
@@ -101,14 +104,25 @@ export function readConversations(
   for (const name of names) {
     if (!name.endsWith(".json")) continue
     try {
-      const { sessionId, items, gist } = JSON.parse(
+      const {
+        sessionId,
+        name: called,
+        items,
+        gist,
+      } = JSON.parse(
         fs.readFileSync(path.join(folder(dir, projectId), name), "utf8")
-      ) as { sessionId?: unknown; items?: unknown; gist?: unknown }
+      ) as {
+        sessionId?: unknown
+        name?: unknown
+        items?: unknown
+        gist?: unknown
+      }
       if (!Array.isArray(items) || items.length === 0) continue
       const { of, text } = (gist ?? {}) as { of?: unknown; text?: unknown }
       found.push({
         id: name.slice(0, -".json".length),
         sessionId: typeof sessionId === "string" ? sessionId : null,
+        name: typeof called === "string" && called ? called : null,
         items: (items as ThreadItem[]).map(settled),
         gist:
           typeof of === "string" && typeof text === "string"

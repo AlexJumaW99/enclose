@@ -2,24 +2,34 @@
 // parts list.
 import * as THREE from "three"
 
+import { drawnIn } from "@/lib/palette"
 import type { LoadedPart, Skin } from "./load"
 
+/** Bare metal that is given no colour. */
 const UNCOLOURED = "#aeb2b9"
 // near-black metal would vanish on the dark theme; it goes steel instead
 const STEEL = "#aab0b8"
 export const EDGE = "#0e1012"
 
-/** The colour of one of a part's skins: the manifest's, or the file's own where it has one. */
+/**
+ * The colour of one of a part's skins. It is one of the app's own colours (see
+ * shared/palette.ts): the one the model names, or the nearest to the colour the model or
+ * its file gives, or, if neither gives any, the one that falls to the part's group.
+ * Metal is the exception: it is the colour of its metal.
+ */
 export function skinColour(
-  { part }: LoadedPart,
+  { part, turn }: LoadedPart,
   skin: Skin,
   dark: boolean
 ): THREE.Color {
-  const color = new THREE.Color(part.color ?? UNCOLOURED)
-  if (part.paint === "bare" && skin.color) color.copy(skin.color)
-  if (part.metal && dark && color.getHSL({ h: 0, s: 0, l: 0 }).l < 0.25)
-    color.set(STEEL)
-  return color
+  const ofFile =
+    part.paint === "bare" && skin.color ? `#${skin.color.getHexString()}` : null
+  if (part.metal) {
+    const color = new THREE.Color(ofFile ?? part.color ?? UNCOLOURED)
+    if (dark && color.getHSL({ h: 0, s: 0, l: 0 }).l < 0.25) color.set(STEEL)
+    return color
+  }
+  return new THREE.Color(drawnIn(ofFile ?? part.color, turn))
 }
 
 /** How a part's surface takes the light. */

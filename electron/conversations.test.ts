@@ -67,11 +67,21 @@ describe("conversations on disk", () => {
 
     const read = readConversations(dir, "p1", () => "session-1")
     expect(read).toEqual([
-      { id: read[0].id, sessionId: "session-1", items, gist: null },
+      { id: read[0].id, sessionId: "session-1", name: null, items, gist: null },
     ])
     // moved, not copied: reading again finds the same one, not a second
     expect(fs.existsSync(path.join(dir, "p1.json"))).toBe(false)
     expect(readConversations(dir, "p1", none)).toEqual(read)
+  })
+
+  it("keeps the name a conversation was given", () => {
+    const named = {
+      ...newConversation(),
+      name: "The lid",
+      items: [said("a", "A cube")],
+    }
+    writeConversation(dir, "p1", named)
+    expect(readConversations(dir, "p1", none)).toEqual([named])
   })
 
   it("keeps what a message was summed up as, and drops what does not read as that", () => {

@@ -1,6 +1,8 @@
 // The one description of the model manifest. The README points here, and Claude is
 // given this text when a folder has no model yet, so it can write one.
 
+import { PALETTE_NAMES } from "./palette"
+
 // the first is the name to write; the rest are what earlier projects wrote
 export const MANIFEST_NAMES = [
   "enclose.model.json",
@@ -34,7 +36,7 @@ its own.
       "group": "enclosure",              // the id of the group it is listed under
       "file": "top.glb",                 // glTF binary, Y-up metres (the build123d/OCCT default)
       "edges": "top.edges.bin",          // optional: float32 x1 y1 z1 x2 y2 z2 per edge segment, mm
-      "color": "#f4f4f2",                // optional; omit to keep the colours in the file
+      "color": "blue",                   // optional: one of ${PALETTE_NAMES.join(", ")}; any other colour is drawn as the nearest of them. Omit it to keep the colours in the file, or to be given one by the group
       "matrix": null,                    // optional: 16 numbers, row-major, placing the part
       "explode": [0, 0, 46],             // optional: where it goes when exploded, mm (worked out when no part says)
       "glass": true,                     // optional: force see-through (or not) in glass mode

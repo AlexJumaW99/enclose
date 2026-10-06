@@ -342,6 +342,11 @@ function wire() {
   )
   ipcMain.handle(CHANNEL.threadStop, (_, id: string) => threads.stop(id))
   ipcMain.handle(
+    CHANNEL.threadRename,
+    (_, id: string, conversationId: string, name: string) =>
+      threads.rename(String(id), String(conversationId), String(name))
+  )
+  ipcMain.handle(
     CHANNEL.threadAnswer,
     (_, id: string, permissionId: string, answer: PermissionAnswer) =>
       threads.answer(id, permissionId, answer)

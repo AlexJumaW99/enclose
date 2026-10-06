@@ -45,6 +45,8 @@ const api: CadApi = {
         manner
       ),
     stop: (projectId) => ipcRenderer.invoke(CHANNEL.threadStop, projectId),
+    rename: (projectId, conversationId, name) =>
+      ipcRenderer.invoke(CHANNEL.threadRename, projectId, conversationId, name),
     answer: (projectId, permissionId, answer) =>
       ipcRenderer.invoke(CHANNEL.threadAnswer, projectId, permissionId, answer),
     onItem: (listener) => on(CHANNEL.threadItem, listener),

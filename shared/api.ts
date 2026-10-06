@@ -9,7 +9,7 @@ export type ThreadStatus = "idle" | "working" | "asking"
 /** One conversation about a project, in as much as a card in the sidebar has room for. */
 export type ConversationSummary = {
   id: string
-  /** what it set out to do: the first thing said in it */
+  /** what it goes by: the name it was given, or else the first thing said in it */
   title: string
   status: ThreadStatus
   /** when the current turn started (ms), while one is running */
@@ -204,6 +204,12 @@ export type CadApi = {
     ): Promise<string | null>
     /** stop whatever Claude is doing in the project */
     stop(projectId: string): Promise<void>
+    /** give a conversation a name to go by; given none, it goes by what was first said */
+    rename(
+      projectId: string,
+      conversationId: string,
+      name: string
+    ): Promise<void>
     answer(
       projectId: string,
       permissionId: string,
@@ -248,6 +254,7 @@ export const CHANNEL = {
   threadItems: "thread:items",
   threadSend: "thread:send",
   threadStop: "thread:stop",
+  threadRename: "thread:rename",
   threadAnswer: "thread:answer",
   threadItem: "thread:item",
   claudeStatus: "claude:status",
