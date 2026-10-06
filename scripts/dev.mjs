@@ -35,12 +35,23 @@ function start() {
 
 function restart() {
   if (!app) return start()
+  // One restart at a time. A second asked for while the first is under way would start
+  // a second app, which finds the first holding the single-instance lock and quits - and
+  // an app that quits is taken for the window being closed, which ends the session.
+  if (restarting) return
   restarting = true
   app.once("exit", () => {
     restarting = false
     start()
   })
   app.kill()
+}
+
+// several files saved together are several builds: wait for them to stop arriving
+let soon = null
+function restartSoon() {
+  clearTimeout(soon)
+  soon = setTimeout(restart, 150)
 }
 
 // both bundles report in after every build; start once both are there, restart after that
@@ -50,7 +61,7 @@ const relaunch = {
   setup(build) {
     build.onEnd((result) => {
       if (result.errors.length > 0) return
-      if (++built >= 2) restart()
+      if (++built >= 2) restartSoon()
     })
   },
 }
