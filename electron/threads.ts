@@ -180,7 +180,8 @@ function guide(
     )
   } else {
     lines.push(
-      "- This folder has no model the app can show yet. When the user asks for something to be made, set the project up yourself, in this way, without asking them how:",
+      "- This folder has no model the app can show yet. Until it has, the view shows a plain cube as a stand-in: it is in no file and is nothing the user made, so take no account of it, and expect to see it in a screenshot taken before the first build.",
+      "- When the user asks for something to be made, set the project up yourself, in this way, without asking them how:",
       `  1. Copy the app's exporter into the folder as enclose.py: cp "${kit}" enclose.py. Leave the copy as it is. Its docstring shows how it is used.`,
       "  2. Write model.py. Build each part with build123d, in millimetres with Z up, each part where it sits in the assembly, and hand the parts to enclose.Model as the docstring shows: one part for each separate component, in groups. If the folder already holds CAD files (STEP), start from them: build123d's import_step reads them.",
       '  3. Find a Python that has build123d: try python3 -c "import build123d". If it has not, make a virtual environment in the folder (python3 -m venv .venv, then .venv/bin/pip install build123d; or uv if it is installed) and use that one.',

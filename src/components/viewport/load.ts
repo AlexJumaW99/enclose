@@ -40,6 +40,8 @@ export type LoadedModel = {
   parts: LoadedPart[]
   /** the assembled model, model mm */
   box: THREE.Box3
+  /** not a model of the project's: the cube shown until it has one */
+  standIn?: true
 }
 
 // glTF is Y-up metres; the model is Z-up millimetres
@@ -227,6 +229,67 @@ export async function loadModel(
     }
   }
   return { model, parts, box }
+}
+
+/** How big the cube shown for a project with no model is, in mm a side. */
+const STAND_IN = 40
+
+/**
+ * What a project with no model yet is shown as: a plain cube standing on the ground, the
+ * way a 3D program opens. It is in no file. The first model built in the folder takes
+ * its place.
+ */
+export function standInModel(): LoadedModel {
+  const geometry = new THREE.BoxGeometry(STAND_IN, STAND_IN, STAND_IN)
+  geometry.translate(0, 0, STAND_IN / 2)
+  geometry.computeBoundingBox()
+  geometry.boundsTree = new MeshBVH(geometry, { indirect: true })
+  // a box is drawn as two triangles a side
+  const skin: Skin = {
+    geometry,
+    color: null,
+    faceOf: Uint32Array.from({ length: 12 }, (_, triangle) => triangle >> 1),
+  }
+  const part: Part = {
+    id: "stand-in",
+    label: "Cube",
+    group: "stand-in",
+    file: "",
+    edges: null,
+    color: null,
+    paint: "all",
+    matrix: null,
+    explode: [0, 0, 0],
+    glass: null,
+    metal: false,
+  }
+  const box = geometry.boundingBox!.clone()
+  // The view frames a model's box closely. Left to that the cube would fill the window,
+  // so it is given room: something to look at in the middle, not a wall.
+  const stage = box.clone().expandByScalar(STAND_IN * 0.75)
+  return {
+    standIn: true,
+    model: {
+      title: null,
+      parts: [part],
+      groups: [{ id: "stand-in", label: "Nothing made yet", shell: false }],
+      keepouts: [],
+      keepoutsLabel: "",
+      downloads: [],
+    },
+    parts: [
+      {
+        part,
+        skins: [skin],
+        edges: creases([skin]),
+        box,
+        home: new THREE.Matrix4(),
+        away: new THREE.Vector3(),
+        faces: 6,
+      },
+    ],
+    box: stage,
+  }
 }
 
 export function disposeModel(loaded: LoadedModel) {

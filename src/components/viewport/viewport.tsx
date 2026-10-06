@@ -1,9 +1,8 @@
 import * as React from "react"
 import { cn } from "cn"
-import { BoxIcon, FolderPlusIcon, TriangleAlertIcon } from "lucide-react"
+import { FolderPlusIcon, TriangleAlertIcon } from "lucide-react"
 
 import type { Project } from "@shared/api"
-import { Composer } from "@/components/composer"
 import { PartPrompt } from "@/components/part-prompt"
 import { PartsPanel } from "@/components/parts-panel"
 import { Tools } from "@/components/tools"
@@ -25,7 +24,7 @@ import { SPREAD, useStore } from "@/lib/store"
 import { AxisGizmo } from "./axis-gizmo"
 import { bridge } from "./bridge"
 import { ExplodeSlider } from "./explode-slider"
-import { disposeModel, loadModel, type LoadedModel } from "./load"
+import { disposeModel, loadModel, standInModel, type LoadedModel } from "./load"
 import { appearance, Scene } from "./scene"
 import { ShadingPie } from "./shading-pie"
 import { useThumbnails } from "./thumbnails"
@@ -37,10 +36,12 @@ type Loading =
   | { status: "ready" }
 
 /**
- * The project's model, loaded. While a rebuilt model is coming in, the previous one stays
- * on screen, so a rebuild swaps the picture rather than blanking it.
+ * The project's model, loaded - or a cube standing in for it, while the project has none.
+ * While a rebuilt model is coming in, the previous one stays on screen, so a rebuild swaps
+ * the picture rather than blanking it.
  */
 function useLoadedModel(project: Project) {
+  const blank = project.manifest === null
   const [loaded, setLoaded] = React.useState<LoadedModel | null>(null)
   const [state, setState] = React.useState<Loading>({
     status: "loading",
@@ -51,7 +52,15 @@ function useLoadedModel(project: Project) {
   React.useEffect(() => {
     let cancelled = false
     const run = async () => {
-      setState({ status: "loading", done: 0, total: 0 })
+      if (!blank) setState({ status: "loading", done: 0, total: 0 })
+      // nothing made in the folder yet: there is a cube to look at meanwhile
+      if (blank) {
+        await Promise.resolve()
+        if (cancelled) return
+        setLoaded(standInModel())
+        setState({ status: "ready" })
+        return
+      }
       const source = await window.cad.model.read(project.id)
       if (!source) throw new Error("The model's manifest could not be read.")
       const model = readModel(source.manifest)
@@ -77,7 +86,7 @@ function useLoadedModel(project: Project) {
     return () => {
       cancelled = true
     }
-  }, [project.id, project.revision])
+  }, [project.id, project.revision, blank])
 
   // free the previous model's meshes once it is off screen
   React.useEffect(
@@ -102,6 +111,14 @@ function Model({ project }: { project: Project }) {
   const partsOpen = useStore((s) => s.partsOpen)
   const thumbs = useThumbnails(loaded, partsOpen)
   const goHome = useStore((s) => s.goHome)
+  const setThreadOpen = useStore((s) => s.setThreadOpen)
+
+  // A project with nothing made in it opens with the conversation beside it: that is
+  // where the first thing to do is. Put away, it stays away.
+  const blank = project.manifest === null
+  React.useEffect(() => {
+    if (blank) setThreadOpen(true)
+  }, [blank, setThreadOpen])
 
   const middle = React.useMemo(
     () => loaded?.box.getCenter(loaded.box.min.clone()).toArray() ?? null,
@@ -218,9 +235,11 @@ function Model({ project }: { project: Project }) {
           view={view}
           selectedId={selection?.part.id ?? null}
           hoveredId={hoveredId}
-          homeKey={`${project.id}:${homeRequests}`}
-          onPick={select}
-          onHover={hover}
+          // the first model made takes the cube's place, and is framed afresh
+          homeKey={`${project.id}:${loaded.standIn ? "cube" : "model"}:${homeRequests}`}
+          // the stand-in is nothing to ask about: it is not picked, and does not light up
+          onPick={loaded.standIn ? nothing : select}
+          onHover={loaded.standIn ? nothing : hover}
           onSection={moveSection}
         />
       )}
@@ -274,6 +293,8 @@ function Model({ project }: { project: Project }) {
   )
 }
 
+const nothing = () => {}
+
 /** No projects at all: how one is started. */
 function Welcome() {
   const addProject = useStore((s) => s.addProject)
@@ -297,43 +318,9 @@ function Welcome() {
   )
 }
 
-/** A project with no model yet: where it is asked for. */
-function Blank({ project }: { project: Project }) {
-  const threadOpen = useStore((s) => s.threadOpen)
-  const working = project.thread.status !== "idle"
-  return (
-    <Empty className="h-full">
-      <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <BoxIcon />
-        </EmptyMedia>
-        <EmptyTitle>
-          {working ? "Claude is working on it" : "Nothing to show yet"}
-        </EmptyTitle>
-        <EmptyDescription>
-          {working
-            ? "The model appears here as soon as it is built."
-            : "Say what you want to make and Claude builds it in this folder. The model appears here as soon as it is built."}
-        </EmptyDescription>
-      </EmptyHeader>
-      {/* with the conversation up, that is where it is written */}
-      {!threadOpen && !working && (
-        <EmptyContent className="w-full max-w-xl">
-          <Composer
-            part={null}
-            placeholder="A case for a Raspberry Pi Zero, with a lid that screws on…"
-            autoFocus
-          />
-        </EmptyContent>
-      )}
-    </Empty>
-  )
-}
-
 /** The middle of the window: the open project's model, or what to do about not having one. */
 export function Viewport({ project }: { project: Project | null }) {
   if (!project) return <Welcome />
-  if (!project.manifest) return <Blank key={project.id} project={project} />
   // keyed by project, so one project's model never lingers under another's name
   return <Model key={project.id} project={project} />
 }

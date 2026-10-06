@@ -216,14 +216,24 @@ export function Thread({ project }: { project: Project }) {
         </ScrollArea>
       ) : (
         <Empty className="flex-1">
-          <EmptyHeader>
-            <EmptyTitle>Ask Claude about this model</EmptyTitle>
-            <EmptyDescription>
-              Describe a change, or click a part in the view and say what it
-              should become. Claude edits the project and rebuilds; the view
-              updates by itself.
-            </EmptyDescription>
-          </EmptyHeader>
+          {project.manifest ? (
+            <EmptyHeader>
+              <EmptyTitle>Ask Claude about this model</EmptyTitle>
+              <EmptyDescription>
+                Describe a change, or click a part in the view and say what it
+                should become. Claude edits the project and rebuilds; the view
+                updates by itself.
+              </EmptyDescription>
+            </EmptyHeader>
+          ) : (
+            <EmptyHeader>
+              <EmptyTitle>What do you want to make?</EmptyTitle>
+              <EmptyDescription>
+                Describe it and Claude builds it in this folder. It takes the
+                place of the cube.
+              </EmptyDescription>
+            </EmptyHeader>
+          )}
         </Empty>
       )}
 
@@ -231,7 +241,11 @@ export function Thread({ project }: { project: Project }) {
         <Composer
           part={selection?.part ?? null}
           onClearPart={() => select(null)}
-          placeholder="Message Claude"
+          placeholder={
+            project.manifest
+              ? "Message Claude"
+              : "A case for a Raspberry Pi Zero, with a lid that screws on…"
+          }
           // opened to be written in: by its button, or by Cmd+B
           autoFocus
         />
