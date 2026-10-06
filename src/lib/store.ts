@@ -31,26 +31,36 @@ export type View = {
   /** how far apart the parts are pulled, as a multiple of the model's own distances */
   spread: number
   section: Section | null
-  keepouts: boolean
-  /** parts switched off in the layers panel */
-  hidden: Record<string, boolean>
+  /** what the view is cut down to; null shows everything */
+  only: Only | null
 }
+
+/**
+ * What is picked out in the parts list, to be shown on its own: one part, a group of
+ * them, or the keep-outs, which are not parts but are listed with them.
+ */
+export type Only = { kind: "part" | "group" | "keepouts"; id: string }
 
 /** Exploding starts at the model's own distances and can be pushed this much further. */
 export const SPREAD = { min: 1, max: 4 }
 
 /**
  * A part that is picked out. `at` is where on screen it was clicked, and is what the
- * prompt opens beside; a part picked from the layers list has none.
+ * prompt opens beside.
  */
 export type Selection = { part: PartRef; at: { x: number; y: number } | null }
 
-const ACTIVE_KEY = "cad-ai:project"
-const ACCESS_KEY = "cad-ai:access"
-const MODE_KEY = "cad-ai:mode"
+const ACTIVE_KEY = "enclose:project"
+const ACCESS_KEY = "enclose:access"
+const MODE_KEY = "enclose:mode"
+
+/** What was saved under a key, or under the name the app had before it was Enclose. */
+const saved = (key: string) =>
+  localStorage.getItem(key) ??
+  localStorage.getItem(key.replace("enclose:", "cad-ai:"))
 
 const savedMode = (): DisplayMode => {
-  const mode = localStorage.getItem(MODE_KEY)
+  const mode = saved(MODE_KEY)
   return mode === "glass" || mode === "wireframe" ? mode : "solid"
 }
 /** How a model is looked at when it opens: whole, assembled, in the mode last used. */
@@ -59,22 +69,18 @@ const homeView = (): View => ({
   exploded: false,
   spread: SPREAD.min,
   section: null,
-  keepouts: true,
-  hidden: {},
+  only: null,
 })
 
 /** What the view can be put into, and got back out of with Esc. */
-export type Entered = "section" | "explode" | "layers"
+export type Entered = "section" | "explode" | "only"
 
 /** Those of them that are on, in the order they were gone into: the last is the latest. */
-function enteredNow(
-  { view, layersOpen }: Pick<State, "view" | "layersOpen">,
-  before: Entered[]
-): Entered[] {
+function enteredNow(view: View, before: Entered[]): Entered[] {
   const on: Record<Entered, boolean> = {
     section: view.section !== null,
     explode: view.exploded,
-    layers: layersOpen,
+    only: view.only !== null,
   }
   const still = before.filter((name) => on[name])
   const fresh = (Object.keys(on) as Entered[]).filter(
@@ -89,14 +95,15 @@ type State = {
   activeId: string | null
   items: Record<string, ThreadItem[]>
   threadOpen: boolean
-  layersOpen: boolean
+  /** whether the list of parts is up */
+  partsOpen: boolean
   access: Access
   claude: ClaudeStatus | null
   view: View
   /** what the view has been put into, latest last: Esc leaves that one */
   entered: Entered[]
   selection: Selection | null
-  /** the part under the pointer, in the view or in the layers list */
+  /** the part under the pointer, in the view or in the parts list */
   hoveredId: string | null
   /** whether the prompt beside the selection is showing */
   prompting: boolean
@@ -112,8 +119,11 @@ type State = {
   hover(partId: string | null): void
   closePrompt(): void
   setThreadOpen(open: boolean): void
-  setLayersOpen(open: boolean): void
-  /** Get out of the last thing gone into; false if there was nothing to get out of. */
+  setPartsOpen(open: boolean): void
+  /**
+   * What Esc does: put the parts list away if it is up, and otherwise get out of the
+   * last thing gone into. False if there was nothing to do.
+   */
   leave(): boolean
   setAccess(access: Access): void
   send(text: string, part: PartRef | null): void
@@ -125,8 +135,8 @@ export const useStore = create<State>()((set, get) => ({
   activeId: null,
   items: {},
   threadOpen: false,
-  layersOpen: false,
-  access: localStorage.getItem(ACCESS_KEY) === "full" ? "full" : "ask",
+  partsOpen: false,
+  access: saved(ACCESS_KEY) === "full" ? "full" : "ask",
   claude: null,
   view: homeView(),
   entered: [],
@@ -144,7 +154,7 @@ export const useStore = create<State>()((set, get) => ({
       hoveredId: null,
       prompting: false,
       view: homeView(),
-      entered: enteredNow({ ...state, view: homeView() }, state.entered),
+      entered: enteredNow(homeView(), state.entered),
     }))
     if (!get().items[id]) {
       void window.cad.thread.items(id).then((items) => {
@@ -166,7 +176,7 @@ export const useStore = create<State>()((set, get) => ({
     if (patch.mode) localStorage.setItem(MODE_KEY, patch.mode)
     set((state) => {
       const view = { ...state.view, ...patch }
-      return { view, entered: enteredNow({ ...state, view }, state.entered) }
+      return { view, entered: enteredNow(view, state.entered) }
     })
   },
 
@@ -190,21 +200,22 @@ export const useStore = create<State>()((set, get) => ({
     set({ threadOpen })
   },
 
-  setLayersOpen(layersOpen) {
-    set((state) => ({
-      layersOpen,
-      entered: enteredNow({ ...state, layersOpen }, state.entered),
-    }))
+  setPartsOpen(partsOpen) {
+    set({ partsOpen })
   },
 
   leave() {
-    const last = get().entered.at(-1)
+    const { partsOpen, entered, setView } = get()
+    // the list is a thing on top of the view and goes first: what was picked in it stays
+    if (partsOpen) {
+      set({ partsOpen: false })
+      return true
+    }
+    const last = entered.at(-1)
     if (!last) return false
-    if (last === "layers") get().setLayersOpen(false)
-    else
-      get().setView(
-        last === "section" ? { section: null } : { exploded: false }
-      )
+    if (last === "section") setView({ section: null })
+    else if (last === "explode") setView({ exploded: false })
+    else setView({ only: null })
     return true
   },
 
@@ -236,9 +247,7 @@ function reconcile(projects: Project[]) {
   useStore.setState({ projects })
   if (activeId && projects.some((p) => p.id === activeId)) return
   // the open project is gone, or nothing was open yet: fall back to one that exists
-  const wanted =
-    /^#project=(.+)$/.exec(location.hash)?.[1] ??
-    localStorage.getItem(ACTIVE_KEY)
+  const wanted = /^#project=(.+)$/.exec(location.hash)?.[1] ?? saved(ACTIVE_KEY)
   const next = projects.find((p) => p.id === wanted) ?? projects[0]
   if (next) activate(next.id)
   else useStore.setState({ activeId: null, selection: null, prompting: false })

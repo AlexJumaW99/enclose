@@ -14,12 +14,9 @@ import type { Turn } from "@/lib/orient"
 import type { Section, Selection, View } from "@/lib/store"
 import { bridge } from "./bridge"
 import type { LoadedModel, LoadedPart } from "./load"
+import { EDGE, finish, skinColour } from "./paint"
 import { FOV, MODEL_TO_WORLD, REACH, Rig, toWorld } from "./rig"
 
-const UNCOLOURED = "#aeb2b9"
-// near-black metal would vanish on the dark theme; it goes steel instead
-const STEEL = "#aab0b8"
-const EDGE = "#0e1012"
 // surfaces sit a hair back in the depth buffer so their own edges win cleanly
 const BEHIND_EDGES = {
   polygonOffset: true,
@@ -42,15 +39,20 @@ export function appearance(
   model: LoadedModel,
   view: View
 ): { shown: boolean; look: Look } {
-  const shown = !view.hidden[loaded.part.id]
+  // with something picked out in the parts list, only that is drawn
+  const { only } = view
+  const shown =
+    !only ||
+    (only.kind === "part" && only.id === loaded.part.id) ||
+    (only.kind === "group" && only.id === loaded.part.group)
   if (view.mode === "wireframe") return { shown, look: "wire" }
   if (view.mode === "solid") return { shown, look: "solid" }
   // Glass is for seeing inside: only the outside goes see-through. A model that does
   // not say which parts are its outside goes see-through as a whole.
-  const shells = model.model.layers.filter((layer) => layer.shell)
+  const shells = model.model.groups.filter((group) => group.shell)
   if (shells.length === 0) return { shown, look: "glass" }
   const outside =
-    shells.some((layer) => layer.id === loaded.part.layer) &&
+    shells.some((group) => group.id === loaded.part.group) &&
     (loaded.part.glass ??
       loaded.box.getSize(new THREE.Vector3()).length() >=
         model.box.getSize(new THREE.Vector3()).length() * GLASS_FROM)
@@ -90,19 +92,8 @@ const PartModel = React.memo(function PartModel({
 
   const planes = React.useMemo(() => [plane], [plane])
   const skinColors = React.useMemo(
-    () =>
-      loaded.skins.map((skin) => {
-        const color = new THREE.Color(part.color ?? UNCOLOURED)
-        if (part.paint === "bare" && skin.color) color.copy(skin.color)
-        if (
-          part.metal &&
-          colors.dark &&
-          color.getHSL({ h: 0, s: 0, l: 0 }).l < 0.25
-        )
-          color.set(STEEL)
-        return color
-      }),
-    [loaded.skins, part, colors.dark]
+    () => loaded.skins.map((skin) => skinColour(loaded, skin, colors.dark)),
+    [loaded, colors.dark]
   )
 
   const lines = React.useMemo(() => {
@@ -164,8 +155,7 @@ const PartModel = React.memo(function PartModel({
           <meshStandardMaterial
             visible={!wire}
             color={skinColors[index]}
-            metalness={part.metal ? 0.55 : 0.1}
-            roughness={part.metal ? 0.45 : 0.62}
+            {...finish(loaded)}
             side={THREE.DoubleSide}
             clippingPlanes={planes}
             {...BEHIND_EDGES}
@@ -577,7 +567,7 @@ export function Scene({
           )
         })}
         {/* keep-outs mark where things sit assembled; pulled apart they'd mislead */}
-        {view.keepouts &&
+        {(!view.only || view.only.kind === "keepouts") &&
           !view.exploded &&
           loaded.model.keepouts.map((keepout) => (
             <KeepoutBox

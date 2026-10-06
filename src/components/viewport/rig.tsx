@@ -40,7 +40,7 @@ const HALF_FOV = Math.tan(THREE.MathUtils.degToRad(FOV / 2))
 export const REACH = { nearest: 0.02, furthest: 40 }
 
 /** Where the camera sits when a model opens: front right, looking down on it. */
-const HOME_DIRECTION = new THREE.Vector3(0.5, -0.62, 0.6).normalize()
+export const HOME_DIRECTION = new THREE.Vector3(0.5, -0.62, 0.6).normalize()
 /** How hard a wheel zooms, against the controls' own pace; and a pinch, against a wheel. */
 const ZOOM_SPEED = 3
 const PINCH = 2.25

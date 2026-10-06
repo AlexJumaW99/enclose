@@ -21,7 +21,7 @@ if (window.cad) {
   // this page was opened in a browser; it only works inside the app's own window
   root.render(
     <p className="p-6 text-sm text-muted-foreground">
-      This is the window of the CAD AI desktop app. Start it with{" "}
+      This is the window of the Enclose desktop app. Start it with{" "}
       <code>npm run dev</code>.
     </p>
   )

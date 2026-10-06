@@ -66,13 +66,22 @@ describe("findModel", () => {
   it("takes the project's word for where the model is and how it is built", () => {
     write("near/model.json", MANIFEST)
     write("deep/down/here/custom.json", MANIFEST)
-    write("cad-ai.json", {
+    write("enclose.json", {
       model: "deep/down/here/custom.json",
       build: "python3 make.py",
     })
     expect(findModel(root)).toEqual({
       manifest: path.join(root, "deep/down/here/custom.json"),
       build: "python3 make.py",
+    })
+  })
+
+  it("still reads the file a project wrote before the app was called Enclose", () => {
+    write("deep/custom.json", MANIFEST)
+    write("cad-ai.json", { model: "deep/custom.json", build: "make" })
+    expect(findModel(root)).toEqual({
+      manifest: path.join(root, "deep/custom.json"),
+      build: "make",
     })
   })
 })

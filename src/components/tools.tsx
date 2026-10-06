@@ -2,7 +2,7 @@ import * as React from "react"
 import { cn } from "cn"
 import {
   FlipHorizontal2Icon,
-  LayersIcon,
+  BoxesIcon,
   MessageSquareIcon,
   UnfoldVerticalIcon,
 } from "lucide-react"
@@ -76,6 +76,7 @@ function Press({
 /** A button that is either on or off, named by its tooltip. */
 function Switch({
   label,
+  opens,
   shortcut,
   side = "left",
   on,
@@ -83,6 +84,8 @@ function Switch({
   children,
 }: {
   label: string
+  /** what the button brings up, for that thing to know its own button by */
+  opens?: string
   /** the key that does the same, shown beside the name */
   shortcut?: string
   /** where the tooltip goes, when something else has the left */
@@ -98,6 +101,7 @@ function Switch({
           <Toggle
             pressed={on}
             onPressedChange={onChange}
+            data-opens={opens}
             aria-keyshortcuts={shortcut
               ?.replace("⌘", "Meta+")
               .replace("Ctrl ", "Control+")}
@@ -136,8 +140,8 @@ export function Tools({
   const setView = useStore((state) => state.setView)
   const threadOpen = useStore((state) => state.threadOpen)
   const setThreadOpen = useStore((state) => state.setThreadOpen)
-  const layersOpen = useStore((state) => state.layersOpen)
-  const setLayersOpen = useStore((state) => state.setLayersOpen)
+  const partsOpen = useStore((state) => state.partsOpen)
+  const setPartsOpen = useStore((state) => state.setPartsOpen)
 
   return (
     <div className="pointer-events-none absolute inset-y-0 right-0 w-15">
@@ -198,8 +202,15 @@ export function Tools({
           >
             <UnfoldVerticalIcon />
           </Switch>
-          <Switch label="Layers" on={layersOpen} onChange={setLayersOpen}>
-            <LayersIcon />
+          {/* lit while the list is up, and while something picked in it is still all
+              that is showing: pressing it brings the list back to pick again */}
+          <Switch
+            label="Parts"
+            opens="parts"
+            on={partsOpen || view.only !== null}
+            onChange={() => setPartsOpen(!partsOpen)}
+          >
+            <BoxesIcon />
           </Switch>
         </Stack>
       )}

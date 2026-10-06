@@ -1,6 +1,6 @@
-# CAD AI
+# Enclose
 
-A desktop workbench for CAD projects that are built from code. You look at the model in
+A desktop workbench for CAD projects that are built from code ([enclose.dev](https://enclose.dev)). You look at the model in
 3D, click the part you mean, say what should change, and Claude edits the project and
 rebuilds it. The view reloads by itself.
 
@@ -26,19 +26,21 @@ npm run dev -- path/to/project   # ...with that folder added and open
 ## How it works
 
 **A project is a folder.** Add one with the + in the sidebar. The app looks in it for a
-model manifest: a JSON file listing the parts, the mesh file of each, and how they are
-grouped. The manifest and its files are build output; the project's own script writes
+model manifest: a JSON file listing the parts, the mesh file of each, and the groups they
+are listed under. A part is any separate component: a thing made, bought or fitted on
+its own. The manifest and its files are build output; the project's own script writes
 them. When the manifest is rewritten, the view reloads and keeps your camera where it was.
 
 The manifest format is in [`shared/manifest-format.ts`](shared/manifest-format.ts). A
-`cad-ai.json` at the top of the project can say where the manifest is and how to build:
+`enclose.json` at the top of the project can say where the manifest is and how to build:
 
 ```json
 { "model": "viewer/public/model/report.json", "build": "python3 make_enclosure.py" }
 ```
 
-Without it, the nearest file named `cad-ai.model.json`, `report.json` or `model.json`
-that lists parts is used.
+Without it, the nearest file named `enclose.model.json`, `report.json` or `model.json`
+that lists parts is used. (Files named `cad-ai.json` and `cad-ai.model.json`, from before
+the app had its name, are still read.)
 
 **The view** draws each part as one mesh per colour, however many faces the CAD export
 wrote, which is what keeps large assemblies smooth (the benchmark behind that is in
@@ -78,7 +80,7 @@ view turns the model over sideways, not end over end.
 **Shading** is on Z, the way it is in Blender: the key brings solid, glass and wireframe
 up round the pointer. Hold it, flick towards one and let go; or tap it, and click one.
 A choice is pointed at by direction, so the pointer need not reach it. Esc, Z again or a
-right-click puts the menu away. Glass makes the outside see-through (the layers a
+right-click puts the menu away. Glass makes the outside see-through (the groups a
 manifest marks as `shell`, or everything if it marks none); wireframe draws edges only.
 
 Down the right-hand edge:
@@ -91,11 +93,18 @@ Down the right-hand edge:
 - **Explode** (E) pulls the parts apart by the distances the manifest gives (or straight
   out from the middle, if it gives none), and a slider along the bottom pulls them
   further.
-- **Layers** lists the manifest's layers and the parts in each, with an eye to switch any
-  of them off. Pointing at a row lights the part up in the view; clicking picks it.
+- **Parts** lists what the model is made of: each part with a small picture of it, under
+  the groups the model puts them in. Pick a part or a group and the view shows it on its
+  own; pick it again and the rest comes back. Esc, or a press anywhere else, puts the
+  list away and leaves what you picked showing, and the button stays lit while it is.
 
-Esc gets back out of the section, the explode and the layers, one press each, starting
-with whichever you went into last.
+Esc puts the parts list away if it is up. After that it gets back out of the section,
+the explode and whatever was picked in the list, one press each, starting with whichever
+you went into last.
+
+Nobody arranges the groups by hand. They come from the manifest, which the project's
+build writes, and Claude is told that grouping is its job: when it adds or removes parts
+it puts each where a person would look for it, and makes a group when none fits.
 
 **Claude** is the Claude Code already on your machine, run through the
 [Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview) in the project's folder.
@@ -104,7 +113,8 @@ do it in Claude Code. Each project has one conversation, which resumes where it 
 Cmd+B shows the conversation, and puts it away again.
 
 On top of what Claude Code can already do, the app gives Claude three tools: a screenshot
-of the view as you see it, the list of parts with their sizes, and your current selection.
+of the view as you see it, the list of parts with their groups and sizes, and your current
+selection.
 A message sent from a clicked part carries the part and the point you clicked, in the
 model's coordinates.
 

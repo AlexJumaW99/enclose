@@ -3,8 +3,8 @@ import { cn } from "cn"
 import { BoxIcon, TriangleAlertIcon } from "lucide-react"
 
 import type { Project } from "@shared/api"
-import { LayersPanel } from "@/components/layers-panel"
 import { PartPrompt } from "@/components/part-prompt"
+import { PartsPanel } from "@/components/parts-panel"
 import { Tools } from "@/components/tools"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -27,6 +27,7 @@ import { ExplodeSlider } from "./explode-slider"
 import { disposeModel, loadModel, type LoadedModel } from "./load"
 import { appearance, Scene } from "./scene"
 import { ShadingPie } from "./shading-pie"
+import { useThumbnails } from "./thumbnails"
 import { sectionAcross, sectionFacing, SectionPlanes } from "./section-planes"
 
 type Loading =
@@ -97,7 +98,8 @@ function Model({ project }: { project: Project }) {
   const hoveredId = useStore((s) => s.hoveredId)
   const hover = useStore((s) => s.hover)
   const homeRequests = useStore((s) => s.homeRequests)
-  const layersOpen = useStore((s) => s.layersOpen)
+  const partsOpen = useStore((s) => s.partsOpen)
+  const thumbs = useThumbnails(loaded, partsOpen)
   const goHome = useStore((s) => s.goHome)
 
   const middle = React.useMemo(
@@ -108,7 +110,8 @@ function Model({ project }: { project: Project }) {
   // Cmd+1 is the view the model opened with; Cmd+2 to 7 are the six flat ones. S cuts
   // the model open and E pulls it apart, both again to undo. While it is cut open, X and
   // Y choose the axis the cut goes across (and Z, which the shading menu passes on). Esc
-  // gets out of the section, the explode or the layers, whichever was gone into last.
+  // puts the parts list away, and then gets out of the section, the explode or what was
+  // picked in the list, whichever was gone into last.
   React.useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.altKey || event.shiftKey) return
@@ -158,6 +161,22 @@ function Model({ project }: { project: Project }) {
     [cut, middle, setView]
   )
 
+  // A rebuild can take away the part or the group that was picked out, which would
+  // leave nothing showing: then everything shows again.
+  React.useEffect(() => {
+    const { only } = useStore.getState().view
+    if (!loaded || !only) return
+    const { parts, groups, keepouts } = loaded.model
+    const there =
+      only.kind === "part"
+        ? parts.some((part) => part.id === only.id)
+        : only.kind === "group"
+          ? groups.some((group) => group.id === only.id) &&
+            parts.some((part) => part.group === only.id)
+          : keepouts.length > 0
+    if (!there) setView({ only: null })
+  }, [loaded, setView])
+
   // what Claude gets when it asks which parts are on screen
   React.useEffect(() => {
     if (!loaded) return
@@ -168,7 +187,7 @@ function Model({ project }: { project: Project }) {
         return {
           id: part.part.id,
           label: part.part.label,
-          layer: part.part.layer,
+          group: part.part.group,
           min: box.min.toArray().map(round),
           max: box.max.toArray().map(round),
           faces: part.faces,
@@ -225,9 +244,10 @@ function Model({ project }: { project: Project }) {
       )}
 
       <Tools loaded={loaded} projectId={project.id} />
-      {loaded && layersOpen && (
-        <LayersPanel
+      {loaded && partsOpen && (
+        <PartsPanel
           loaded={loaded}
+          thumbs={thumbs}
           // further in while the section's second button stands where it would be
           className={cn(
             "absolute top-1/2 max-h-[70%] -translate-y-1/2 transition-[right]",

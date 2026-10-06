@@ -3,15 +3,16 @@
 import type { Vec3 } from "@shared/api"
 
 /**
- * A named group of parts, as the layers panel lists them. `shell` marks the outside of
+ * A named group of parts, as the parts list shows them. `shell` marks the outside of
  * the thing: the parts that go see-through in glass mode, so what they enclose shows.
  */
-export type Layer = { id: string; label: string; shell: boolean }
+export type Group = { id: string; label: string; shell: boolean }
 
 export type Part = {
   id: string
   label: string
-  layer: string
+  /** the group it is listed under */
+  group: string
   file: string
   edges: string | null
   color: string | null
@@ -48,16 +49,16 @@ export type Download = {
 export type Model = {
   title: string | null
   parts: Part[]
-  layers: Layer[]
+  groups: Group[]
   keepouts: Keepout[]
   keepoutsLabel: string
   downloads: Download[]
 }
 
-// The first project this app opened wrote its manifest before layers could be declared:
-// parts carry a `group`, and the viewer it came with knew what each group meant. A
-// manifest without `layers` is read the way that viewer read it.
-const UNDECLARED: Record<string, Omit<Layer, "id">> = {
+// The first project this app opened wrote its manifest before groups could be declared:
+// parts carry a `group`, and the viewer it came with knew what each one meant. A
+// manifest that declares no groups is read the way that viewer read it.
+const UNDECLARED: Record<string, Omit<Group, "id">> = {
   enclosure: { label: "Enclosure", shell: true },
   inside: { label: "Electronics", shell: false },
   screws: { label: "Screws", shell: false },
@@ -82,7 +83,9 @@ export function readModel(manifest: unknown): Model {
   if (!isObject(manifest) || !Array.isArray(manifest.parts)) {
     throw new Error("The manifest has no list of parts.")
   }
-  const declared = Array.isArray(manifest.layers)
+  // "layers" is what groups were called in the first version of the format
+  const listed = manifest.groups ?? manifest.layers
+  const declared = Array.isArray(listed)
 
   const parts: Part[] = manifest.parts.map((raw: unknown, index) => {
     if (!isObject(raw)) throw new Error(`Part ${index + 1} is not an object.`)
@@ -90,7 +93,7 @@ export function readModel(manifest: unknown): Model {
     const file = text(raw.file)
     if (!id || !file)
       throw new Error(`Part ${index + 1} needs an "id" and a "file".`)
-    const layer = text(raw.layer) ?? text(raw.group) ?? "model"
+    const group = text(raw.group) ?? text(raw.layer) ?? "model"
     const color = text(raw.color)
     const matrix =
       Array.isArray(raw.matrix) && raw.matrix.length === 16
@@ -99,15 +102,15 @@ export function readModel(manifest: unknown): Model {
     return {
       id,
       label: text(raw.label) ?? id,
-      layer,
+      group,
       file,
       edges: text(raw.edges),
       color,
-      paint: color && (declared || layer !== "inside") ? "all" : "bare",
+      paint: color && (declared || group !== "inside") ? "all" : "bare",
       matrix,
       explode: vec3(raw.explode) ?? [0, 0, 0],
       glass: typeof raw.glass === "boolean" ? raw.glass : null,
-      metal: raw.finish === "metal" || (!declared && layer === "screws"),
+      metal: raw.finish === "metal" || (!declared && group === "screws"),
     }
   })
   if (parts.length === 0) throw new Error("The manifest lists no parts.")
@@ -118,23 +121,23 @@ export function readModel(manifest: unknown): Model {
     ids.add(part.id)
   }
 
-  const used = [...new Set(parts.map((p) => p.layer))]
-  let layers: Layer[]
+  const used = [...new Set(parts.map((p) => p.group))]
+  let groups: Group[]
   if (declared) {
-    layers = (manifest.layers as unknown[]).filter(isObject).flatMap((raw) => {
+    groups = (listed as unknown[]).filter(isObject).flatMap((raw) => {
       const id = text(raw.id)
       if (!id) return []
       // "control": "shell" is how the first version of the format spelled it
       const shell = raw.shell === true || raw.control === "shell"
       return [{ id, label: text(raw.label) ?? titled(id), shell }]
     })
-    // a part may name a layer nobody declared: it still gets listed
+    // a part may name a group nobody declared: it still gets listed
     for (const id of used) {
-      if (!layers.some((l) => l.id === id))
-        layers.push({ id, label: titled(id), shell: false })
+      if (!groups.some((g) => g.id === id))
+        groups.push({ id, label: titled(id), shell: false })
     }
   } else {
-    layers = used.map((id) => ({
+    groups = used.map((id) => ({
       id,
       ...(UNDECLARED[id] ?? { label: titled(id), shell: false }),
     }))
@@ -187,7 +190,7 @@ export function readModel(manifest: unknown): Model {
   return {
     title: text(manifest.title),
     parts,
-    layers,
+    groups,
     keepouts,
     keepoutsLabel:
       text(manifest.keepoutsLabel) ??

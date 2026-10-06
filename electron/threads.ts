@@ -141,10 +141,12 @@ function guide(
   build: string | null
 ): string {
   const lines = [
-    "You are running inside CAD AI, a desktop app. The user is looking at a 3D view of this project's model while they talk to you, and can click a part to ask about it.",
+    "You are running inside Enclose, a desktop app for designing physical things in code. The user is looking at a 3D view of this project's model while they talk to you, and can click a part to ask about it.",
     "",
     "- A message may begin with a <selection> block: the part the user clicked and the point they clicked on it, in the model's own coordinates (mm, Z up).",
-    "- You can see what they see. mcp__viewport__screenshot returns the current view as an image, mcp__viewport__parts lists the parts with their sizes, mcp__viewport__selection returns the current selection.",
+    "- You can see what they see. mcp__viewport__screenshot returns the current view as an image, mcp__viewport__parts lists the parts with their groups and sizes, mcp__viewport__selection returns the current selection.",
+    "- The model is made of parts. Each separate component is one part: a thing that is made, bought or fitted on its own, such as a lid, a board or a screw. Whatever the user asks you to add as a thing of its own is a part of its own. The app lists the parts under groups, and the user can pick one part or one group to look at alone.",
+    "- Grouping the parts is your job, not the user's. Whenever you add, split, merge or remove parts, put each one in the group a person would look for it in, by what it belongs to or what it does (the enclosure, the electronics, the fasteners), and add a group when none fits. Keep group and part labels short and plain. Do this without being asked and without asking. Regroup only when the user asks for a different arrangement, or when the model has changed so much that the old one no longer makes sense; if the user arranges the groups themselves, keep to their arrangement.",
   ]
   if (manifest) {
     lines.push(
@@ -152,11 +154,12 @@ function guide(
       build
         ? `- The build command is: ${build}`
         : "- Find how the model is built from the project's README or scripts before changing geometry.",
+      '- The groups are what the manifest says they are: its "groups" list, and the "group" each part names. Like the rest of the manifest they are written by the build.',
       "- After a change to geometry: rebuild, take a screenshot, and check the result yourself before you report it."
     )
   } else {
     lines.push(
-      '- This folder has no model the app can show yet. If the user wants one, write a build script (build123d is the usual choice) that produces a manifest in this format, and add a cad-ai.json at the top of the folder naming the manifest and the build command, like { "model": "model/cad-ai.model.json", "build": "python3 make.py" }.',
+      '- This folder has no model the app can show yet. If the user wants one, write a build script (build123d is the usual choice) that produces a manifest in this format, and add an enclose.json at the top of the folder naming the manifest and the build command, like { "model": "model/enclose.model.json", "build": "python3 make.py" }.',
       "",
       MANIFEST_FORMAT
     )
@@ -439,7 +442,7 @@ export class Threads {
         ),
         tool(
           "parts",
-          "Every part of the model on screen: id, label, layer, bounding box in model coordinates (mm), and whether it is currently shown.",
+          "Every part of the model on screen: id, label, the group it is listed under, bounding box in model coordinates (mm), and whether it is currently shown.",
           {},
           async () => ask("parts").then(text_, failed),
           UP_FRONT

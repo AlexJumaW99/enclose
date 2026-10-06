@@ -9,20 +9,20 @@ const part = (id: string, extra: object = {}) => ({
 })
 
 describe("readModel", () => {
-  it("reads a manifest that declares its layers", () => {
+  it("reads a manifest that declares its groups", () => {
     const model = readModel({
       title: "Bracket",
-      layers: [
+      groups: [
         { id: "body", label: "Body", shell: true },
         { id: "fasteners", label: "Fasteners" },
       ],
       parts: [
-        part("plate", { layer: "body", color: "#ff0000", explode: [0, 0, 10] }),
-        part("bolt", { layer: "fasteners", finish: "metal" }),
+        part("plate", { group: "body", color: "#ff0000", explode: [0, 0, 10] }),
+        part("bolt", { group: "fasteners", finish: "metal" }),
       ],
     })
     expect(model.title).toBe("Bracket")
-    expect(model.layers).toEqual([
+    expect(model.groups).toEqual([
       { id: "body", label: "Body", shell: true },
       { id: "fasteners", label: "Fasteners", shell: false },
     ])
@@ -39,19 +39,19 @@ describe("readModel", () => {
     expect(model.keepoutsLabel).toBe("Keep-outs")
   })
 
-  it("lists a layer that a part names but nobody declared", () => {
+  it("lists a group that a part names but nobody declared", () => {
     const model = readModel({
       // "control": "shell" is how the first version of the format marked the outside
       layers: [{ id: "case", control: "shell" }],
       parts: [part("a", { layer: "odd_bits" }), part("b", { layer: "case" })],
     })
-    expect(model.layers).toEqual([
+    expect(model.groups).toEqual([
       { id: "case", label: "Case", shell: true },
       { id: "odd_bits", label: "Odd bits", shell: false },
     ])
   })
 
-  it("reads a manifest from before layers, the way its first viewer did", () => {
+  it("reads a manifest from before groups, the way its first viewer did", () => {
     const model = readModel({
       parts: [
         part("top", { group: "enclosure", color: "#f4f4f2" }),
@@ -75,7 +75,7 @@ describe("readModel", () => {
         { id: "broken", min: [0, 0], max: [1, 1, 1] },
       ],
     })
-    expect(model.layers.map((l) => [l.label, l.shell])).toEqual([
+    expect(model.groups.map((l) => [l.label, l.shell])).toEqual([
       ["Enclosure", true],
       ["Electronics", false],
       ["Screws", false],
@@ -90,8 +90,8 @@ describe("readModel", () => {
     ])
   })
 
-  it("puts parts that name no layer into one", () => {
-    expect(readModel({ parts: [part("a"), part("b")] }).layers).toEqual([
+  it("puts parts that name no group into one", () => {
+    expect(readModel({ parts: [part("a"), part("b")] }).groups).toEqual([
       { id: "model", label: "Model", shell: false },
     ])
   })

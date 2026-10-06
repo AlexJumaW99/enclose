@@ -4,7 +4,7 @@ import fs from "node:fs"
 import path from "node:path"
 
 import type { Project, ThreadSummary } from "../shared/api"
-import { MANIFEST_NAMES } from "../shared/manifest-format"
+import { CONFIG_NAMES, MANIFEST_NAMES } from "../shared/manifest-format"
 
 type Saved = {
   id: string
@@ -16,7 +16,7 @@ type Saved = {
 type Found = {
   /** absolute path of the manifest */
   manifest: string | null
-  /** how the project says it is built, from its cad-ai.json */
+  /** how the project says it is built, from its enclose.json */
   build: string | null
 }
 
@@ -41,26 +41,29 @@ function isManifest(file: string): boolean {
 }
 
 /**
- * Where a folder keeps its model. A cad-ai.json at the top can say so outright
+ * Where a folder keeps its model. An enclose.json at the top can say so outright
  * ({ "model": "path/to/manifest.json", "build": "python3 make.py" }); otherwise the
  * nearest manifest wins, searching level by level.
  */
 export function findModel(root: string): Found {
   let build: string | null = null
-  try {
-    const config = JSON.parse(
-      fs.readFileSync(path.join(root, "cad-ai.json"), "utf8")
-    ) as {
-      model?: unknown
-      build?: unknown
+  for (const name of CONFIG_NAMES) {
+    try {
+      const config = JSON.parse(
+        fs.readFileSync(path.join(root, name), "utf8")
+      ) as {
+        model?: unknown
+        build?: unknown
+      }
+      if (typeof config.build === "string") build = config.build
+      if (typeof config.model === "string") {
+        const file = path.resolve(root, config.model)
+        if (isManifest(file)) return { manifest: file, build }
+      }
+      break
+    } catch {
+      // no config by this name, or not valid JSON: try the next, then the search
     }
-    if (typeof config.build === "string") build = config.build
-    if (typeof config.model === "string") {
-      const file = path.resolve(root, config.model)
-      if (isManifest(file)) return { manifest: file, build }
-    }
-  } catch {
-    // no config, or not valid JSON: fall through to the search
   }
 
   let level = [root]

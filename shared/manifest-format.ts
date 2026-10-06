@@ -1,15 +1,28 @@
 // The one description of the model manifest. The README points here, and Claude is
 // given this text when a folder has no model yet, so it can write one.
 
-export const MANIFEST_NAMES = ["cad-ai.model.json", "report.json", "model.json"]
+// the first is the name to write; the rest are what earlier projects wrote
+export const MANIFEST_NAMES = [
+  "enclose.model.json",
+  "cad-ai.model.json",
+  "report.json",
+  "model.json",
+]
 
-export const MANIFEST_FORMAT = `A model is a folder holding one manifest (a JSON file named cad-ai.model.json) and the
+/** The file at the top of a project that says where its model is and how to build it. */
+export const CONFIG_NAMES = ["enclose.json", "cad-ai.json"]
+
+export const MANIFEST_FORMAT = `A model is a folder holding one manifest (a JSON file named enclose.model.json) and the
 files it names. Every path in the manifest is relative to the manifest. Units are
 millimetres, Z is up.
 
+A model is made of parts: each separate component is one part, with its own file. The
+app lists the parts under groups, and lets the user look at one part or one group on
+its own.
+
 {
   "title": "Enclosure",                 // optional
-  "layers": [                            // optional; how the layers panel groups parts
+  "groups": [                            // how the parts list is grouped, in this order
     { "id": "enclosure", "label": "Enclosure", "shell": true },   // the outside: see-through in glass mode
     { "id": "inside", "label": "Electronics" },
     { "id": "screws", "label": "Screws" }
@@ -17,8 +30,8 @@ millimetres, Z is up.
   "parts": [
     {
       "id": "top",                       // unique, stable between builds
-      "label": "Lid",
-      "layer": "enclosure",              // "group" is read as the same thing
+      "label": "Lid",                    // what the user reads: short, and says what the part is
+      "group": "enclosure",              // the id of the group it is listed under
       "file": "top.glb",                 // glTF binary, Y-up metres (the build123d/OCCT default)
       "edges": "top.edges.bin",          // optional: float32 x1 y1 z1 x2 y2 z2 per edge segment, mm
       "color": "#f4f4f2",                // optional; omit to keep the colours in the file
