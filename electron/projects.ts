@@ -9,6 +9,8 @@ import { CONFIG_NAMES, MANIFEST_NAMES } from "../shared/manifest-format"
 type Saved = {
   id: string
   path: string
+  /** what the user called it, for a project made here; otherwise the folder's name serves */
+  name?: string
   sessionId: string | null
   addedAt: number
   /** taken off the list, but remembered: adding the folder again brings back its conversation */
@@ -23,6 +25,30 @@ type Found = {
 }
 
 const SKIP = new Set(["node_modules", "venv", "__pycache__", "dist", "target"])
+
+/**
+ * What a new project's folder is called: when it was made, to the minute, then its name
+ * in lower case with dashes, as in 2026-10-05-2336-pill-box. The date comes first so
+ * that the folders sort in the order they were made.
+ */
+export function folderName(name: string, made: Date): string {
+  const two = (n: number) => String(n).padStart(2, "0")
+  const when = [
+    made.getFullYear(),
+    two(made.getMonth() + 1),
+    two(made.getDate()),
+    two(made.getHours()) + two(made.getMinutes()),
+  ].join("-")
+  const slug = name
+    // accents come off their letters, so that "café" is "cafe"
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    // anything that is not a letter or a digit, in any script, is a dash
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/^-+|-+$/g, "")
+  return `${when}-${slug || "untitled"}`
+}
 const MAX_DEPTH = 6
 const MAX_FOLDERS = 4000
 const MAX_MANIFEST_BYTES = 5_000_000
@@ -218,7 +244,7 @@ export class Projects {
       return {
         id: p.id,
         path: p.path,
-        name: path.basename(p.path),
+        name: p.name ?? path.basename(p.path),
         branch: readBranch(p.path),
         manifest: manifest && path.relative(p.path, manifest),
         revision: this.revisions.get(p.id) ?? 0,
@@ -236,8 +262,11 @@ export class Projects {
     }
   }
 
-  /** Add a folder, or return the project it already is - or was, before it was closed. */
-  add(dir: string): string {
+  /**
+   * Add a folder, or return the project it already is - or was, before it was closed.
+   * `name` is what to call it, when that is not the folder's own name.
+   */
+  add(dir: string, name?: string): string {
     const real = fs.realpathSync(dir)
     const existing = this.saved.find((p) => p.path === real)
     if (existing) {
@@ -253,6 +282,7 @@ export class Projects {
     const project: Saved = {
       id: randomBytes(6).toString("hex"),
       path: real,
+      ...(name ? { name } : {}),
       sessionId: null,
       addedAt: Date.now(),
     }

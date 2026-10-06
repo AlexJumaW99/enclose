@@ -18,7 +18,7 @@ import {
   type ViewportResponse,
 } from "../shared/api"
 import { findClaude } from "./claude"
-import { Projects, resolveInside } from "./projects"
+import { folderName, Projects, resolveInside } from "./projects"
 import { SettingsStore } from "./settings"
 import { Threads } from "./threads"
 
@@ -183,21 +183,19 @@ async function capture(window: BrowserWindow, file: string) {
 }
 
 /**
- * Make the folder for a new project, where new projects go: named as the user named it,
- * as far as a folder can be, and numbered if that name is already taken.
+ * Make the folder for a new project, where new projects go, and say what the project is
+ * to be called. The folder gets a name of its own (see `folderName`), numbered if two
+ * projects of one name are made in the same minute.
  */
-function newFolder(name: string): string {
-  const base =
-    name
-      .replace(/[/\\:]/g, "-")
-      .replace(/\s+/g, " ")
-      .replace(/^[.\s]+|[.\s]+$/g, "") || "Untitled"
+function newFolder(typed: string): { dir: string; name: string } {
+  const name = typed.replace(/\s+/g, " ").trim() || "Untitled"
+  const base = folderName(name, new Date())
   const { projectsFolder } = settings.get()
   for (let n = 1; ; n++) {
-    const dir = path.join(projectsFolder, n === 1 ? base : `${base} ${n}`)
+    const dir = path.join(projectsFolder, n === 1 ? base : `${base}-${n}`)
     if (fs.existsSync(dir)) continue
     fs.mkdirSync(dir, { recursive: true })
-    return dir
+    return { dir, name }
   }
 }
 
@@ -249,7 +247,8 @@ function wire() {
     return list().find((p) => p.id === id) ?? null
   })
   ipcMain.handle(CHANNEL.projectsCreate, (_, name: string) => {
-    const id = projects.add(newFolder(String(name)))
+    const made = newFolder(String(name))
+    const id = projects.add(made.dir, made.name)
     return list().find((p) => p.id === id) ?? null
   })
   ipcMain.handle(CHANNEL.projectsRemove, (_, id: string) => {

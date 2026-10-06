@@ -4,7 +4,13 @@ import path from "node:path"
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
-import { findModel, Projects, readBranch, resolveInside } from "./projects"
+import {
+  findModel,
+  folderName,
+  Projects,
+  readBranch,
+  resolveInside,
+} from "./projects"
 
 let root: string
 const write = (file: string, content: unknown) => {
@@ -119,9 +125,11 @@ describe("Projects", () => {
     write("thing/model.json", MANIFEST)
     const file = path.join(root, "state/projects.json")
     const projects = new Projects(file, () => {})
-    const id = projects.add(path.join(root, "thing"))
+    const id = projects.add(path.join(root, "thing"), "The Thing")
     projects.setSession(id, "session-1")
-    expect(projects.list(idle).map((p) => p.id)).toEqual([id])
+    expect(projects.list(idle).map((p) => [p.id, p.name])).toEqual([
+      [id, "The Thing"],
+    ])
 
     projects.remove(id)
     expect(projects.list(idle)).toEqual([])
@@ -129,12 +137,42 @@ describe("Projects", () => {
     // and it stays closed across a restart
     expect(new Projects(file, () => {}).list(idle)).toEqual([])
 
+    // and comes back under the name it was given, which is not its folder's
     expect(projects.add(path.join(root, "thing"))).toBe(id)
     expect(projects.get(id)).toMatchObject({ sessionId: "session-1" })
     expect(projects.list(idle)[0]).toMatchObject({
       id,
+      name: "The Thing",
       manifest: "model.json",
     })
+    // a folder that is only opened goes by its own name
+    write("other/model.json", MANIFEST)
+    const other = projects.add(path.join(root, "other"))
+    expect(projects.list(idle).find((p) => p.id === other)?.name).toBe("other")
     projects.close()
+  })
+})
+
+describe("folderName", () => {
+  const made = new Date(2026, 9, 5, 23, 6)
+
+  it("puts when it was made first, then the name in lower case with dashes", () => {
+    expect(folderName("Pill box", made)).toBe("2026-10-05-2306-pill-box")
+    expect(folderName("  Desk   Clamp v2!  ", made)).toBe(
+      "2026-10-05-2306-desk-clamp-v2"
+    )
+  })
+
+  it("keeps nothing a folder name should not have", () => {
+    expect(folderName("../odd:name/", made)).toBe("2026-10-05-2306-odd-name")
+    expect(folderName("Café holder №2", made)).toBe(
+      "2026-10-05-2306-cafe-holder-no2"
+    )
+  })
+
+  it("keeps letters of other scripts, and has a name when given none", () => {
+    expect(folderName("箱 1", made)).toBe("2026-10-05-2306-箱-1")
+    expect(folderName("", made)).toBe("2026-10-05-2306-untitled")
+    expect(folderName("!!!", made)).toBe("2026-10-05-2306-untitled")
   })
 })

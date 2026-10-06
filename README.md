@@ -26,8 +26,10 @@ npm run dev -- path/to/project   # ...with that folder added and open
 ## How it works
 
 **A project is a folder.** Drop one on the window, or use the + beside the project cards:
-it makes a new folder under a name you give, in `~/Documents/Enclose` unless the settings
-say elsewhere, or opens one you already have. The × on a card closes the project, which
+it makes a new folder for a name you give, in `~/Documents/Enclose` unless the settings
+say elsewhere, or opens one you already have. A new project called "Pill box" keeps that
+name on its card, and its folder is `2026-10-05-2336-pill-box`: when it was made, then
+the name in lower case with dashes. The × on a card closes the project, which
 deletes nothing: open the folder again and its conversation is still there.
 
 The app looks in the folder for a

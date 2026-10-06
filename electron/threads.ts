@@ -141,11 +141,18 @@ function guide(
   root: string,
   manifest: string | null,
   build: string | null,
-  kit: string
+  kit: string,
+  /** what the user called the project, when that is not its folder's name */
+  called: string | null
 ): string {
   const lines = [
     "You are running inside Enclose, a desktop app for designing physical things in code. The user is looking at a 3D view of this project's model while they talk to you, and can click a part to ask about it.",
     "",
+    ...(called
+      ? [
+          `- The user calls this project "${called}". That is its name; the folder's is only where it is kept.`,
+        ]
+      : []),
     "- A message may begin with a <selection> block: the part the user clicked and the point they clicked on it, in the model's own coordinates (mm, Z up).",
     "- You can see what they see. mcp__viewport__screenshot returns the current view as an image, mcp__viewport__parts lists the parts with their groups and sizes, mcp__viewport__selection returns the current selection.",
     "- The model is made of parts. Each separate component is one part: a thing that is made, bought or fitted on its own, such as a lid, a board or a screw. Whatever the user asks you to add as a thing of its own is a part of its own. The app lists the parts under groups, and the user can pick one part or one group to look at alone.",
@@ -602,7 +609,8 @@ export class Threads {
               project.path,
               project.manifest,
               project.build,
-              this.deps.kit
+              this.deps.kit,
+              project.name ?? null
             ),
           },
           mcpServers: { viewport },
