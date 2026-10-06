@@ -5,6 +5,7 @@ import { Thread } from "@/components/thread"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { bridge } from "@/components/viewport/bridge"
 import { Viewport } from "@/components/viewport/viewport"
+import { MAC } from "@/lib/platform"
 import { useActiveProject, useStore } from "@/lib/store"
 
 /** Answer Claude's questions about what is on screen. */
@@ -41,11 +42,30 @@ function useViewportRequests() {
   )
 }
 
+/** Cmd+B shows the conversation, and puts it away again. */
+function useConversationKey() {
+  React.useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      // Ctrl+B on a Mac is a key for moving through text: left to do that
+      const held = MAC ? event.metaKey && !event.ctrlKey : event.ctrlKey
+      if (!held || event.altKey || event.shiftKey) return
+      if (event.key.toLowerCase() !== "b") return
+      const { activeId, threadOpen, setThreadOpen } = useStore.getState()
+      if (!activeId) return
+      event.preventDefault()
+      setThreadOpen(!threadOpen)
+    }
+    window.addEventListener("keydown", key)
+    return () => window.removeEventListener("keydown", key)
+  }, [])
+}
+
 export function App() {
   const ready = useStore((state) => state.ready)
   const threadOpen = useStore((state) => state.threadOpen)
   const project = useActiveProject()
   useViewportRequests()
+  useConversationKey()
 
   return (
     <TooltipProvider>

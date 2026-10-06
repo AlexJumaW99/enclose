@@ -2,13 +2,12 @@
 // nothing in it says which it was, so it is read from how the scroll moves: fingers start
 // slowly, by whole pixels, and wander sideways; a wheel turns one way, a notch at a time.
 
+import { MAC } from "./platform"
+
 /** The least a notch of a wheel scrolls where notches are counted in pixels. */
 const NOTCH = 50
 /** Scrolls closer together than this, in ms, are one movement, made by one thing. */
 export const SCROLL_PAUSE = 200
-
-const MAC =
-  typeof navigator !== "undefined" && navigator.userAgent.includes("Mac")
 
 export type Scroll = Pick<WheelEvent, "deltaX" | "deltaY" | "deltaMode">
 export type ScrollSource = "fingers" | "wheel"

@@ -232,6 +232,8 @@ export function Thread({ project }: { project: Project }) {
           part={selection?.part ?? null}
           onClearPart={() => select(null)}
           placeholder="Message Claude"
+          // opened to be written in: by its button, or by Cmd+B
+          autoFocus
         />
         <p className="px-1 text-xs text-muted-foreground">
           {!claude

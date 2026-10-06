@@ -111,7 +111,8 @@ function Model({ project }: { project: Project }) {
 
   // Cmd+1 is the view the model opened with; Cmd+2 to 7 are the six flat ones. S cuts
   // the model open and E pulls it apart, both again to undo. While it is cut open, X, Y
-  // and Z choose the axis the cut goes across.
+  // and Z choose the axis the cut goes across. Esc gets out of the section, the explode
+  // or the layers, whichever was gone into last.
   React.useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.altKey || event.shiftKey) return
@@ -122,6 +123,15 @@ function Model({ project }: { project: Project }) {
         const view = VIEWS[Number(digit) - 2]
         if (view) bridge.lookFrom?.(view.axis, view.sign)
         else goHome()
+        return
+      }
+      if (event.key === "Escape") {
+        // not when the key is already closing something of its own: a menu, or the
+        // prompt beside a part
+        const { prompting, leave } = useStore.getState()
+        const taken =
+          event.defaultPrevented || prompting || spokenFor(event.target)
+        if (!taken && leave()) event.preventDefault()
         return
       }
       // a letter on its own: not one held down, and not one being typed somewhere

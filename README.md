@@ -84,10 +84,14 @@ Down the right-hand edge:
 - **Layers** lists the manifest's layers and the parts in each, with an eye to switch any
   of them off. Pointing at a row lights the part up in the view; clicking picks it.
 
+Esc gets back out of the section, the explode and the layers, one press each, starting
+with whichever you went into last.
+
 **Claude** is the Claude Code already on your machine, run through the
 [Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview) in the project's folder.
 The app has no login of its own and stores no credentials; if you need to sign in again,
 do it in Claude Code. Each project has one conversation, which resumes where it left off.
+Cmd+B shows the conversation, and puts it away again.
 
 On top of what Claude Code can already do, the app gives Claude three tools: a screenshot
 of the view as you see it, the list of parts with their sizes, and your current selection.

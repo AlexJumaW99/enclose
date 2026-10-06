@@ -63,6 +63,26 @@ const homeView = (): View => ({
   hidden: {},
 })
 
+/** What the view can be put into, and got back out of with Esc. */
+export type Entered = "section" | "explode" | "layers"
+
+/** Those of them that are on, in the order they were gone into: the last is the latest. */
+function enteredNow(
+  { view, layersOpen }: Pick<State, "view" | "layersOpen">,
+  before: Entered[]
+): Entered[] {
+  const on: Record<Entered, boolean> = {
+    section: view.section !== null,
+    explode: view.exploded,
+    layers: layersOpen,
+  }
+  const still = before.filter((name) => on[name])
+  const fresh = (Object.keys(on) as Entered[]).filter(
+    (name) => on[name] && !still.includes(name)
+  )
+  return [...still, ...fresh]
+}
+
 type State = {
   ready: boolean
   projects: Project[]
@@ -73,6 +93,8 @@ type State = {
   access: Access
   claude: ClaudeStatus | null
   view: View
+  /** what the view has been put into, latest last: Esc leaves that one */
+  entered: Entered[]
   selection: Selection | null
   /** the part under the pointer, in the view or in the layers list */
   hoveredId: string | null
@@ -91,6 +113,8 @@ type State = {
   closePrompt(): void
   setThreadOpen(open: boolean): void
   setLayersOpen(open: boolean): void
+  /** Get out of the last thing gone into; false if there was nothing to get out of. */
+  leave(): boolean
   setAccess(access: Access): void
   send(text: string, part: PartRef | null): void
 }
@@ -105,6 +129,7 @@ export const useStore = create<State>()((set, get) => ({
   access: localStorage.getItem(ACCESS_KEY) === "full" ? "full" : "ask",
   claude: null,
   view: homeView(),
+  entered: [],
   selection: null,
   hoveredId: null,
   prompting: false,
@@ -113,13 +138,14 @@ export const useStore = create<State>()((set, get) => ({
   activate(id) {
     if (get().activeId === id) return
     localStorage.setItem(ACTIVE_KEY, id)
-    set({
+    set((state) => ({
       activeId: id,
       selection: null,
       hoveredId: null,
       prompting: false,
       view: homeView(),
-    })
+      entered: enteredNow({ ...state, view: homeView() }, state.entered),
+    }))
     if (!get().items[id]) {
       void window.cad.thread.items(id).then((items) => {
         set((state) => ({ items: { ...state.items, [id]: items } }))
@@ -138,7 +164,10 @@ export const useStore = create<State>()((set, get) => ({
 
   setView(patch) {
     if (patch.mode) localStorage.setItem(MODE_KEY, patch.mode)
-    set((state) => ({ view: { ...state.view, ...patch } }))
+    set((state) => {
+      const view = { ...state.view, ...patch }
+      return { view, entered: enteredNow({ ...state, view }, state.entered) }
+    })
   },
 
   goHome() {
@@ -162,7 +191,21 @@ export const useStore = create<State>()((set, get) => ({
   },
 
   setLayersOpen(layersOpen) {
-    set({ layersOpen })
+    set((state) => ({
+      layersOpen,
+      entered: enteredNow({ ...state, layersOpen }, state.entered),
+    }))
+  },
+
+  leave() {
+    const last = get().entered.at(-1)
+    if (!last) return false
+    if (last === "layers") get().setLayersOpen(false)
+    else
+      get().setView(
+        last === "section" ? { section: null } : { exploded: false }
+      )
+    return true
   },
 
   setAccess(access) {

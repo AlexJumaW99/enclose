@@ -23,6 +23,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { MAC } from "@/lib/platform"
 import { SPREAD, useStore, type DisplayMode } from "@/lib/store"
 import type { LoadedModel } from "./viewport/load"
 import { sectionFacing } from "./viewport/section-planes"
@@ -103,7 +104,9 @@ function Switch({
           <Toggle
             pressed={on}
             onPressedChange={onChange}
-            aria-keyshortcuts={shortcut}
+            aria-keyshortcuts={shortcut
+              ?.replace("⌘", "Meta+")
+              .replace("Ctrl ", "Control+")}
             className={cn(
               ROUND,
               "aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary/85 aria-pressed:hover:text-primary-foreground"
@@ -152,7 +155,12 @@ export function Tools({
   return (
     <div className="pointer-events-none absolute inset-y-0 right-0 w-15">
       <Stack className="absolute top-3 right-3">
-        <Switch label="Conversation" on={threadOpen} onChange={setThreadOpen}>
+        <Switch
+          label="Conversation"
+          shortcut={MAC ? "⌘B" : "Ctrl B"}
+          on={threadOpen}
+          onChange={setThreadOpen}
+        >
           <MessageSquareIcon />
         </Switch>
         {loaded && loaded.model.downloads.length > 0 && (
