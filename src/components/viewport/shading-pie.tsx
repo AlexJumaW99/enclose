@@ -217,8 +217,9 @@ export function ShadingPie({
         style={{ left: shown.at.x, top: shown.at.y }}
       >
         <svg
-          viewBox="-25 -25 50 50"
-          className="absolute size-[50px] -translate-1/2"
+          // with room round the ring for the width of its line
+          viewBox="-28 -28 56 56"
+          className="absolute size-14 -translate-1/2"
           aria-hidden
         >
           {/* a dark ring under the pale one, so it shows over a pale part too */}
