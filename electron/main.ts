@@ -248,12 +248,12 @@ function wire() {
   })
   ipcMain.handle(CHANNEL.projectsCreate, (_, name: string) => {
     const made = newFolder(String(name))
-    const id = projects.add(made.dir, made.name)
+    const id = projects.add(made.dir, { name: made.name })
     return list().find((p) => p.id === id) ?? null
   })
   ipcMain.handle(CHANNEL.projectsRemove, (_, id: string) => {
     threads.stop(id)
-    projects.remove(id)
+    projects.remove(id, threads.items(id).length === 0)
   })
   ipcMain.handle(CHANNEL.projectsReveal, (_, id: string) => {
     const project = projects.get(id)
@@ -371,6 +371,7 @@ if (!app.requestSingleInstanceLock()) {
       onReset: (projectId) => send(CHANNEL.threadWasReset, projectId),
       onSummary: broadcast,
     })
+    projects.sweep((id) => threads.items(id).length === 0)
     wire()
 
     // a folder on the command line is added and opened, like `code <folder>`

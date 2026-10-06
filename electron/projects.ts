@@ -11,6 +11,8 @@ type Saved = {
   path: string
   /** what the user called it, for a project made here; otherwise the folder's name serves */
   name?: string
+  /** the app made this folder itself, rather than being pointed at one that was there */
+  made?: boolean
   sessionId: string | null
   addedAt: number
   /** taken off the list, but remembered: adding the folder again brings back its conversation */
@@ -25,6 +27,22 @@ type Found = {
 }
 
 const SKIP = new Set(["node_modules", "venv", "__pycache__", "dist", "target"])
+
+/**
+ * Delete a folder if there is nothing in it, which is the only way this app deletes one.
+ * (The Finder leaves a note of its own in any folder it has shown: that does not count.)
+ */
+function removeIfEmpty(dir: string): boolean {
+  try {
+    const inside = fs.readdirSync(dir)
+    if (inside.some((name) => name !== ".DS_Store")) return false
+    for (const name of inside) fs.unlinkSync(path.join(dir, name))
+    fs.rmdirSync(dir)
+    return true
+  } catch {
+    return false
+  }
+}
 
 /**
  * What a new project's folder is called: when it was made, to the minute, then its name
@@ -264,9 +282,10 @@ export class Projects {
 
   /**
    * Add a folder, or return the project it already is - or was, before it was closed.
-   * `name` is what to call it, when that is not the folder's own name.
+   * `made` says the app has just made the folder itself, and under what name the
+   * project goes.
    */
-  add(dir: string, name?: string): string {
+  add(dir: string, made?: { name: string }): string {
     const real = fs.realpathSync(dir)
     const existing = this.saved.find((p) => p.path === real)
     if (existing) {
@@ -282,7 +301,7 @@ export class Projects {
     const project: Saved = {
       id: randomBytes(6).toString("hex"),
       path: real,
-      ...(name ? { name } : {}),
+      ...(made ? { name: made.name, made: true } : {}),
       sessionId: null,
       addedAt: Date.now(),
     }
@@ -293,16 +312,39 @@ export class Projects {
     return project.id
   }
 
-  /** Take a project off the list. Nothing of it is deleted. */
-  remove(id: string) {
+  /**
+   * Take a project off the list. Nothing of the user's is deleted: the folder stays and
+   * the project is remembered. The one exception is a project that came to nothing - a
+   * folder the app made, with nothing put in it and (`unused`) nothing said about it -
+   * which is cleared away, folder and all, rather than left lying about for good.
+   */
+  remove(id: string, unused: boolean) {
     const project = this.saved.find((p) => p.id === id)
     if (!project) return
-    project.closed = true
     this.watchers.get(id)?.close()
     this.watchers.delete(id)
     this.found.delete(id)
+    if (unused && this.cameToNothing(project))
+      this.saved = this.saved.filter((p) => p !== project)
+    else project.closed = true
     this.save()
     this.onChange()
+  }
+
+  /** Whether a project was only ever an empty folder of the app's making, now deleted. */
+  private cameToNothing(project: Saved): boolean {
+    // projects made before `made` was kept are known by having a name of their own
+    const ours = project.made ?? project.name !== undefined
+    return ours && removeIfEmpty(project.path)
+  }
+
+  /** Clear away closed projects that came to nothing before this was done on closing. */
+  sweep(unused: (id: string) => boolean) {
+    const before = this.saved.length
+    this.saved = this.saved.filter(
+      (p) => !(p.closed && unused(p.id) && this.cameToNothing(p))
+    )
+    if (this.saved.length !== before) this.save()
   }
 
   setSession(id: string, sessionId: string | null) {

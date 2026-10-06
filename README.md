@@ -30,7 +30,9 @@ it makes a new folder for a name you give, in `~/Documents/Enclose` unless the s
 say elsewhere, or opens one you already have. A new project called "Pill box" keeps that
 name on its card, and its folder is `2026-10-05-2336-pill-box`: when it was made, then
 the name in lower case with dashes. The × on a card closes the project, which
-deletes nothing: open the folder again and its conversation is still there.
+deletes nothing of yours: open the folder again and its conversation is still there. The
+one thing it clears away is a project that came to nothing, a folder the app made that
+is still empty and was never talked about.
 
 The app looks in the folder for a
 model manifest: a JSON file listing the parts, the mesh file of each, and the groups they

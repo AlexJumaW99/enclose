@@ -125,13 +125,13 @@ describe("Projects", () => {
     write("thing/model.json", MANIFEST)
     const file = path.join(root, "state/projects.json")
     const projects = new Projects(file, () => {})
-    const id = projects.add(path.join(root, "thing"), "The Thing")
+    const id = projects.add(path.join(root, "thing"), { name: "The Thing" })
     projects.setSession(id, "session-1")
     expect(projects.list(idle).map((p) => [p.id, p.name])).toEqual([
       [id, "The Thing"],
     ])
 
-    projects.remove(id)
+    projects.remove(id, true)
     expect(projects.list(idle)).toEqual([])
     expect(projects.get(id)).toBeNull()
     // and it stays closed across a restart
@@ -149,6 +149,48 @@ describe("Projects", () => {
     write("other/model.json", MANIFEST)
     const other = projects.add(path.join(root, "other"))
     expect(projects.list(idle).find((p) => p.id === other)?.name).toBe("other")
+    projects.close()
+  })
+
+  it("clears away a project that came to nothing, and only that", () => {
+    const file = path.join(root, "state/projects.json")
+    const projects = new Projects(file, () => {})
+    const dir = (name: string) => {
+      fs.mkdirSync(path.join(root, name), { recursive: true })
+      return path.join(root, name)
+    }
+    const names = () => projects.list(idle).map((p) => p.name)
+
+    // made here and never used: the folder goes, and the project is forgotten
+    const blank = projects.add(dir("made-blank"), { name: "Blank" })
+    fs.writeFileSync(path.join(root, "made-blank/.DS_Store"), "")
+    projects.remove(blank, true)
+    expect(fs.existsSync(path.join(root, "made-blank"))).toBe(false)
+    expect(projects.add(dir("made-blank"))).not.toBe(blank)
+
+    // made here, but something was said about it: kept
+    const talked = projects.add(dir("made-talked"), { name: "Talked" })
+    projects.remove(talked, false)
+    expect(fs.existsSync(path.join(root, "made-talked"))).toBe(true)
+
+    // made here, and something is in it: kept
+    const filled = projects.add(dir("made-filled"), { name: "Filled" })
+    write("made-filled/model.py", "")
+    projects.remove(filled, true)
+    expect(fs.existsSync(path.join(root, "made-filled/model.py"))).toBe(true)
+
+    // an empty folder of the user's own is never deleted
+    const theirs = projects.add(dir("their-empty"))
+    projects.remove(theirs, true)
+    expect(fs.existsSync(path.join(root, "their-empty"))).toBe(true)
+    expect(projects.add(dir("their-empty"))).toBe(theirs)
+
+    // what an earlier version left closed and empty is cleared when asked
+    projects.remove(projects.add(dir("old-blank"), { name: "Old" }), false)
+    projects.sweep(() => true)
+    expect(fs.existsSync(path.join(root, "old-blank"))).toBe(false)
+    expect(fs.existsSync(path.join(root, "made-filled"))).toBe(true)
+    expect(names()).toContain("their-empty")
     projects.close()
   })
 })
