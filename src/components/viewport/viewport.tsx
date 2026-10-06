@@ -224,7 +224,7 @@ function Model({ project }: { project: Project }) {
         </div>
       )}
       {loaded && middle && (
-        <div className="pointer-events-none absolute right-3 bottom-3 flex items-end gap-1">
+        <div className="pointer-events-none absolute right-3 bottom-3 flex items-center gap-1">
           <SectionPlanes middle={middle} />
           <AxisGizmo />
         </div>

@@ -105,7 +105,8 @@ export function SectionPlanes({
       viewBox="-50 -50 100 100"
       role="group"
       aria-label="Section plane"
-      className={cn("pointer-events-auto size-28 select-none", className)}
+      // the same size as the axes it stands beside
+      className={cn("pointer-events-auto size-22 select-none", className)}
     >
       {walls.map(({ axis, points, x, y }) => {
         const chosen = across.exact && across.axis === axis
@@ -134,7 +135,7 @@ export function SectionPlanes({
               y={y}
               textAnchor="middle"
               dominantBaseline="central"
-              fontSize={11}
+              fontSize={12}
               fontWeight={700}
               className={cn(
                 "fill-foreground",
