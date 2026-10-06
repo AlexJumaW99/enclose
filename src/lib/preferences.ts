@@ -1,0 +1,48 @@
+// What the user has chosen about how the view answers the hand. These are the window's
+// own, kept in its storage; what the app's own process has to know (where new projects
+// go) is kept by that process instead.
+import { create } from "zustand"
+
+/** auto: told apart by how the scroll moves. Or always the one, or always the other. */
+export type Scrolling = "auto" | "trackpad" | "wheel"
+
+export type Preferences = {
+  /** what a scroll is taken to come from */
+  scrolling: Scrolling
+  /** how fast the view turns under the hand, against the speed it comes with */
+  turnSpeed: number
+}
+
+export const TURN_SPEED = { min: 0.4, max: 2.5 }
+const DEFAULTS: Preferences = { scrolling: "auto", turnSpeed: 1 }
+const KEY = "enclose:preferences"
+
+function saved(): Preferences {
+  try {
+    const read = JSON.parse(
+      localStorage.getItem(KEY) ?? "{}"
+    ) as Partial<Preferences>
+    const scrolling =
+      read.scrolling === "trackpad" || read.scrolling === "wheel"
+        ? read.scrolling
+        : DEFAULTS.scrolling
+    const turnSpeed =
+      typeof read.turnSpeed === "number" && Number.isFinite(read.turnSpeed)
+        ? Math.min(TURN_SPEED.max, Math.max(TURN_SPEED.min, read.turnSpeed))
+        : DEFAULTS.turnSpeed
+    return { scrolling, turnSpeed }
+  } catch {
+    return DEFAULTS
+  }
+}
+
+export const usePreferences = create<
+  Preferences & { change(patch: Partial<Preferences>): void }
+>()((set, get) => ({
+  ...saved(),
+  change(patch) {
+    set(patch)
+    const { scrolling, turnSpeed } = get()
+    localStorage.setItem(KEY, JSON.stringify({ scrolling, turnSpeed }))
+  },
+}))

@@ -116,6 +116,7 @@ function Model({ project }: { project: Project }) {
   React.useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.altKey || event.shiftKey) return
+      if (useStore.getState().settingsOpen) return
       if (event.metaKey || event.ctrlKey) {
         const digit = /^Digit([1-7])$/.exec(event.code)?.[1]
         if (!digit) return

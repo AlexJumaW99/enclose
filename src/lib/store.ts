@@ -97,6 +97,8 @@ type State = {
   threadOpen: boolean
   /** whether the list of parts is up */
   partsOpen: boolean
+  /** whether the settings are over the window */
+  settingsOpen: boolean
   access: Access
   claude: ClaudeStatus | null
   view: View
@@ -125,6 +127,7 @@ type State = {
   closePrompt(): void
   setThreadOpen(open: boolean): void
   setPartsOpen(open: boolean): void
+  setSettingsOpen(open: boolean): void
   /**
    * What Esc does: put the parts list away if it is up, and otherwise get out of the
    * last thing gone into. False if there was nothing to do.
@@ -141,6 +144,7 @@ export const useStore = create<State>()((set, get) => ({
   items: {},
   threadOpen: false,
   partsOpen: false,
+  settingsOpen: false,
   access: saved(ACCESS_KEY) === "full" ? "full" : "ask",
   claude: null,
   view: homeView(),
@@ -222,6 +226,10 @@ export const useStore = create<State>()((set, get) => ({
 
   setPartsOpen(partsOpen) {
     set({ partsOpen })
+  },
+
+  setSettingsOpen(settingsOpen) {
+    set({ settingsOpen })
   },
 
   leave() {

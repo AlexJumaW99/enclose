@@ -25,7 +25,12 @@ npm run dev -- path/to/project   # ...with that folder added and open
 
 ## How it works
 
-**A project is a folder.** Add one with the + in the sidebar. The app looks in it for a
+**A project is a folder.** Drop one on the window, or use the + beside the project cards:
+it makes a new folder under a name you give, in `~/Documents/Enclose` unless the settings
+say elsewhere, or opens one you already have. The × on a card closes the project, which
+deletes nothing: open the folder again and its conversation is still there.
+
+The app looks in the folder for a
 model manifest: a JSON file listing the parts, the mesh file of each, and the groups they
 are listed under. A part is any separate component: a thing made, bought or fitted on
 its own. The manifest and its files are build output; the project's own script writes
@@ -128,6 +133,10 @@ model's coordinates.
 
 By default Claude edits files in the project without asking and asks before anything
 else, such as running the build. "Full access" in the message box turns the asking off.
+
+**Settings** (the gear at the bottom left, or Cmd+,) hold where new projects go, whether
+Claude asks before it acts, the theme, how a scroll is read and how fast the view turns,
+and a list of every shortcut.
 
 ## Where things are
 

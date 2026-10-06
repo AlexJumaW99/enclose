@@ -1,9 +1,17 @@
 import * as React from "react"
-import { FolderPlusIcon } from "lucide-react"
+import { FolderPlusIcon, SettingsIcon } from "lucide-react"
 
+import { Settings } from "@/components/settings"
 import { Sidebar } from "@/components/sidebar"
 import { Thread } from "@/components/thread"
-import { TooltipProvider } from "@/components/ui/tooltip"
+import { Button } from "@/components/ui/button"
+import { Kbd } from "@/components/ui/kbd"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { bridge } from "@/components/viewport/bridge"
 import { Viewport } from "@/components/viewport/viewport"
 import { MAC } from "@/lib/platform"
@@ -52,15 +60,24 @@ function useViewportRequests() {
   )
 }
 
-/** Cmd+B shows the conversation, and puts it away again. */
-function useConversationKey() {
+/**
+ * Cmd+B shows the conversation, and puts it away again. Cmd+, does the same for the
+ * settings, as it does in every Mac app.
+ */
+function useAppKeys() {
   React.useEffect(() => {
     const key = (event: KeyboardEvent) => {
       // Ctrl+B on a Mac is a key for moving through text: left to do that
       const held = MAC ? event.metaKey && !event.ctrlKey : event.ctrlKey
       if (!held || event.altKey || event.shiftKey) return
-      if (event.key.toLowerCase() !== "b") return
-      const { activeId, threadOpen, setThreadOpen } = useStore.getState()
+      const state = useStore.getState()
+      if (event.key === ",") {
+        event.preventDefault()
+        state.setSettingsOpen(!state.settingsOpen)
+        return
+      }
+      if (event.key.toLowerCase() !== "b" || state.settingsOpen) return
+      const { activeId, threadOpen, setThreadOpen } = state
       if (!activeId) return
       event.preventDefault()
       setThreadOpen(!threadOpen)
@@ -126,9 +143,11 @@ export function App() {
   const ready = useStore((state) => state.ready)
   const threadOpen = useStore((state) => state.threadOpen)
   const project = useActiveProject()
+  const settingsOpen = useStore((state) => state.settingsOpen)
+  const setSettingsOpen = useStore((state) => state.setSettingsOpen)
   const dropping = useFolderDrop()
   useViewportRequests()
-  useConversationKey()
+  useAppKeys()
 
   return (
     <TooltipProvider>
@@ -138,8 +157,28 @@ export function App() {
           {/* the top edge of the view is also what the window is dragged by */}
           <div className="drag absolute inset-x-0 top-0 h-3" />
           <Sidebar />
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  className="absolute bottom-4 left-4.5 bg-background shadow-sm"
+                  onClick={() => setSettingsOpen(true)}
+                />
+              }
+            >
+              <SettingsIcon />
+              <span className="sr-only">Settings</span>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="has-data-[slot=kbd]:pr-2.5">
+              Settings
+              <Kbd>{MAC ? "⌘," : "Ctrl ,"}</Kbd>
+            </TooltipContent>
+          </Tooltip>
         </main>
         {threadOpen && project && <Thread project={project} />}
+        {settingsOpen && <Settings />}
         {dropping && (
           <div className="pointer-events-none fixed inset-2 z-50 flex items-center justify-center rounded-2xl bg-background/70 ring-2 ring-foreground/40 backdrop-blur-sm ring-inset">
             <div className="flex items-center gap-2.5 text-sm font-medium">

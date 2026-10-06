@@ -24,6 +24,7 @@ import { CameraControls, CameraControlsImpl } from "@react-three/drei"
 
 import type { Vec3 } from "@shared/api"
 import { nearestTurn, viewFrom, type Axis, type Sign } from "@/lib/orient"
+import { usePreferences } from "@/lib/preferences"
 import { SCROLL_PAUSE, scrollSource } from "@/lib/scroll"
 import { bridge, publishOrientation } from "./bridge"
 
@@ -532,6 +533,7 @@ export function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
   const gl = useThree((state) => state.gl)
   const size = useThree((state) => state.size)
   const aspect = size.width / size.height
+  const turnSpeed = usePreferences((state) => state.turnSpeed)
 
   const latest = React.useRef(box)
   React.useEffect(() => {
@@ -641,7 +643,8 @@ export function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
       if (made.isFlat() && swipe.travel < GRIP) return
       camera.smoothTime = SMOOTH.turn
       // the model goes the way the fingers do, as it does under a drag
-      made.orbit(-event.deltaX * TURN.swipe, -event.deltaY * TURN.swipe)
+      const rate = TURN.swipe * usePreferences.getState().turnSpeed
+      made.orbit(-event.deltaX * rate, -event.deltaY * rate)
     }
 
     const wheel = (event: WheelEvent) => {
@@ -653,8 +656,16 @@ export function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
       camera.smoothTime = SMOOTH.zoom
       if (event.shiftKey) return
       const now = performance.now()
+      // what it was made with is worked out, unless the user has said which it always is
+      const { scrolling } = usePreferences.getState()
+      const from =
+        scrolling === "auto"
+          ? source(event, now)
+          : scrolling === "trackpad"
+            ? "fingers"
+            : "wheel"
       // a pinch arrives as a scroll with Ctrl held
-      if (!event.ctrlKey && source(event, now) === "fingers") {
+      if (!event.ctrlKey && from === "fingers") {
         swallow(event)
         turn(event, now)
         return
@@ -716,6 +727,9 @@ export function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
       camera={lens}
       makeDefault
       onControl={() => director.current?.taken()}
+      // a drag turns as fast as the user has asked the view to turn
+      azimuthRotateSpeed={turnSpeed}
+      polarRotateSpeed={turnSpeed}
       dollySpeed={ZOOM_SPEED}
       dollyToCursor
       smoothTime={SMOOTH.turn}
