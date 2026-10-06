@@ -4,7 +4,6 @@ import {
   FlipHorizontal2Icon,
   LayersIcon,
   MessageSquareIcon,
-  RotateCcwIcon,
   UnfoldVerticalIcon,
 } from "lucide-react"
 
@@ -146,7 +145,6 @@ export function Tools({
   const view = useStore((state) => state.view)
   const { section } = view
   const setView = useStore((state) => state.setView)
-  const goHome = useStore((state) => state.goHome)
   const threadOpen = useStore((state) => state.threadOpen)
   const setThreadOpen = useStore((state) => state.setThreadOpen)
   const layersOpen = useStore((state) => state.layersOpen)
@@ -175,11 +173,6 @@ export function Tools({
       {/* how the model is looked at: a little air between the kinds of control */}
       {loaded && (
         <div className="absolute top-1/2 right-3 flex -translate-y-1/2 flex-col gap-4">
-          <Stack>
-            <Press label="Reset the view" onClick={goHome}>
-              <RotateCcwIcon />
-            </Press>
-          </Stack>
           <Stack>
             {MODES.map(({ mode, label, icon }) => (
               <Switch
