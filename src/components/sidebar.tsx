@@ -13,16 +13,17 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { NewProject } from "./new-project"
 import { useStore } from "@/lib/store"
 import { ago, useNow } from "@/lib/time"
 
@@ -140,6 +141,8 @@ function ProjectMenu({
  */
 export function Sidebar() {
   const projects = useStore((state) => state.projects)
+  const addProject = useStore((state) => state.addProject)
+  const createProject = useStore((state) => state.createProject)
   const [adding, setAdding] = React.useState(false)
   const now = useNow()
   // with no projects the middle of the window is where one is started
@@ -158,11 +161,11 @@ export function Sidebar() {
         {projects.map((project) => (
           <ProjectCard key={project.id} project={project} now={now} />
         ))}
-        <Popover open={adding} onOpenChange={setAdding}>
+        <DropdownMenu open={adding} onOpenChange={setAdding}>
           <Tooltip>
             <TooltipTrigger
               render={
-                <PopoverTrigger
+                <DropdownMenuTrigger
                   render={
                     <Button
                       variant="outline"
@@ -180,10 +183,17 @@ export function Sidebar() {
               <TooltipContent side="right">New project</TooltipContent>
             )}
           </Tooltip>
-          <PopoverContent side="right" align="start" className="w-80">
-            <NewProject autoFocus onDone={() => setAdding(false)} />
-          </PopoverContent>
-        </Popover>
+          <DropdownMenuContent side="right" align="start">
+            <DropdownMenuGroup>
+              <DropdownMenuItem onClick={() => void createProject()}>
+                New project
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void addProject()}>
+                Open folder…
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </aside>
   )

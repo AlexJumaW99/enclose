@@ -13,6 +13,8 @@ type Saved = {
   name?: string
   /** the app made this folder itself, rather than being pointed at one that was there */
   made?: boolean
+  /** `name` is a stand-in, until what is being made gives the project a name of its own */
+  standIn?: boolean
   sessionId: string | null
   addedAt: number
   /** taken off the list, but remembered: adding the folder again brings back its conversation */
@@ -224,14 +226,20 @@ export class Projects {
     this.found.set(project.id, found)
     if (found.manifest === before) return
 
+    this.bump(project.id)
+    this.watch(project)
+  }
+
+  /** Watch a project's manifest where it now is. */
+  private watch(project: Saved) {
     this.watchers.get(project.id)?.close()
     this.watchers.delete(project.id)
-    this.bump(project.id)
-    if (!found.manifest) return
-    const name = path.basename(found.manifest)
+    const manifest = this.found.get(project.id)?.manifest
+    if (!manifest) return
+    const name = path.basename(manifest)
     try {
       const watcher = fs.watch(
-        path.dirname(found.manifest),
+        path.dirname(manifest),
         { persistent: false },
         (_, changed) => {
           if (changed !== name) return
@@ -282,10 +290,10 @@ export class Projects {
 
   /**
    * Add a folder, or return the project it already is - or was, before it was closed.
-   * `made` says the app has just made the folder itself, and under what name the
-   * project goes.
+   * `made` says the app has just made the folder itself, under what name the project
+   * goes, and whether that name is only a stand-in.
    */
-  add(dir: string, made?: { name: string }): string {
+  add(dir: string, made?: { name: string; standIn?: boolean }): string {
     const real = fs.realpathSync(dir)
     const existing = this.saved.find((p) => p.path === real)
     if (existing) {
@@ -301,7 +309,13 @@ export class Projects {
     const project: Saved = {
       id: randomBytes(6).toString("hex"),
       path: real,
-      ...(made ? { name: made.name, made: true } : {}),
+      ...(made
+        ? {
+            name: made.name,
+            made: true,
+            ...(made.standIn ? { standIn: true } : {}),
+          }
+        : {}),
       sessionId: null,
       addedAt: Date.now(),
     }
@@ -336,6 +350,58 @@ export class Projects {
     // projects made before `made` was kept are known by having a name of their own
     const ours = project.made ?? project.name !== undefined
     return ours && removeIfEmpty(project.path)
+  }
+
+  /**
+   * Give a project that still goes by a stand-in the name of what has been made in it:
+   * the title of its model. Its folder is renamed to match, keeping the date it was made
+   * on. To be called when nothing is at work in the folder. `moved` hears of the rename.
+   */
+  christen(id: string, moved: (from: string, to: string) => void) {
+    const project = this.open().find((p) => p.id === id)
+    const manifest = this.found.get(id)?.manifest
+    if (!project?.standIn || !manifest) return
+    let title: unknown
+    try {
+      title = (
+        JSON.parse(fs.readFileSync(manifest, "utf8")) as { title?: unknown }
+      ).title
+    } catch {
+      return
+    }
+    if (typeof title !== "string" || !title.trim()) return
+    const name = title.replace(/\s+/g, " ").trim()
+
+    const from = project.path
+    const base = folderName(name, new Date(project.addedAt))
+    let to = from
+    if (path.basename(from) !== base) {
+      for (let n = 1; ; n++) {
+        to = path.join(path.dirname(from), n === 1 ? base : `${base}-${n}`)
+        if (!fs.existsSync(to)) break
+      }
+      try {
+        fs.renameSync(from, to)
+      } catch {
+        // the folder stays as it is called; the project still gets its name
+        to = from
+      }
+    }
+    project.name = name
+    delete project.standIn
+    if (to !== from) {
+      project.path = to
+      // the model is the same model, somewhere else: watched there, without being
+      // taken for a new one
+      this.found.set(id, {
+        manifest: path.join(to, path.relative(from, manifest)),
+        build: this.found.get(id)?.build ?? null,
+      })
+      this.watch(project)
+      moved(from, to)
+    }
+    this.save()
+    this.onChange()
   }
 
   /** Clear away closed projects that came to nothing before this was done on closing. */

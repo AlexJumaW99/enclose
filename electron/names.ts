@@ -1,0 +1,83 @@
+// A name for a project that does not have one yet: two plain words, so that it can be
+// told from the others until the thing being made gives it a real one.
+
+const HOW = [
+  "amber",
+  "brave",
+  "bright",
+  "calm",
+  "clever",
+  "copper",
+  "cosmic",
+  "crisp",
+  "curious",
+  "dapper",
+  "eager",
+  "fuzzy",
+  "gentle",
+  "golden",
+  "happy",
+  "humble",
+  "jolly",
+  "keen",
+  "lively",
+  "lucky",
+  "mellow",
+  "mighty",
+  "nimble",
+  "plucky",
+  "quiet",
+  "rapid",
+  "rustic",
+  "silver",
+  "snappy",
+  "steady",
+  "sunny",
+  "swift",
+  "tidy",
+  "vivid",
+  "witty",
+  "zesty",
+]
+const WHAT = [
+  "anvil",
+  "badger",
+  "beacon",
+  "bolt",
+  "bracket",
+  "comet",
+  "cricket",
+  "falcon",
+  "ferret",
+  "gadget",
+  "gecko",
+  "hammer",
+  "heron",
+  "lantern",
+  "lathe",
+  "magnet",
+  "marble",
+  "otter",
+  "panda",
+  "pebble",
+  "piston",
+  "puffin",
+  "rivet",
+  "rocket",
+  "sprocket",
+  "squirrel",
+  "thimble",
+  "toaster",
+  "walrus",
+  "widget",
+  "wombat",
+  "wrench",
+]
+
+const one = (words: string[]) => words[Math.floor(Math.random() * words.length)]
+
+/** Something like "Quiet heron". */
+export function standInName(): string {
+  const how = one(HOW)
+  return `${how.charAt(0).toUpperCase()}${how.slice(1)} ${one(WHAT)}`
+}

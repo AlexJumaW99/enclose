@@ -113,8 +113,8 @@ export type CadApi = {
     add(): Promise<Project | null>
     /** add a folder the user dropped on the window; null if it is not a folder */
     addFolder(dir: string): Promise<Project | null>
-    /** make a folder of this name where new projects go, and add it */
-    create(name: string): Promise<Project>
+    /** make a folder where new projects go, under a stand-in name, and add it */
+    create(): Promise<Project>
     /** where on disk something dropped on the window is */
     pathOf(file: File): string
     /** take the project off the list; its folder and its conversation are kept */

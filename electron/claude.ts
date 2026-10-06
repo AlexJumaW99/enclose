@@ -2,6 +2,7 @@
 // own: it runs that install, which carries whatever account the user signed in with.
 import { execFile } from "node:child_process"
 import fs from "node:fs"
+import os from "node:os"
 import path from "node:path"
 import { promisify } from "node:util"
 
@@ -27,6 +28,31 @@ const PARENT_SESSION = [
 ]
 
 /** The environment to start Claude Code with: ours, minus what belongs to a parent session. */
+/**
+ * Where Claude Code keeps what it knows of a folder: the conversations had there, and
+ * the notes it has made about the project. It files them under the folder's path.
+ */
+const storeOf = (dir: string) =>
+  path.join(
+    process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), ".claude"),
+    "projects",
+    dir.replace(/[^a-zA-Z0-9]/g, "-")
+  )
+
+/**
+ * A project's folder has been renamed: take what Claude Code keeps about it along, so
+ * that its notes are still the project's. (A conversation can be carried on either way:
+ * Claude Code finds it by its id.) If this cannot be done, nothing is lost by it.
+ */
+export function followRename(from: string, to: string) {
+  try {
+    const [was, is] = [storeOf(from), storeOf(to)]
+    if (fs.existsSync(was) && !fs.existsSync(is)) fs.renameSync(was, is)
+  } catch {
+    // left where it was
+  }
+}
+
 export function claudeEnv(): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = { ...process.env }
   for (const key of PARENT_SESSION) delete env[key]

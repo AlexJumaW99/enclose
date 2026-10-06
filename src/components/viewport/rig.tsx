@@ -71,6 +71,8 @@ const STEP = 1 / 30
 const RIGHTING = 0.1
 /** Room left around the model when a flat view is fitted to it. */
 const MARGIN = 1.35
+/** And when the view it opens with is: less, since that one is seen from a corner. */
+const HOME_MARGIN = 1.18
 
 const { ACTION } = CameraControlsImpl
 
@@ -256,12 +258,34 @@ function direct(stage: {
     /** The view a model opens with, framing all of it. */
     home(animate: boolean, ratio: number) {
       ++sent
-      // fit the narrower of the view's two angles, so a tall window does not crop the sides
-      const angle = Math.atan(Math.min(HALF_FOV, HALF_FOV * ratio))
-      // a little inside the bounding sphere: models are rarely as tall as they are wide
-      const distance = (reach() / Math.sin(angle)) * 0.94
       const target = middle()
       const toward = toWorld(HOME_DIRECTION)
+      // Stand back just far enough that every corner of the model's box is in the view,
+      // whatever its shape: a cube needs more room than a slab does.
+      const right = new THREE.Vector3(0, 1, 0).cross(toward).normalize()
+      const up = toward.clone().cross(right)
+      const box = stage.box()
+      const corner = new THREE.Vector3()
+      let distance = 0
+      for (let i = 0; i < 8; i++) {
+        corner
+          .copy(
+            toWorld(
+              new THREE.Vector3(
+                i & 1 ? box.max.x : box.min.x,
+                i & 2 ? box.max.y : box.min.y,
+                i & 4 ? box.max.z : box.min.z
+              )
+            )
+          )
+          .sub(target)
+        // how near the camera the corner is, and how far off the middle of the view
+        const near = corner.dot(toward)
+        const across =
+          (Math.abs(corner.dot(right)) * HOME_MARGIN) / (HALF_FOV * ratio)
+        const upward = (Math.abs(corner.dot(up)) * HOME_MARGIN) / HALF_FOV
+        distance = Math.max(distance, near + across, near + upward)
+      }
       narrow()
       // the lens opens over the first of the turn home, and is whole by the end of it
       const turn = facing().angleTo(toward)

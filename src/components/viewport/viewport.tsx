@@ -4,11 +4,11 @@ import { BoxIcon, FolderPlusIcon, TriangleAlertIcon } from "lucide-react"
 
 import type { Project } from "@shared/api"
 import { Composer } from "@/components/composer"
-import { NewProject } from "@/components/new-project"
 import { PartPrompt } from "@/components/part-prompt"
 import { PartsPanel } from "@/components/parts-panel"
 import { Tools } from "@/components/tools"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
 import {
   Empty,
   EmptyContent,
@@ -274,21 +274,10 @@ function Model({ project }: { project: Project }) {
   )
 }
 
-/** Where new projects go, as the user would write it. */
-function useProjectsFolder(): string | null {
-  const [folder, setFolder] = React.useState<string | null>(null)
-  React.useEffect(() => {
-    void window.cad.settings.get().then((settings) =>
-      // the home folder is written the short way
-      setFolder(settings.projectsFolder.replace(/^\/Users\/[^/]+(?=\/)/, "~"))
-    )
-  }, [])
-  return folder
-}
-
 /** No projects at all: how one is started. */
 function Welcome() {
-  const folder = useProjectsFolder()
+  const addProject = useStore((s) => s.addProject)
+  const createProject = useStore((s) => s.createProject)
   return (
     <Empty className="h-full">
       <EmptyHeader>
@@ -296,14 +285,13 @@ function Welcome() {
           <FolderPlusIcon />
         </EmptyMedia>
         <EmptyTitle>Drop a folder here</EmptyTitle>
-        <EmptyDescription>
-          Enclose works in a folder on your Mac. Drop one on this window, empty
-          or not, and it becomes a project. Or name a new one, and its folder is
-          made for you{folder ? ` in ${folder}` : ""}.
-        </EmptyDescription>
+        <EmptyDescription>Empty or not, it becomes a project.</EmptyDescription>
       </EmptyHeader>
-      <EmptyContent>
-        <NewProject />
+      <EmptyContent className="flex-row justify-center">
+        <Button variant="outline" onClick={() => void addProject()}>
+          Open folder
+        </Button>
+        <Button onClick={() => void createProject()}>Create</Button>
       </EmptyContent>
     </Empty>
   )

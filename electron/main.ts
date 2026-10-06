@@ -17,7 +17,8 @@ import {
   type ViewportRequest,
   type ViewportResponse,
 } from "../shared/api"
-import { findClaude } from "./claude"
+import { findClaude, followRename } from "./claude"
+import { standInName } from "./names"
 import { folderName, Projects, resolveInside } from "./projects"
 import { SettingsStore } from "./settings"
 import { Threads } from "./threads"
@@ -184,11 +185,12 @@ async function capture(window: BrowserWindow, file: string) {
 
 /**
  * Make the folder for a new project, where new projects go, and say what the project is
- * to be called. The folder gets a name of its own (see `folderName`), numbered if two
- * projects of one name are made in the same minute.
+ * called for now: a stand-in, until what is made in it gives it a name. The folder is
+ * named to match (see `folderName`), numbered if the same name comes up twice in a
+ * minute.
  */
-function newFolder(typed: string): { dir: string; name: string } {
-  const name = typed.replace(/\s+/g, " ").trim() || "Untitled"
+function newFolder(): { dir: string; name: string } {
+  const name = standInName()
   const base = folderName(name, new Date())
   const { projectsFolder } = settings.get()
   for (let n = 1; ; n++) {
@@ -246,9 +248,9 @@ function wire() {
     const id = projects.add(String(dir))
     return list().find((p) => p.id === id) ?? null
   })
-  ipcMain.handle(CHANNEL.projectsCreate, (_, name: string) => {
-    const made = newFolder(String(name))
-    const id = projects.add(made.dir, { name: made.name })
+  ipcMain.handle(CHANNEL.projectsCreate, () => {
+    const made = newFolder()
+    const id = projects.add(made.dir, { name: made.name, standIn: true })
     return list().find((p) => p.id === id) ?? null
   })
   ipcMain.handle(CHANNEL.projectsRemove, (_, id: string) => {
@@ -366,6 +368,7 @@ if (!app.requestSingleInstanceLock()) {
       projects,
       claude: () => claude,
       kit: path.join(app.getAppPath(), "kit", "enclose.py"),
+      onRenamed: followRename,
       viewport: askViewport,
       onItem: (projectId, item) => send(CHANNEL.threadItem, projectId, item),
       onReset: (projectId) => send(CHANNEL.threadWasReset, projectId),

@@ -193,6 +193,74 @@ describe("Projects", () => {
     expect(names()).toContain("their-empty")
     projects.close()
   })
+
+  it("names a stand-in project after its model, and its folder to match", () => {
+    const projects = new Projects(
+      path.join(root, "state/projects.json"),
+      () => {}
+    )
+    const start = path.join(root, "2026-10-05-2306-quiet-heron")
+    fs.mkdirSync(start)
+    const id = projects.add(start, { name: "Quiet heron", standIn: true })
+    const moves: string[][] = []
+    const christen = () =>
+      projects.christen(id, (from, to) => moves.push([from, to]))
+    const now = () => projects.list(idle).find((p) => p.id === id)!
+
+    // nothing made yet: it keeps the stand-in
+    christen()
+    expect(now().name).toBe("Quiet heron")
+
+    write("2026-10-05-2306-quiet-heron/build/enclose.model.json", {
+      ...MANIFEST,
+      title: "  Pill   box ",
+    })
+    projects.refresh(id)
+    const revision = now().revision
+    christen()
+    expect(now().name).toBe("Pill box")
+    expect(path.basename(now().path)).toMatch(
+      /^\d{4}-\d\d-\d\d-\d{4}-pill-box$/
+    )
+    expect(fs.existsSync(start)).toBe(false)
+    expect(
+      fs.existsSync(path.join(now().path, "build/enclose.model.json"))
+    ).toBe(true)
+    // the model is the same one, in the same place within the folder: not reloaded
+    expect(now().manifest).toBe("build/enclose.model.json")
+    expect(now().revision).toBe(revision)
+    expect(moves).toEqual([
+      [fs.realpathSync(root) + "/2026-10-05-2306-quiet-heron", now().path],
+    ])
+
+    // it has its name now: a later title does not rename it again
+    write(
+      path.relative(root, path.join(now().path, "build/enclose.model.json")),
+      {
+        ...MANIFEST,
+        title: "Something else",
+      }
+    )
+    christen()
+    expect(now().name).toBe("Pill box")
+    expect(moves).toHaveLength(1)
+    projects.close()
+  })
+
+  it("never renames a folder the app did not name", () => {
+    const projects = new Projects(
+      path.join(root, "state/projects.json"),
+      () => {}
+    )
+    write("theirs/model.json", { ...MANIFEST, title: "A title" })
+    const id = projects.add(path.join(root, "theirs"))
+    projects.christen(id, () => {
+      throw new Error("renamed")
+    })
+    expect(projects.list(idle)[0]).toMatchObject({ name: "theirs" })
+    expect(fs.existsSync(path.join(root, "theirs/model.json"))).toBe(true)
+    projects.close()
+  })
 })
 
 describe("folderName", () => {
@@ -216,5 +284,13 @@ describe("folderName", () => {
     expect(folderName("箱 1", made)).toBe("2026-10-05-2306-箱-1")
     expect(folderName("", made)).toBe("2026-10-05-2306-untitled")
     expect(folderName("!!!", made)).toBe("2026-10-05-2306-untitled")
+  })
+})
+
+describe("standInName", () => {
+  it("is two plain words", async () => {
+    const { standInName } = await import("./names")
+    for (let i = 0; i < 50; i++)
+      expect(standInName()).toMatch(/^[A-Z][a-z]+ [a-z]+$/)
   })
 })

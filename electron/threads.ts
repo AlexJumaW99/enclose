@@ -43,6 +43,8 @@ export type ThreadsDeps = {
   claude: () => ClaudeStatus
   /** where the app keeps the exporter a project copies to write its model */
   kit: string
+  /** a project's folder was renamed, from this path to that */
+  onRenamed: (from: string, to: string) => void
   /** ask the window something about the viewport it is showing */
   viewport: (
     projectId: string,
@@ -142,17 +144,25 @@ function guide(
   manifest: string | null,
   build: string | null,
   kit: string,
-  /** what the user called the project, when that is not its folder's name */
-  called: string | null
+  /** what the project goes by, when that is not its folder's name */
+  called: string | null,
+  /** that name is only a stand-in, until the model gives the project one */
+  standIn: boolean
 ): string {
   const lines = [
     "You are running inside Enclose, a desktop app for designing physical things in code. The user is looking at a 3D view of this project's model while they talk to you, and can click a part to ask about it.",
     "",
-    ...(called
+    ...(called && !standIn
       ? [
-          `- The user calls this project "${called}". That is its name; the folder's is only where it is kept.`,
+          `- This project is called "${called}". That is its name; the folder's is only where it is kept.`,
         ]
       : []),
+    ...(standIn
+      ? [
+          `- This project has no name of its own yet: "${called}" is a stand-in the app made up. Give the model a title of two or three plain words that says what the thing is (the first argument of enclose.Model). The project takes that name once the model is built, and its folder is renamed to match after you finish, so do not write the folder's path into any file.`,
+        ]
+      : []),
+    "- Keep to the model and the project. Say nothing about tools, connectors or settings of the user's that are no part of this app (an MCP server that wants signing in to, say) unless they ask.",
     "- A message may begin with a <selection> block: the part the user clicked and the point they clicked on it, in the model's own coordinates (mm, Z up).",
     "- You can see what they see. mcp__viewport__screenshot returns the current view as an image, mcp__viewport__parts lists the parts with their groups and sizes, mcp__viewport__selection returns the current selection.",
     "- The model is made of parts. Each separate component is one part: a thing that is made, bought or fitted on its own, such as a lid, a board or a screw. Whatever the user asks you to add as a thing of its own is a part of its own. The app lists the parts under groups, and the user can pick one part or one group to look at alone.",
@@ -174,7 +184,7 @@ function guide(
       `  1. Copy the app's exporter into the folder as enclose.py: cp "${kit}" enclose.py. Leave the copy as it is. Its docstring shows how it is used.`,
       "  2. Write model.py. Build each part with build123d, in millimetres with Z up, each part where it sits in the assembly, and hand the parts to enclose.Model as the docstring shows: one part for each separate component, in groups. If the folder already holds CAD files (STEP), start from them: build123d's import_step reads them.",
       '  3. Find a Python that has build123d: try python3 -c "import build123d". If it has not, make a virtual environment in the folder (python3 -m venv .venv, then .venv/bin/pip install build123d; or uv if it is installed) and use that one.',
-      '  4. Write enclose.json at the top of the folder, naming the model and the build command: { "model": "build/enclose.model.json", "build": "python3 model.py" }, with the Python you found.',
+      '  4. Write enclose.json at the top of the folder, naming the model and the build command: { "model": "build/enclose.model.json", "build": "python3 model.py" }, with the Python you found. Paths in it are relative to the folder, never absolute.',
       "  5. Run the build. The model shows in the app by itself once build/enclose.model.json is written. Then take a screenshot and check the result before you report it.",
       "- Keep the folder plain: model.py, enclose.py, enclose.json, and build/, which is output and never edited by hand (if the folder is a git repository, ignore build/ and .venv/).",
       "- Start with the simplest thing that is what they asked for, show it, and say in a sentence or two what you assumed (sizes, wall thickness) so that they can correct it.",
@@ -610,7 +620,8 @@ export class Threads {
               project.manifest,
               project.build,
               this.deps.kit,
-              project.name ?? null
+              project.name ?? null,
+              project.standIn === true
             ),
           },
           mcpServers: { viewport },
@@ -652,6 +663,9 @@ export class Threads {
       this.write(projectId)
       // Claude may have created, moved or rebuilt the model
       this.deps.projects.refresh(projectId)
+      // and with nothing at work in the folder any more, a project that has just been
+      // given its shape can take its name
+      this.deps.projects.christen(projectId, this.deps.onRenamed)
       this.deps.onSummary()
     }
   }
