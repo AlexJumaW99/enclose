@@ -15,17 +15,16 @@ import {
   WireframeIcon,
 } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import { Kbd } from "@/components/ui/kbd"
 import { Toggle } from "@/components/ui/toggle"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { nearestAxis } from "@/lib/orient"
 import { SPREAD, useStore, type DisplayMode } from "@/lib/store"
-import { bridge } from "./viewport/bridge"
 import type { LoadedModel } from "./viewport/load"
-import { sectionAcross } from "./viewport/section-planes"
+import { sectionFacing } from "./viewport/section-planes"
 
 /** What every button floating over the view is: a frosted circle of its own. */
 const ROUND =
@@ -44,11 +43,14 @@ function Stack({ className, ...props }: React.ComponentProps<"div">) {
 /** A button that is either on or off, named by its tooltip. */
 function Switch({
   label,
+  shortcut,
   on,
   onChange,
   children,
 }: {
   label: string
+  /** the key that does the same, shown beside the name */
+  shortcut?: string
   on: boolean
   onChange: (on: boolean) => void
   children: React.ReactNode
@@ -60,6 +62,7 @@ function Switch({
           <Toggle
             pressed={on}
             onPressedChange={onChange}
+            aria-keyshortcuts={shortcut}
             className={cn(
               ROUND,
               "aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary/85 aria-pressed:hover:text-primary-foreground"
@@ -70,7 +73,11 @@ function Switch({
         {children}
         <span className="sr-only">{label}</span>
       </TooltipTrigger>
-      <TooltipContent side="left">{label}</TooltipContent>
+      {/* a little room on the right, or the arrow bites into the key */}
+      <TooltipContent side="left" className="has-data-[slot=kbd]:pr-2.5">
+        {label}
+        {shortcut && <Kbd>{shortcut}</Kbd>}
+      </TooltipContent>
     </Tooltip>
   )
 }
@@ -151,20 +158,17 @@ export function Tools({
           <Stack>
             <Switch
               label="Section"
+              shortcut="S"
               on={view.section !== null}
-              onChange={(on) => {
-                if (!on) return setView({ section: null })
-                // start with the cut that faces the camera most squarely: it opens
-                // the model up towards you
-                const { axis } = nearestAxis(bridge.eye?.() ?? [0, -1, 0])
-                const middle = loaded.box.getCenter(loaded.box.min.clone())
-                setView({ section: sectionAcross(axis, middle.toArray()) })
-              }}
+              onChange={(on) =>
+                setView({ section: on ? sectionFacing(loaded.box) : null })
+              }
             >
               <SectionIcon />
             </Switch>
             <Switch
               label="Explode"
+              shortcut="E"
               on={view.exploded}
               onChange={(exploded) => setView({ exploded, spread: SPREAD.min })}
             >

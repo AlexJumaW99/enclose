@@ -18,13 +18,19 @@ import {
 import { Spinner } from "@/components/ui/spinner"
 import { readModel } from "@/lib/model"
 import { VIEWS } from "@/lib/orient"
-import { useStore } from "@/lib/store"
+import { SPREAD, useStore } from "@/lib/store"
 import { AxisGizmo } from "./axis-gizmo"
 import { bridge } from "./bridge"
 import { ExplodeSlider } from "./explode-slider"
 import { disposeModel, loadModel, type LoadedModel } from "./load"
 import { appearance, Scene } from "./scene"
-import { SectionPlanes } from "./section-planes"
+import { sectionFacing, SectionPlanes } from "./section-planes"
+
+/** Whether a key pressed here is on its way into some text, or a menu's own. */
+const spokenFor = (target: EventTarget | null) =>
+  target instanceof HTMLElement &&
+  (target.isContentEditable ||
+    target.closest("input, textarea, select, [role=menu]") !== null)
 
 type Loading =
   | { status: "loading"; done: number; total: number }
@@ -97,21 +103,34 @@ function Model({ project }: { project: Project }) {
   const layersOpen = useStore((s) => s.layersOpen)
   const goHome = useStore((s) => s.goHome)
 
-  // Cmd+1 is the view the model opened with; Cmd+2 to 7 are the six flat ones
+  // Cmd+1 is the view the model opened with; Cmd+2 to 7 are the six flat ones. S cuts
+  // the model open and E pulls it apart, both again to undo.
   React.useEffect(() => {
     const key = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey)
+      if (event.altKey || event.shiftKey) return
+      if (event.metaKey || event.ctrlKey) {
+        const digit = /^Digit([1-7])$/.exec(event.code)?.[1]
+        if (!digit) return
+        event.preventDefault()
+        const view = VIEWS[Number(digit) - 2]
+        if (view) bridge.lookFrom?.(view.axis, view.sign)
+        else goHome()
         return
-      const digit = /^Digit([1-7])$/.exec(event.code)?.[1]
-      if (!digit) return
+      }
+      // a letter on its own: not one held down, and not one being typed somewhere
+      if (!loaded || event.repeat || spokenFor(event.target)) return
+      const { view, setView } = useStore.getState()
+      const letter = event.key.toLowerCase()
+      if (letter === "s")
+        setView({ section: view.section ? null : sectionFacing(loaded.box) })
+      else if (letter === "e")
+        setView({ exploded: !view.exploded, spread: SPREAD.min })
+      else return
       event.preventDefault()
-      const view = VIEWS[Number(digit) - 2]
-      if (view) bridge.lookFrom?.(view.axis, view.sign)
-      else goHome()
     }
     window.addEventListener("keydown", key)
     return () => window.removeEventListener("keydown", key)
-  }, [goHome])
+  }, [goHome, loaded])
 
   // what Claude gets when it asks which parts are on screen
   React.useEffect(() => {

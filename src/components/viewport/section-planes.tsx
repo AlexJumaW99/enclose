@@ -68,6 +68,15 @@ export function sectionAcross(axis: Axis, middle: Vec3) {
 }
 
 /**
+ * The section to start with: across the axis the camera faces most squarely, which opens
+ * the model up towards you.
+ */
+export function sectionFacing(box: THREE.Box3) {
+  const { axis } = nearestAxis(bridge.eye?.() ?? [0, -1, 0])
+  return sectionAcross(axis, box.getCenter(new THREE.Vector3()).toArray())
+}
+
+/**
  * Shown while a section is on: the three ways to cut, turning with the camera so each
  * square lies the way its cut would, and a button to see the other half.
  */

@@ -74,11 +74,12 @@ Down the right-hand edge:
 
 - **Solid, glass, wireframe.** Glass makes the outside see-through (the layers a manifest
   marks as `shell`, or everything if it marks none); wireframe draws edges only.
-- **Section** cuts the model open. Three squares appear by the axes, one per direction to
-  cut across; in the view, drag the arrow to push the cut through the model and the arcs
-  to tilt it. The button beside the squares shows the other half.
-- **Explode** pulls the parts apart by the distances the manifest gives (or straight out
-  from the middle, if it gives none), and a slider along the bottom pulls them further.
+- **Section** (S) cuts the model open. Three squares appear by the axes, one per direction
+  to cut across; in the view, drag the arrow to push the cut through the model and the
+  arcs to tilt it. The button beside the squares shows the other half.
+- **Explode** (E) pulls the parts apart by the distances the manifest gives (or straight
+  out from the middle, if it gives none), and a slider along the bottom pulls them
+  further.
 - **Layers** lists the manifest's layers and the parts in each, with an eye to switch any
   of them off. Pointing at a row lights the part up in the view; clicking picks it.
 
