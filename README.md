@@ -55,8 +55,10 @@ zoom, whatever it was taken for.
 The axes in the bottom right corner turn with the camera. Click the end of one to look at
 the model from there, click it again for the opposite side, or drag inside it to orbit.
 Those six views are flat: drawn with no perspective, so a side is seen exactly side-on,
-centred and fitted to the window. Panning and zooming keep a view flat; orbiting brings
-the perspective back.
+centred and fitted to the window. Panning and zooming keep a view flat. Orbiting brings
+the perspective back a little at a time, over the first 30° of the turn, and it goes the
+same way over the last 30° of the turn into a flat view: the lens changes while the model
+is turning, never while it is still.
 
 | | |
 |---|---|

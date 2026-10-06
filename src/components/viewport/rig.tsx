@@ -4,7 +4,13 @@
 // are smaller, which is how an object looks. The flat views - front, top, from the end
 // of an axis - use one with no lens, so that a side is seen exactly side-on, with
 // nothing of the top showing. Getting from one to the other is done by narrowing the
-// lens while pulling back, until it is so narrow that taking it away changes nothing.
+// lens while standing further back, until it is so narrow that taking it away changes
+// nothing.
+//
+// The lens narrows and opens with the turn of the camera, not with the clock: over the
+// last of the turn into a flat view, and over the first of the turn out of one. A change
+// of perspective is easy to see in a view that is otherwise still, and hard to see in
+// one that is turning anyway.
 import * as React from "react"
 import * as THREE from "three"
 import { useFrame, useThree } from "@react-three/fiber"
@@ -46,10 +52,41 @@ const GRIP = 16
 const SMOOTH = { zoom: 0.1, turn: 0.3, flight: 0.2 }
 /** How narrow the lens gets on the way into a flat view: at this, losing it is not seen. */
 const FLATTEN = 24
+/** The least of the lens there ever is, as a share of the whole of it. */
+const FLATTEST = 1 / FLATTEN
+/** How far the camera turns, in radians, while the lens opens or closes. */
+const GIVE = Math.PI / 6
+/** How near a set view, in radians, counts as there. */
+const THERE = 0.004
+/** The longest step of time, in seconds, that a single frame moves the camera by. */
+const STEP = 1 / 30
 /** Room left around the model when a flat view is fitted to it. */
 const MARGIN = 1.35
 
 const { ACTION } = CameraControlsImpl
+
+/** What ties the lens to the turn of the camera, while something does. */
+type Tie =
+  | {
+      /** on the way to a flat view: the lens closes as the camera nears it */
+      kind: "closing"
+      turn: number
+      polar: number
+      toward: THREE.Vector3
+      /** the share of the lens there was to begin with */
+      share: number
+      /** the turn, in radians, that the closing is spread over */
+      over: number
+      /** the scale the view is to end at, in pixels per mm */
+      fit: number
+    }
+  | {
+      /** turning away from where the lens was narrowed: it opens as the camera goes */
+      kind: "opening"
+      from: THREE.Vector3
+      share: number
+      over: number
+    }
 
 /** Everything that moves the camera other than the hand directly on the view. */
 function direct(stage: {
@@ -64,29 +101,34 @@ function direct(stage: {
 }) {
   const { controls, lens, flat } = stage
   let mode: "lens" | "flat" = "lens"
-  /** the lens is narrowed, or on its way to being */
-  let narrowed = false
+  /** how many times narrower than itself the lens is: 1 when it is whole */
+  let narrowing = 1
+  let tie: Tie | null = null
   /** true until the user moves the camera themselves */
   let atHome = true
-  /** counts the moves asked for, so that one overtaken by another can tell */
-  let flight = 0
   /** counts the times the camera was sent to a set view */
   let sent = 0
   /** the scale the flat view is at, or on its way to, in pixels per mm */
   let goal = 1
-  /** a flight into a flat view that is under way: where it is headed */
-  let arriving: { flight: number; turn: number; polar: number } | null = null
 
   const reach = () => stage.box().getSize(new THREE.Vector3()).length() / 2
   const middle = () => toWorld(stage.box().getCenter(new THREE.Vector3()))
-  /** How far back the lens has to be to show things at a scale, in pixels per mm. */
+  /** Which way the camera is from what it looks at. */
+  const facing = () =>
+    new THREE.Vector3().setFromSphericalCoords(
+      1,
+      controls.polarAngle,
+      controls.azimuthAngle
+    )
+  const ease = (share: number) => THREE.MathUtils.smoothstep(share, 0, 1)
+  /** How far back the whole lens has to be to show things at a scale, in pixels per mm. */
   const distanceAt = (scale: number) =>
     stage.size().height / (2 * scale * HALF_FOV)
   /** The scale that what the camera looks at is shown at now, in pixels per mm. */
   const scaleNow = () =>
     mode === "flat"
       ? flat.zoom
-      : (stage.size().height * lens.zoom) / (2 * controls.distance * HALF_FOV)
+      : (stage.size().height * narrowing) / (2 * controls.distance * HALF_FOV)
 
   /** How far the user may zoom, either way. */
   const limits = () => {
@@ -94,19 +136,29 @@ function direct(stage: {
     if (mode === "flat") {
       controls.minZoom = distanceAt(1) / (r * REACH.furthest)
       controls.maxZoom = distanceAt(1) / (r * REACH.nearest)
+      controls.minDistance = 0
+      controls.maxDistance = Infinity
       return
     }
     controls.minZoom = 0.01
     controls.maxZoom = Infinity
-    controls.minDistance = r * REACH.nearest
-    controls.maxDistance = r * REACH.furthest
+    // a narrowed lens stands further back, by as much as it is narrowed
+    controls.minDistance = r * REACH.nearest * narrowing
+    controls.maxDistance = r * REACH.furthest * narrowing
   }
-  /** A move the app makes itself goes where it needs to; `settled` restores the limits. */
-  const unbound = () => {
-    controls.minZoom = 1e-6
-    controls.maxZoom = Infinity
-    controls.minDistance = 0
-    controls.maxDistance = Infinity
+
+  /** Narrow the lens this many times, and stand back by as much: nothing changes size. */
+  const lensTo = (next: number) => {
+    if (next === narrowing) return
+    const by = next / narrowing
+    // where the camera is, and where a zoom still under way is taking it
+    const settling = controls.getSpherical(new THREE.Spherical(), true).radius
+    narrowing = next
+    limits()
+    void controls.dollyTo(controls.distance * by, false)
+    void controls.dollyTo(settling * by, true)
+    void controls.zoomTo(next, false)
+    stage.redraw()
   }
 
   /** Swap the narrowed lens for none, keeping everything the size it is. */
@@ -123,13 +175,13 @@ function direct(stage: {
       far: r * 50,
     })
     mode = "flat"
-    narrowed = false
     controls.camera = flat
-    unbound()
+    limits()
     void controls.dollyTo(r * 4, false)
     void controls.zoomTo(scale, false)
+    // the controls only pass this on when they next update: `scaleNow` reads it before
+    flat.zoom = scale
     goal = scale
-    limits()
     stage.show(flat)
   }
 
@@ -139,23 +191,24 @@ function direct(stage: {
     const distance = distanceAt(scaleNow())
     const { width, height } = stage.size()
     mode = "lens"
-    narrowed = true
+    narrowing = FLATTEN
     lens.aspect = width / height
     controls.camera = lens
-    unbound()
+    limits()
     void controls.zoomTo(FLATTEN, false)
     void controls.dollyTo(distance * FLATTEN, false)
     stage.show(lens)
   }
 
-  /** Open the lens back up, keeping what the camera looks at the size it is. */
-  const open = (animate: boolean) => {
-    const distance = distanceAt(scaleNow())
-    narrow()
-    narrowed = false
-    unbound()
-    void controls.zoomTo(1, animate)
-    void controls.dollyTo(distance, animate)
+  /** The user is turning the view: a flight to a set view gives way to them. */
+  const letGo = () => {
+    if (tie?.kind !== "closing") return
+    tie = {
+      kind: "opening",
+      from: facing(),
+      share: mode === "flat" ? FLATTEST : 1 / narrowing,
+      over: GIVE,
+    }
   }
 
   limits()
@@ -163,22 +216,41 @@ function direct(stage: {
   return {
     isFlat: () => mode === "flat",
     sends: () => sent,
+    /** For a script checking the view: what the camera is doing, in numbers. */
+    probe: () => ({
+      // where the camera is this instant, not where it is headed
+      eye: [facing().x, -facing().z, facing().y],
+      flat: mode === "flat",
+      lens: mode === "flat" ? 0 : 1 / narrowing,
+      scale: scaleNow(),
+      tie: tie?.kind ?? null,
+    }),
 
     /** The view a model opens with, framing all of it. */
     home(animate: boolean, ratio: number) {
-      ++flight
       ++sent
-      narrow()
-      narrowed = false
       // fit the narrower of the view's two angles, so a tall window does not crop the sides
       const angle = Math.atan(Math.min(HALF_FOV, HALF_FOV * ratio))
       // a little inside the bounding sphere: models are rarely as tall as they are wide
       const distance = (reach() / Math.sin(angle)) * 0.94
       const target = middle()
-      const eye = toWorld(HOME_DIRECTION).multiplyScalar(distance).add(target)
+      const toward = toWorld(HOME_DIRECTION)
+      narrow()
+      // the lens opens over the first of the turn home, and is whole by the end of it
+      const turn = facing().angleTo(toward)
+      if (animate && narrowing > 1 && turn > THERE) {
+        tie = {
+          kind: "opening",
+          from: facing(),
+          share: 1 / narrowing,
+          over: Math.min(GIVE, turn * 0.9),
+        }
+      } else {
+        tie = null
+        lensTo(1)
+      }
+      const eye = toward.multiplyScalar(distance * narrowing).add(target)
       controls.smoothTime = SMOOTH.turn
-      unbound()
-      void controls.zoomTo(1, animate)
       void controls.setLookAt(
         eye.x,
         eye.y,
@@ -188,8 +260,6 @@ function direct(stage: {
         target.z,
         animate
       )
-      // a move that is not animated never comes to rest, so nothing else restores these
-      if (!animate) limits()
       atHome = true
       stage.redraw()
     },
@@ -211,28 +281,33 @@ function direct(stage: {
           : axis === "y"
             ? [extent.x, extent.z]
             : [extent.x, extent.y]
-      const scale = Math.min(width / across, height / up) / MARGIN
+      const fit = Math.min(width / across, height / up) / MARGIN
       const target = middle()
       const turn = nearestTurn(controls.azimuthAngle, azimuth)
+      const toward = new THREE.Vector3().setFromSphericalCoords(1, polar, turn)
 
-      ++flight
       ++sent
       atHome = false
+      // the lens closes over the last of the turn; `tick` takes it away on arrival
+      tie = {
+        kind: "closing",
+        turn,
+        polar,
+        toward,
+        share: 1 / narrowing,
+        over: Math.max(Math.min(GIVE, facing().angleTo(toward)), THERE),
+        fit,
+      }
       controls.smoothTime = SMOOTH.flight
       void controls.rotateTo(turn, polar, true)
       void controls.moveTo(target.x, target.y, target.z, true)
       if (mode === "flat") {
-        limits()
-        goal = scale
-        void controls.zoomTo(scale, true)
-        return
+        // from one flat view to another there is no lens to bring back
+        goal = fit
+        void controls.zoomTo(fit, true)
+      } else {
+        void controls.dollyTo(distanceAt(fit) * narrowing, true)
       }
-      // with the lens narrowing as it goes; `tick` takes it away once it has arrived
-      narrowed = true
-      arriving = { flight, turn, polar }
-      unbound()
-      void controls.zoomTo(FLATTEN, true)
-      void controls.dollyTo(distanceAt(scale) * FLATTEN, true)
     },
 
     /**
@@ -270,10 +345,7 @@ function direct(stage: {
     /** Orbit by these angles, the way a drag to the right and down turns the view. */
     orbit(right: number, down: number) {
       atHome = false
-      if (mode === "flat" || narrowed) {
-        ++flight
-        open(true)
-      }
+      letGo()
       void controls.rotate(-right, -down, false)
       stage.redraw()
     },
@@ -290,46 +362,58 @@ function direct(stage: {
     /** The user has taken hold of the view. */
     taken() {
       atHome = false
-      // A flat view is one direction only: turning away from it, or from the way to
-      // it, brings the lens back. Panning and zooming keep it.
+      // only turning takes the camera off its way to a flat view: panning and zooming
+      // on the way there are let be
       const turning =
         (controls.currentAction & (ACTION.ROTATE | ACTION.TOUCH_ROTATE)) !== 0
-      if (turning && (mode === "flat" || narrowed)) {
-        ++flight
-        open(true)
-      }
-    },
-
-    /** The camera has come to rest: the user's zoom limits apply again. */
-    settled() {
-      if (mode === "flat" || !narrowed) limits()
+      if (turning) letGo()
     },
 
     /** Called every frame that is drawn. */
     tick() {
-      if (arriving && (arriving.flight !== flight || mode === "flat")) {
-        arriving = null
-      }
-      // The flight into a flat view is as good as over: the lens is nearly as narrow as
-      // it gets and the turn is within a quarter of a degree. Finish it here rather than
-      // wait for the camera to come fully to rest, which takes seconds longer and during
-      // which the view would not yet behave like a flat one.
-      if (
-        arriving &&
-        lens.zoom > FLATTEN * 0.97 &&
-        Math.abs(controls.azimuthAngle - arriving.turn) < 0.004 &&
-        Math.abs(controls.polarAngle - arriving.polar) < 0.004
-      ) {
-        void controls.rotateTo(arriving.turn, arriving.polar, false)
-        arriving = null
-        flatten()
+      if (tie?.kind === "closing") {
+        const there =
+          Math.abs(controls.azimuthAngle - tie.turn) < THERE &&
+          Math.abs(controls.polarAngle - tie.polar) < THERE
+        if (there) {
+          // As good as arrived: finish here rather than wait for the camera to come
+          // fully to rest, which takes seconds longer.
+          void controls.rotateTo(tie.turn, tie.polar, false)
+          if (mode === "lens") {
+            flatten()
+            goal = tie.fit
+            void controls.zoomTo(goal, true)
+          }
+          // and from here the lens comes back as the camera is turned away
+          tie = {
+            kind: "opening",
+            from: tie.toward,
+            share: FLATTEST,
+            over: GIVE,
+          }
+        } else if (mode === "lens") {
+          const left = facing().angleTo(tie.toward) / tie.over
+          lensTo(1 / (FLATTEST + (tie.share - FLATTEST) * ease(left)))
+        }
+      } else if (tie) {
+        const turned = facing().angleTo(tie.from)
+        if (mode === "flat" && turned > THERE) narrow()
+        if (mode === "lens") {
+          if (turned < tie.over) {
+            const share = tie.share + (1 - tie.share) * ease(turned / tie.over)
+            lensTo(1 / share)
+          } else {
+            lensTo(1)
+            tie = null
+          }
+        }
       }
       if (mode === "lens") {
         // A narrowed lens sits far back. Draw only the slice of depth the model is in,
         // or surfaces close together would start to show through one another.
         const r = reach()
         const near =
-          lens.zoom > 1.01
+          narrowing > 1.01
             ? Math.max((r * REACH.nearest) / 4, controls.distance - 3 * r)
             : (r * REACH.nearest) / 4
         const far = Math.max(r * REACH.furthest * 2, controls.distance + 3 * r)
@@ -371,8 +455,14 @@ export function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
 
   React.useEffect(() => {
     if (!controls.current) return
+    // The view is only drawn when something changes, so the first frame of a move is
+    // handed all the time the view sat still as its step, and the camera would jump
+    // most of the way there at once. No frame gets to count for more than a slow one.
+    const impl = controls.current
+    const update = impl.update.bind(impl)
+    impl.update = (delta) => update(Math.min(delta, STEP))
     const made = direct({
-      controls: controls.current,
+      controls: impl,
       lens,
       flat,
       box: () => latest.current,
@@ -389,7 +479,10 @@ export function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
     bridge.orbit = (dx, dy) => made.orbit(dx * TURN.axes, dy * TURN.axes)
     bridge.eye = () => made.eye()
     bridge.flat = () => made.isFlat()
+    // lets a script see what the camera is doing when the app is checked without a person
+    if (import.meta.env.DEV) Object.assign(window, { __camera: made.probe })
     return () => {
+      impl.update = update
       director.current = null
       bridge.lookFrom = bridge.orbit = bridge.eye = bridge.flat = null
     }
@@ -522,7 +615,6 @@ export function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
       camera={lens}
       makeDefault
       onControl={() => director.current?.taken()}
-      onRest={() => director.current?.settled()}
       dollySpeed={ZOOM_SPEED}
       dollyToCursor
       smoothTime={SMOOTH.turn}
