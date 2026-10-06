@@ -41,7 +41,7 @@ const UNLIT =
   "bg-sidebar-accent/45 ring-foreground/5 hover:bg-sidebar-accent/65"
 
 /** What a card is written in, and its name: the same size, and heavier. */
-const SMALL = "text-[11px] leading-[1.4]"
+const SMALL = "text-[12px] leading-[1.4]"
 const NAME = `truncate ${SMALL} font-medium`
 
 /**
@@ -98,7 +98,10 @@ function When({
   // one there is news of says that instead, across the end of the card
   if (newsOf(conversation, finished)) return null
   return (
-    <span className={cn(SMALL, "shrink-0 text-muted-foreground tabular-nums")}>
+    // the quietest thing on the card: when matters less than what
+    <span
+      className={cn(SMALL, "shrink-0 text-muted-foreground/60 tabular-nums")}
+    >
       {ago(conversation.updatedAt, now)}
     </span>
   )
@@ -147,7 +150,7 @@ function Written({
         className={cn(
           "flex flex-col gap-0.5",
           news &&
-            "[mask-image:linear-gradient(to_right,black_calc(100%-6.25rem),transparent_calc(100%-4rem))]"
+            "[mask-image:linear-gradient(to_right,black_calc(100%-6.75rem),transparent_calc(100%-4.375rem))]"
         )}
       >
         {children}
@@ -195,18 +198,20 @@ function Under({
             // a little of the card's own edge, and what is under it
             className={cn(
               "group/under pointer-events-auto absolute inset-x-0 z-10 cursor-pointer outline-none",
-              news ? "-bottom-7.5 h-9" : "-bottom-2.5 h-4"
+              news ? "-bottom-7.5 h-9" : "-bottom-3.5 h-5"
             )}
           />
         }
       >
-        {/* the card beneath, as much of it as shows: it comes out a little to be pressed */}
+        {/* The card beneath, as much of it as shows: it comes out a little to be pressed.
+            It starts just under the edge of the card over it, which is drawn outside
+            that card and would otherwise be covered. */}
         <span
           className={cn(
-            "glass absolute inset-x-2.5 top-1.5 flex items-center gap-1 rounded-b-lg border-x border-b border-foreground/5 bg-sidebar-accent/45 px-2.5 transition-[height]",
+            "glass absolute inset-x-2.5 top-1.75 flex items-center gap-1 rounded-b-lg border-x border-b border-foreground/5 bg-sidebar-accent/45 px-2.5 transition-[height]",
             news
               ? "h-6 group-hover/under:h-6.5 group-focus-visible/under:h-6.5"
-              : "h-1.5 group-hover/under:h-2.5 group-focus-visible/under:h-2.5"
+              : "h-2.5 group-hover/under:h-3.5 group-focus-visible/under:h-3.5"
           )}
         >
           {news && (
@@ -262,7 +267,7 @@ function ProjectCard({ project, now }: { project: Project; now: number }) {
         className={cn(
           "group/card relative w-49",
           // room for the one that shows under it
-          under.length > 0 && !spread && (newsUnder ? "mb-6.5" : "mb-1.5")
+          under.length > 0 && !spread && (newsUnder ? "mb-6.75" : "mb-2.75")
         )}
       >
         <ProjectMenu project={project}>
