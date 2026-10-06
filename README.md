@@ -48,6 +48,11 @@ Moving around on a trackpad: move two fingers across it to orbit, pinch to zoom 
 whatever is under the pointer, and hold Shift to pan. With a mouse: drag to orbit, turn
 the wheel to zoom, and drag with Shift held, or with the right button, to pan.
 
+Orbiting does not stop straight above the model or straight below: it carries on over
+the top and round the far side, with the model upside down, as it does in Blender. A set
+view, or Cmd+1, brings it back the right way up, and goes there the short way however
+many times the view has been turned about.
+
 A trackpad and a wheel send the same scroll, so which one it was is read from how the
 scroll moves ([`src/lib/scroll.ts`](src/lib/scroll.ts)). Holding Ctrl makes any scroll
 zoom, whatever it was taken for.

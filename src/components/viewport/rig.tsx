@@ -11,6 +11,12 @@
 // last of the turn into a flat view, and over the first of the turn out of one. A change
 // of perspective is easy to see in a view that is otherwise still, and hard to see in
 // one that is turning anyway.
+//
+// The controls keep the camera the right way up, and so stop it straight above the model
+// and straight below. Here it goes on over the top instead, and comes down the far side
+// with the model upside down. That is done by having the controls carry on from the
+// opposite side, which leaves the picture turned half way round about its middle, and
+// turning the picture back: the two cancel, and nothing is seen to jump.
 import * as React from "react"
 import * as THREE from "three"
 import { useFrame, useThree } from "@react-three/fiber"
@@ -60,6 +66,8 @@ const GIVE = Math.PI / 6
 const THERE = 0.004
 /** The longest step of time, in seconds, that a single frame moves the camera by. */
 const STEP = 1 / 30
+/** Seconds for a picture that is upside down to come most of the way upright again. */
+const RIGHTING = 0.1
 /** Room left around the model when a flat view is fitted to it. */
 const MARGIN = 1.35
 
@@ -110,6 +118,14 @@ function direct(stage: {
   let sent = 0
   /** the scale the flat view is at, or on its way to, in pixels per mm */
   let goal = 1
+  /**
+   * How far the picture is turned about its middle, in radians, and how far it is to be:
+   * nothing the right way up, half a turn upside down.
+   */
+  let roll = 0
+  let rollTo = 0
+  /** the turn last given to the camera, to know when it has to be given again */
+  let rolled = 0
 
   const reach = () => stage.box().getSize(new THREE.Vector3()).length() / 2
   const middle = () => toWorld(stage.box().getCenter(new THREE.Vector3()))
@@ -120,6 +136,13 @@ function direct(stage: {
       controls.polarAngle,
       controls.azimuthAngle
     )
+  /** A set view is seen the right way up: the picture turns back on the way there. */
+  const upright = (animate: boolean) => {
+    // the short way round, whichever way up it is now
+    roll -= Math.round(roll / (2 * Math.PI)) * 2 * Math.PI
+    rollTo = 0
+    if (!animate) roll = 0
+  }
   const ease = (share: number) => THREE.MathUtils.smoothstep(share, 0, 1)
   /** How far back the whole lens has to be to show things at a scale, in pixels per mm. */
   const distanceAt = (scale: number) =>
@@ -224,6 +247,9 @@ function direct(stage: {
       lens: mode === "flat" ? 0 : 1 / narrowing,
       scale: scaleNow(),
       tie: tie?.kind ?? null,
+      roll,
+      turn: controls.camera.quaternion.toArray(),
+      target: controls.getTarget(new THREE.Vector3(), false).toArray(),
     }),
 
     /** The view a model opens with, framing all of it. */
@@ -249,17 +275,17 @@ function direct(stage: {
         tie = null
         lensTo(1)
       }
-      const eye = toward.multiplyScalar(distance * narrowing).add(target)
+      upright(animate)
       controls.smoothTime = SMOOTH.turn
-      void controls.setLookAt(
-        eye.x,
-        eye.y,
-        eye.z,
-        target.x,
-        target.y,
-        target.z,
+      // the short way round: however many times the view has been turned about, it is
+      // never more than half a turn from home
+      void controls.rotateTo(
+        nearestTurn(controls.azimuthAngle, Math.atan2(toward.x, toward.z)),
+        Math.acos(toward.y),
         animate
       )
+      void controls.moveTo(target.x, target.y, target.z, animate)
+      void controls.dollyTo(distance * narrowing, animate)
       atHome = true
       stage.redraw()
     },
@@ -288,6 +314,7 @@ function direct(stage: {
 
       ++sent
       atHome = false
+      upright(true)
       // the lens closes over the last of the turn; `tick` takes it away on arrival
       tie = {
         kind: "closing",
@@ -350,6 +377,47 @@ function direct(stage: {
       stage.redraw()
     },
 
+    /**
+     * Turn the camera by these angles, the way the controls would - but on past straight
+     * above and straight below, where they stop. Every turn the hand makes comes through
+     * here: a drag, fingers on the trackpad, a drag on the axes in the corner.
+     */
+    turn(azimuth: number, polar: number) {
+      // seen upside down, the same movement of the hand turns the camera the other way
+      const way = rollTo === 0 ? 1 : -1
+      // From where the camera is, not from where a flight was taking it: the hand takes
+      // over, and what was left of the flight's turn is dropped.
+      let theta = controls.azimuthAngle + way * azimuth
+      let phi = controls.polarAngle + way * polar
+      if (phi < 0 || phi > Math.PI) {
+        // over the top, or under the bottom: on down the far side, the other way up
+        phi = phi < 0 ? -phi : 2 * Math.PI - phi
+        theta += Math.PI
+        const half = rollTo === 0 ? Math.PI : -Math.PI
+        rollTo += half
+        roll += half
+      }
+      return controls.rotateTo(theta, phi, false)
+    },
+
+    /**
+     * Where a point of the view is in the picture the controls believe they are showing,
+     * which is the same place unless the picture is turned about its middle.
+     */
+    asControlsSee(x: number, y: number, rect: DOMRect) {
+      if (roll === 0) return { x, y }
+      const middle = {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+      }
+      const [right, up] = [x - middle.x, middle.y - y]
+      const [cos, sin] = [Math.cos(roll), Math.sin(roll)]
+      return {
+        x: middle.x + right * cos - up * sin,
+        y: middle.y - (right * sin + up * cos),
+      }
+    },
+
     /** Where the camera is from what it looks at, as a direction in the model's frame. */
     eye(): Vec3 {
       const eye = controls
@@ -369,10 +437,31 @@ function direct(stage: {
       if (turning) letGo()
     },
 
-    /** Called every frame that is drawn. */
-    tick() {
+    /** Called every frame that is drawn, with the seconds since the last. */
+    tick(delta: number) {
+      // The picture turns back upright on the way to a set view...
+      if (roll !== rollTo) {
+        const left = roll - rollTo
+        roll =
+          Math.abs(left) < 0.002
+            ? rollTo
+            : rollTo + left * Math.exp(-delta / RIGHTING)
+        stage.redraw()
+      }
+      // ...and is turned here, each frame, from how the controls have just left the
+      // camera: the right way up. This is the camera the frame is drawn with, even if
+      // what follows swaps it for the other.
+      if (roll !== 0 || rolled !== 0) {
+        const camera = controls.camera
+        camera.lookAt(controls.getTarget(new THREE.Vector3(), false))
+        camera.rotateZ(roll)
+        camera.updateMatrixWorld()
+        rolled = roll
+      }
+
       if (tie?.kind === "closing") {
         const there =
+          roll === 0 &&
           Math.abs(controls.azimuthAngle - tie.turn) < THERE &&
           Math.abs(controls.polarAngle - tie.polar) < THERE
         if (there) {
@@ -461,6 +550,10 @@ export function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
     const impl = controls.current
     const update = impl.update.bind(impl)
     impl.update = (delta) => update(Math.min(delta, STEP))
+    // and every turn the controls make of their own accord goes by way of `turn`, which
+    // takes the camera on over the top where they would stop it
+    const rotate = impl.rotate.bind(impl)
+    impl.rotate = (azimuth, polar) => made.turn(azimuth, polar)
     const made = direct({
       controls: impl,
       lens,
@@ -483,6 +576,7 @@ export function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
     if (import.meta.env.DEV) Object.assign(window, { __camera: made.probe })
     return () => {
       impl.update = update
+      impl.rotate = rotate
       director.current = null
       bridge.lookFrom = bridge.orbit = bridge.eye = bridge.flat = null
     }
@@ -583,14 +677,21 @@ export function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
       }
       // The controls would answer a pinch by changing the lens instead of moving the
       // camera. Pass it on as a turn of a wheel, so every zoom is the same kind: towards
-      // the pointer, within the same limits.
-      if (!event.ctrlKey) return
+      // the pointer, within the same limits. And upside down, they have to be told where
+      // the pointer is in the picture as they know it.
+      const at = made.asControlsSee(
+        event.clientX,
+        event.clientY,
+        canvas.getBoundingClientRect()
+      )
+      if (!event.ctrlKey && at.x === event.clientX && at.y === event.clientY)
+        return
       swallow(event)
       const plain = new WheelEvent("wheel", {
-        deltaY: event.deltaY * PINCH,
+        deltaY: event.deltaY * (event.ctrlKey ? PINCH : 1),
         deltaMode: event.deltaMode,
-        clientX: event.clientX,
-        clientY: event.clientY,
+        clientX: at.x,
+        clientY: at.y,
         bubbles: true,
         cancelable: true,
       })
@@ -606,7 +707,7 @@ export function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
     }
   }, [gl])
 
-  useFrame(() => director.current?.tick())
+  useFrame((_, delta) => director.current?.tick(Math.min(delta, STEP)))
 
   return (
     <CameraControls
