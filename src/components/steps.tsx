@@ -1,21 +1,51 @@
 import * as React from "react"
 import { cn } from "cn"
-import { ChevronDownIcon } from "lucide-react"
+import {
+  BotIcon,
+  ChevronDownIcon,
+  EyeIcon,
+  FilePlusIcon,
+  FileTextIcon,
+  GlobeIcon,
+  ListIcon,
+  MousePointerClickIcon,
+  PencilIcon,
+  SearchIcon,
+  TerminalIcon,
+  WrenchIcon,
+  type LucideIcon,
+} from "lucide-react"
 
-import { Badge } from "@/components/ui/badge"
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import type { Step } from "@/lib/steps"
+import { duration } from "@/lib/time"
 
-/** A line of the steps, whichever one: a tag is as tall as it gets. */
+/** A line of the steps, whichever one. */
 const LINE = "flex h-5 items-center gap-2 text-xs text-muted-foreground"
 /** Words for what is still going on: a light passes along them, over and over. */
 const LIVE = "shimmer shimmer-color-foreground"
 
-/** A step in a line: the kind of thing it was, as a tag, and what it was done to. */
+/** The picture for each kind of step; any other is a tool of some sort. */
+const ICONS: Record<string, LucideIcon> = {
+  Run: TerminalIcon,
+  Read: FileTextIcon,
+  Edit: PencilIcon,
+  Write: FilePlusIcon,
+  Search: SearchIcon,
+  Fetch: GlobeIcon,
+  "Web search": GlobeIcon,
+  "Find tool": WrenchIcon,
+  Subagent: BotIcon,
+  Look: EyeIcon,
+  Check: MousePointerClickIcon,
+  List: ListIcon,
+}
+
+/** A step in a line: a picture of the kind of thing it was, then what was done, in words. */
 function StepLine({
   step,
   live = false,
@@ -24,28 +54,35 @@ function StepLine({
   /** it is the one Claude is on, and the line is there to say so */
   live?: boolean
 }) {
+  const Icon = ICONS[step.name] ?? WrenchIcon
+  // a step that failed is one to notice, not an alarm: Claude tries another way
+  const failed = step.state === "failed"
   return (
     <>
-      <Badge
-        variant="secondary"
-        className={
-          // a step that failed is one to notice, not an alarm: Claude tries another way
-          step.state === "failed"
-            ? "bg-attention/10 text-attention dark:bg-attention/20"
-            : "text-foreground/80"
-        }
-      >
-        {/* a step done to nothing in particular has only its name to light */}
-        <span className={cn(live && !step.detail && LIVE)}>{step.name}</span>
-      </Badge>
-      <span
-        className={cn(
-          "min-w-0 truncate font-mono",
-          live ? LIVE : step.state === "running" && "text-foreground"
-        )}
-        title={step.detail}
-      >
-        {step.detail}
+      <Icon
+        className={cn("size-3.5 shrink-0", failed && "text-attention")}
+        aria-hidden
+      />
+      <span className="flex min-w-0 gap-1">
+        <span
+          className={cn(
+            "shrink-0 font-medium",
+            failed ? "text-attention" : "text-foreground/80",
+            // a step done to nothing in particular has only its name to light
+            live && !step.detail && LIVE
+          )}
+        >
+          {step.name}
+        </span>
+        <span
+          className={cn(
+            "min-w-0 truncate",
+            live ? LIVE : step.state === "running" && "text-foreground"
+          )}
+          title={step.detail}
+        >
+          {step.detail}
+        </span>
       </span>
     </>
   )
@@ -53,13 +90,16 @@ function StepLine({
 
 /**
  * What Claude did between saying things, as one line. While it is at it, the line is
- * the step it is on; afterwards, how many there were. It opens into all of them.
+ * the step it is on; afterwards, how long it was at them. It opens into all of them.
  */
 export function Steps({
   steps,
+  took,
   working,
 }: {
   steps: Step[]
+  /** how long Claude was at them, in ms, if they are over and that is known */
+  took: number | null
   /** Claude is still on the turn these are the latest of, and may add to them */
   working: boolean
 }) {
@@ -69,8 +109,8 @@ export function Steps({
   if (!current) return null
   const busy = working || current.state === "running"
 
-  // one step is the whole of it: there is nothing to open
-  if (steps.length === 1)
+  // one step with no time to give is the whole of it: there is nothing to open
+  if (steps.length === 1 && (busy || took === null))
     return (
       <div className={LINE}>
         <StepLine step={current} live={busy} />
@@ -86,15 +126,14 @@ export function Steps({
         )}
       >
         {busy && !open ? (
-          // each step comes up from under the one before it
-          <span
-            key={current.id}
-            className="flex min-w-0 animate-in items-center gap-2 duration-200 fade-in slide-in-from-bottom-1"
-          >
+          // each step takes the place of the one before it, with no show made of it
+          <span className="flex min-w-0 items-center gap-2">
             <StepLine step={current} live />
           </span>
-        ) : (
+        ) : busy || took === null ? (
           <span className={cn(busy && LIVE)}>{steps.length} steps</span>
+        ) : (
+          <span>Worked for {duration(took)}</span>
         )}
         <ChevronDownIcon className="size-3.5 shrink-0 opacity-60 transition-transform group-data-panel-open/steps:rotate-180" />
       </CollapsibleTrigger>

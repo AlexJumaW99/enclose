@@ -35,14 +35,14 @@ const api: CadApi = {
   thread: {
     items: (projectId, conversationId) =>
       ipcRenderer.invoke(CHANNEL.threadItems, projectId, conversationId),
-    send: (projectId, conversationId, text, part, access) =>
+    send: (projectId, conversationId, text, part, manner) =>
       ipcRenderer.invoke(
         CHANNEL.threadSend,
         projectId,
         conversationId,
         text,
         part,
-        access
+        manner
       ),
     stop: (projectId) => ipcRenderer.invoke(CHANNEL.threadStop, projectId),
     answer: (projectId, permissionId, answer) =>
@@ -51,6 +51,7 @@ const api: CadApi = {
   },
   claude: {
     status: () => ipcRenderer.invoke(CHANNEL.claudeStatus),
+    models: () => ipcRenderer.invoke(CHANNEL.claudeModels),
   },
   settings: {
     get: () => ipcRenderer.invoke(CHANNEL.settingsGet),

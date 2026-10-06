@@ -5,10 +5,13 @@ import path from "node:path"
 import { app, BrowserWindow, dialog, ipcMain, protocol, shell } from "electron"
 
 import {
+  ACCESSES,
   CHANNEL,
+  EFFORTS,
   MODEL_SCHEME,
-  type Access,
   type ClaudeStatus,
+  type Manner,
+  type ModelChoice,
   type ModelSource,
   type PartRef,
   type PermissionAnswer,
@@ -17,7 +20,7 @@ import {
   type ViewportRequest,
   type ViewportResponse,
 } from "../shared/api"
-import { findClaude, followRename } from "./claude"
+import { findClaude, followRename, listModels } from "./claude"
 import { standInName } from "./names"
 import { folderName, Projects, resolveInside } from "./projects"
 import { SettingsStore } from "./settings"
@@ -319,7 +322,7 @@ function wire() {
       conversationId: string | null,
       text: string,
       part: PartRef | null,
-      access: Access
+      manner: Partial<Manner> | null
     ) =>
       // answers at once, with the conversation it went into: the turn runs for as long
       // as it runs, and reports through thread items
@@ -328,7 +331,13 @@ function wire() {
         conversationId === null ? null : String(conversationId),
         String(text),
         part,
-        access === "full" ? "full" : "ask"
+        {
+          model: typeof manner?.model === "string" ? manner.model : null,
+          effort: EFFORTS.find((effort) => effort === manner?.effort) ?? null,
+          // what cannot be made out is not taken for leave to do anything
+          access:
+            ACCESSES.find((access) => access === manner?.access) ?? "edits",
+        }
       )
   )
   ipcMain.handle(CHANNEL.threadStop, (_, id: string) => threads.stop(id))
@@ -340,6 +349,15 @@ function wire() {
 
   const claudeFound = findClaude().then((status) => (claude = status))
   ipcMain.handle(CHANNEL.claudeStatus, () => claudeFound)
+  // asked of Claude Code once; if it would not say, it is asked again the next time
+  let models: Promise<ModelChoice[]> | null = null
+  ipcMain.handle(CHANNEL.claudeModels, () => {
+    models ??= claudeFound.then(listModels).then((found) => {
+      if (found.length === 0) models = null
+      return found
+    })
+    return models
+  })
 
   ipcMain.handle(CHANNEL.settingsGet, (): Settings => settings.get())
   ipcMain.handle(

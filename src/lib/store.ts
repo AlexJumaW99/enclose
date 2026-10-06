@@ -3,15 +3,19 @@
 import { create } from "zustand"
 
 import { stackOf, type Stack } from "@/lib/conversations"
+import { mannerOf, savedAccess } from "@/lib/manner"
 import { usePreferences } from "@/lib/preferences"
 
-import type {
-  Access,
-  ClaudeStatus,
-  PartRef,
-  Project,
-  ThreadItem,
-  Vec3,
+import {
+  EFFORTS,
+  type Access,
+  type ClaudeStatus,
+  type Effort,
+  type ModelChoice,
+  type PartRef,
+  type Project,
+  type ThreadItem,
+  type Vec3,
 } from "@shared/api"
 import type { Turn } from "@/lib/orient"
 
@@ -66,6 +70,8 @@ export type Selection = { part: PartRef; at: { x: number; y: number } | null }
 
 const ACTIVE_KEY = "enclose:project"
 const ACCESS_KEY = "enclose:access"
+const MODEL_KEY = "enclose:model"
+const EFFORT_KEY = "enclose:effort"
 const MODE_KEY = "enclose:mode"
 const THREAD_WIDTH_KEY = "enclose:thread-width"
 
@@ -127,6 +133,12 @@ type State = {
   /** whether the settings are over the window */
   settingsOpen: boolean
   access: Access
+  /** the model picked to answer, as Claude Code knows it; null leaves it to Claude Code */
+  model: string | null
+  /** how hard it is to think; null leaves that to Claude Code too */
+  effort: Effort | null
+  /** the models Claude Code offers, once it has said */
+  models: ModelChoice[]
   claude: ClaudeStatus | null
   view: View
   /** what the view has been put into, latest last: Esc leaves that one */
@@ -169,6 +181,8 @@ type State = {
    */
   leave(): boolean
   setAccess(access: Access): void
+  setModel(model: string | null): void
+  setEffort(effort: Effort | null): void
   send(text: string, part: PartRef | null): void
 }
 
@@ -185,7 +199,10 @@ export const useStore = create<State>()((set, get) => ({
   threadWidth: savedThreadWidth(),
   partsOpen: false,
   settingsOpen: false,
-  access: saved(ACCESS_KEY) === "full" ? "full" : "ask",
+  access: savedAccess(saved(ACCESS_KEY)),
+  model: saved(MODEL_KEY) || null,
+  effort: EFFORTS.find((effort) => effort === saved(EFFORT_KEY)) ?? null,
+  models: [],
   claude: null,
   view: homeView(),
   entered: [],
@@ -308,8 +325,18 @@ export const useStore = create<State>()((set, get) => ({
     set({ access })
   },
 
+  setModel(model) {
+    localStorage.setItem(MODEL_KEY, model ?? "")
+    set({ model })
+  },
+
+  setEffort(effort) {
+    localStorage.setItem(EFFORT_KEY, effort ?? "")
+    set({ effort })
+  },
+
   send(text, part) {
-    const { activeId, access, projects, picked } = get()
+    const { activeId, access, model, effort, models, projects, picked } = get()
     const project = projects.find((p) => p.id === activeId)
     const message = text.trim()
     if (!project || !message) return
@@ -322,7 +349,13 @@ export const useStore = create<State>()((set, get) => ({
     )
     set({ threadOpen: true, prompting: false })
     void window.cad.thread
-      .send(project.id, open?.id ?? null, message, part, access)
+      .send(
+        project.id,
+        open?.id ?? null,
+        message,
+        part,
+        mannerOf(models, model, effort, access)
+      )
       .then((id) => {
         // stay with it: a conversation that has just begun is not yet the one on the
         // card, and one that had settled is turned back to by being carried on
@@ -331,6 +364,13 @@ export const useStore = create<State>()((set, get) => ({
       })
   },
 }))
+
+/** Ask Claude Code what models it has, if it has not yet said. */
+export async function askModels() {
+  if (useStore.getState().models.length > 0) return
+  const models = await window.cad.claude.models()
+  if (models.length > 0) useStore.setState({ models })
+}
 
 /** Put an item into a thread, replacing the one with the same id if it is already there. */
 function withItem(items: ThreadItem[], item: ThreadItem): ThreadItem[] {
@@ -369,6 +409,7 @@ export function connect() {
     useStore.setState({ ready: true })
   })
   void cad.claude.status().then((claude) => useStore.setState({ claude }))
+  void askModels()
 }
 
 // lets a script drive the app when it is being checked without a person at it

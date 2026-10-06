@@ -4,7 +4,7 @@ import remarkGfm from "remark-gfm"
 /** Claude's answers are Markdown. Raw HTML in them is shown as text, never run. */
 export function Markdown({ children }: { children: string }) {
   return (
-    <div className="flex flex-col gap-3 text-sm leading-relaxed [&_li>p]:inline">
+    <div className="flex flex-col gap-3 text-sm leading-relaxed text-foreground/85 [&_li>p]:inline">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{

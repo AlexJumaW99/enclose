@@ -146,10 +146,15 @@ selection.
 A message sent from a clicked part carries the part and the point you clicked, in the
 model's coordinates.
 
-By default Claude edits files in the project without asking and asks before anything
-else, such as running the build. "Full access" in the message box turns the asking off.
+Under the message box are three choices: which of Claude Code's models answers, how hard
+it thinks, and what it may do without asking. The models are the ones your Claude Code
+offers; "Default" leaves the model, and how hard it thinks, as Claude Code is set.
+Claude starts out with full access and never asks. It can be made to ask before it
+changes a file or runs anything ("Supervised"), to edit files freely and ask before
+anything else ("Auto-accept edits"), or to do what is routine and ask about the rest
+("Auto").
 
-**Settings** (the gear at the bottom left, or Cmd+,) hold where new projects go, whether
+**Settings** (the gear at the bottom left, or Cmd+,) hold where new projects go, how much
 Claude asks before it acts, the theme, how a scroll is read and how fast the view turns,
 and a list of every shortcut.
 

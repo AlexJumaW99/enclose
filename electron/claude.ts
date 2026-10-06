@@ -6,7 +6,13 @@ import os from "node:os"
 import path from "node:path"
 import { promisify } from "node:util"
 
-import type { ClaudeStatus } from "../shared/api"
+import {
+  query,
+  type ModelInfo,
+  type SDKUserMessage,
+} from "@anthropic-ai/claude-agent-sdk"
+
+import { EFFORTS, type ClaudeStatus, type ModelChoice } from "../shared/api"
 
 const run = promisify(execFile)
 
@@ -118,4 +124,84 @@ export async function findClaude(): Promise<ClaudeStatus> {
     // it is there but would not report a version; still worth trying to run
   }
   return { path: real, version }
+}
+
+/** What Claude Code says of its models, as the app offers them. */
+export function modelChoices(rows: ModelInfo[]): ModelChoice[] {
+  const choices = rows.map((row): ModelChoice => {
+    const standing = row.value === "default"
+    // the default is one of the models, which the list also has under its own name
+    const itself = standing
+      ? rows.find(
+          (other) =>
+            other !== row &&
+            other.resolvedModel !== undefined &&
+            other.resolvedModel === row.resolvedModel
+        )
+      : undefined
+    return {
+      id: standing ? null : row.value,
+      name: row.displayName,
+      short: itself?.displayName ?? row.displayName,
+      detail: row.description,
+      efforts: EFFORTS.filter(
+        (effort) =>
+          row.supportsEffort && row.supportedEffortLevels?.includes(effort)
+      ),
+    }
+  })
+  // there is always the choice of leaving it to Claude Code
+  if (choices.length > 0 && !choices.some((choice) => choice.id === null))
+    choices.unshift({
+      id: null,
+      name: "Default",
+      short: "Default",
+      detail: "The model Claude Code is set to run",
+      efforts: [],
+    })
+  return choices
+}
+
+/** How long Claude Code is given to say what models it has. */
+const MODELS_TIMEOUT_MS = 20_000
+
+/**
+ * The models the installed Claude Code offers the account it is signed in to. It is
+ * asked through a session that is given nothing to answer, and ended once it has said.
+ * None, if it is not installed or would not say.
+ */
+export async function listModels(claude: ClaudeStatus): Promise<ModelChoice[]> {
+  if (!claude.path) return []
+  const abort = new AbortController()
+  const gaveUp = new Promise<never>((_, reject) =>
+    abort.signal.addEventListener("abort", () => reject(new Error("ended")), {
+      once: true,
+    })
+  )
+  // nothing is ever said to it: the session is only there to be asked
+  const nothing: AsyncIterable<SDKUserMessage> = {
+    [Symbol.asyncIterator]: () => ({
+      next: () =>
+        gaveUp.catch(() => ({ done: true as const, value: undefined })),
+    }),
+  }
+  const timer = setTimeout(() => abort.abort(), MODELS_TIMEOUT_MS)
+  try {
+    const session = query({
+      prompt: nothing,
+      options: {
+        cwd: os.tmpdir(),
+        pathToClaudeCodeExecutable: claude.path,
+        env: claudeEnv(),
+        abortController: abort,
+        settingSources: ["user"],
+      },
+    })
+    return modelChoices(await Promise.race([session.supportedModels(), gaveUp]))
+  } catch {
+    return []
+  } finally {
+    clearTimeout(timer)
+    abort.abort()
+  }
 }

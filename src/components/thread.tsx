@@ -264,7 +264,7 @@ export function Thread({ project }: { project: Project }) {
       }}
     >
       <Edge />
-      <header className="drag flex h-12 shrink-0 items-center justify-between gap-2 pr-2 pl-4">
+      <header className="drag flex h-12 shrink-0 items-center justify-between gap-2 pr-2.5 pl-5">
         <h2 className="truncate text-sm font-medium">{project.name}</h2>
         <div className="no-drag flex items-center">
           <Tooltip>
@@ -304,12 +304,14 @@ export function Thread({ project }: { project: Project }) {
 
       {items?.length ? (
         <ScrollArea className="min-h-0 flex-1">
-          <div className="flex flex-col gap-3.5 px-4 pt-2 pb-4">
+          {/* everything said here breaks its lines so that none ends on a word alone */}
+          <div className="flex flex-col gap-3.5 px-5 pt-2 pb-5 text-pretty">
             {blocks.map((block) =>
               block.kind === "steps" ? (
                 <Steps
                   key={block.id}
                   steps={block.steps}
+                  took={block.took}
                   working={working && block === latest}
                 />
               ) : (
@@ -364,15 +366,14 @@ export function Thread({ project }: { project: Project }) {
           // opened to be written in: by its button, or by Cmd+B
           autoFocus
         />
-        <p className="px-1 text-xs text-muted-foreground">
-          {elsewhere
-            ? "Claude is at work in another of this project's conversations."
-            : !claude
-              ? "Looking for Claude Code…"
-              : claude.path
-                ? `Using your Claude Code${claude.version ? ` ${claude.version}` : ""} and its login`
-                : "Claude Code was not found on this machine. Install it and sign in there."}
-        </p>
+        {/* said only when a message cannot be sent, and why */}
+        {(elsewhere || (claude && !claude.path)) && (
+          <p className="px-1.5 text-xs text-muted-foreground">
+            {elsewhere
+              ? "Claude is at work in another of this project's conversations."
+              : "Claude Code was not found on this machine. Install it and sign in there."}
+          </p>
+        )}
       </div>
     </aside>
   )

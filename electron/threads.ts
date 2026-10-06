@@ -15,9 +15,9 @@ import {
 } from "@anthropic-ai/claude-agent-sdk"
 
 import type {
-  Access,
   ClaudeStatus,
   ConversationSummary,
+  Manner,
   PartRef,
   PermissionAnswer,
   ThreadItem,
@@ -128,6 +128,13 @@ function describeTool(name: string, input: unknown, root: string) {
     detail: typeof first === "string" ? first : "",
   }
 }
+
+/** What Claude Code calls each of the ways it can be told to ask before it acts. */
+const ASKING = {
+  supervised: "default",
+  edits: "acceptEdits",
+  auto: "auto",
+} as const
 
 /** The question put to the user when Claude needs a yes before using a tool. */
 function question(toolName: string): string {
@@ -369,7 +376,7 @@ export class Threads {
     conversationId: string | null,
     text: string,
     part: PartRef | null,
-    access: Access
+    manner: Manner
   ): string | null {
     const project = this.deps.projects.get(projectId)
     const book = this.book(projectId)
@@ -404,7 +411,7 @@ export class Threads {
     }
     book.run = run
     this.deps.onSummary()
-    void this.turn(projectId, project, book, run, finished, text, part, access)
+    void this.turn(projectId, project, book, run, finished, text, part, manner)
     return conversation.id
   }
 
@@ -417,7 +424,7 @@ export class Threads {
     finished: Promise<void>,
     text: string,
     part: PartRef | null,
-    access: Access
+    manner: Manner
   ) {
     const { conversation, abort, finish } = run
     /** The session Claude Code says this conversation now is: what carries it on next time. */
@@ -690,12 +697,15 @@ export class Threads {
           allowedTools: VIEWPORT_TOOLS,
           // it would need its own form here; until then Claude asks in plain text
           disallowedTools: ["AskUserQuestion"],
-          ...(access === "full"
+          // left unsaid, Claude Code runs the model it is set to, as hard as it is set to
+          ...(manner.model ? { model: manner.model } : {}),
+          ...(manner.effort ? { effort: manner.effort } : {}),
+          ...(manner.access === "full"
             ? {
                 permissionMode: "bypassPermissions" as const,
                 allowDangerouslySkipPermissions: true,
               }
-            : { permissionMode: "acceptEdits" as const, canUseTool }),
+            : { permissionMode: ASKING[manner.access], canUseTool }),
           stderr: (data) => {
             stderr = (stderr + data).slice(-2000)
           },

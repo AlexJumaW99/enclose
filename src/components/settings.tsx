@@ -204,15 +204,17 @@ function General() {
       <Group title="Conversations">
         <Row
           title="Permissions"
-          detail="Ask first: Claude edits the project's files freely and asks before anything else, such as running the build. Full access: it never asks."
+          detail="Supervised: Claude asks before it changes a file or runs anything. Edits: it edits the project's files freely and asks before anything else, such as running the build. Auto: it does what is routine and asks about the rest. Full: it never asks."
         >
           <Choice
             label="Permissions"
             value={access}
             onChange={setAccess}
             options={[
-              { value: "ask", label: "Ask first" },
-              { value: "full", label: "Full access" },
+              { value: "supervised", label: "Supervised" },
+              { value: "edits", label: "Edits" },
+              { value: "auto", label: "Auto" },
+              { value: "full", label: "Full" },
             ]}
           />
         </Row>

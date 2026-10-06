@@ -80,8 +80,50 @@ export type ThreadItem =
       text: string
     }
 
-/** ask: Claude edits files freely but asks before anything else. full: never asks. */
-export type Access = "ask" | "full"
+/**
+ * What Claude may do without asking. supervised: nothing that changes a file or runs a
+ * command. edits: change the project's files, and ask before anything else. auto: Claude
+ * Code judges what is routine and asks about the rest. full: anything.
+ */
+export type Access = "supervised" | "edits" | "auto" | "full"
+export const ACCESSES: readonly Access[] = [
+  "supervised",
+  "edits",
+  "auto",
+  "full",
+]
+
+/** How hard a model is told to think before it answers. */
+export type Effort = "low" | "medium" | "high" | "xhigh" | "max"
+export const EFFORTS: readonly Effort[] = [
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+]
+
+/** A model the installed Claude Code offers. */
+export type ModelChoice = {
+  /** what Claude Code knows it by, or null for whichever model it is set to run */
+  id: string | null
+  /** as Claude Code lists it: "Opus 5.5", "Default (recommended)" */
+  name: string
+  /** the model it is, said shortly: the same, but for the default, the model that is */
+  short: string
+  detail: string
+  /** how hard it can be told to think; none if that is not to be chosen */
+  efforts: Effort[]
+}
+
+/** How a message is to be answered: by which model, thinking how hard, asking how much. */
+export type Manner = {
+  /** null: the model Claude Code is set to run */
+  model: string | null
+  /** null: as hard as Claude Code is set to have that model think */
+  effort: Effort | null
+  access: Access
+}
 
 export type PermissionAnswer = "allow" | "always" | "deny"
 
@@ -150,7 +192,7 @@ export type CadApi = {
       conversationId: string | null,
       text: string,
       part: PartRef | null,
-      access: Access
+      manner: Manner
     ): Promise<string | null>
     /** stop whatever Claude is doing in the project */
     stop(projectId: string): Promise<void>
@@ -169,6 +211,8 @@ export type CadApi = {
   }
   claude: {
     status(): Promise<ClaudeStatus>
+    /** the models to choose from; none if Claude Code is missing or would not say */
+    models(): Promise<ModelChoice[]>
   }
   settings: {
     get(): Promise<Settings>
@@ -199,6 +243,7 @@ export const CHANNEL = {
   threadAnswer: "thread:answer",
   threadItem: "thread:item",
   claudeStatus: "claude:status",
+  claudeModels: "claude:models",
   settingsGet: "settings:get",
   settingsChooseProjectsFolder: "settings:choose-projects-folder",
   settingsRevealProjectsFolder: "settings:reveal-projects-folder",

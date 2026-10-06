@@ -1,6 +1,6 @@
 import * as React from "react"
 import { cn } from "cn"
-import { PlusIcon, XIcon } from "lucide-react"
+import { CornerLeftUpIcon, PlusIcon, XIcon } from "lucide-react"
 
 import type { ConversationSummary, Project } from "@shared/api"
 import { Button } from "@/components/ui/button"
@@ -180,7 +180,7 @@ function ProjectCard({ project, now }: { project: Project; now: number }) {
                   className="pointer-events-auto text-muted-foreground"
                   onClick={() => setSpread(false)}
                 >
-                  <XIcon />
+                  <CornerLeftUpIcon />
                 </Button>
               )}
             </span>
@@ -269,7 +269,9 @@ export function Sidebar() {
     <aside className="pointer-events-none absolute inset-y-0 left-0 flex w-68 flex-col">
       {/* room for the window's traffic lights, and something to drag it by */}
       <div className="drag pointer-events-auto h-12 w-58 shrink-0" />
-      <div className="flex min-h-0 [scrollbar-width:none] flex-col items-start gap-1.5 overflow-y-auto px-4.5 pb-4">
+      {/* a list that scrolls cuts off whatever is outside it, and a card's edge is drawn
+          just outside the card: it starts a little higher than the first card does */}
+      <div className="-mt-1 flex min-h-0 [scrollbar-width:none] flex-col items-start gap-1.5 overflow-y-auto px-4.5 pt-1 pb-4">
         {projects.map((project) => (
           <ProjectCard key={project.id} project={project} now={now} />
         ))}

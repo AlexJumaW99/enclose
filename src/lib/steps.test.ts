@@ -3,25 +3,29 @@ import { describe, expect, it } from "vitest"
 import type { ThreadItem } from "@shared/api"
 import { inBlocks } from "./steps"
 
-const user = (id: string): ThreadItem => ({
+const user = (id: string, at = 0): ThreadItem => ({
   kind: "user",
   id,
-  at: 0,
+  at,
   text: "Make a cube",
   part: null,
 })
-const says = (id: string): ThreadItem => ({
+const says = (id: string, at = 0): ThreadItem => ({
   kind: "assistant",
   id,
-  at: 0,
+  at,
   text: "Done.",
   streaming: false,
 })
-const step = (id: string, state: "running" | "done" | "failed" = "done") =>
+const step = (
+  id: string,
+  state: "running" | "done" | "failed" = "done",
+  at = 0
+) =>
   ({
     kind: "tool",
     id,
-    at: 0,
+    at,
     name: "Run",
     detail: "python3 model.py",
     state,
@@ -85,6 +89,32 @@ describe("inBlocks", () => {
     expect(
       shape([step("a", "failed"), asked("q", "denied"), step("b")])
     ).toEqual(["a", "permission", "b"])
+  })
+
+  it("times a stretch from when Claude was asked to what came after it", () => {
+    const blocks = inBlocks([
+      user("u", 1_000),
+      step("a", "done", 9_000),
+      step("b", "done", 20_000),
+      says("s", 31_000),
+    ])
+    expect(blocks[1]).toMatchObject({ kind: "steps", took: 30_000 })
+  })
+
+  it("times it from its first step when something was said before it", () => {
+    const blocks = inBlocks([
+      user("u", 1_000),
+      says("s", 2_000),
+      step("a", "done", 5_000),
+      step("b", "done", 6_000),
+      says("t", 12_000),
+    ])
+    expect(blocks[2]).toMatchObject({ kind: "steps", took: 7_000 })
+  })
+
+  it("has no time for a stretch that nothing has come after", () => {
+    const blocks = inBlocks([user("u", 1_000), step("a", "done", 5_000)])
+    expect(blocks[1]).toMatchObject({ kind: "steps", took: null })
   })
 
   it("has nothing to show for nothing", () => {
