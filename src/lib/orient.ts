@@ -57,11 +57,15 @@ export function normalOf(turn: Turn): Vec3 {
  * round the vertical, and the angle down from straight above, as three.js measures them
  * (its vertical is Y, so the model's Z).
  */
+const TOP = { azimuth: 0, polar: 0 }
+
 export function viewFrom(
   axis: Axis,
   sign: Sign
 ): { azimuth: number; polar: number } {
-  if (axis === "z") return { azimuth: 0, polar: sign > 0 ? 0 : Math.PI }
+  // From above, the model's back is at the top of the view. From below it still is: the
+  // model is turned over sideways, the way a thing in the hand is, not end over end.
+  if (axis === "z") return sign > 0 ? TOP : { azimuth: Math.PI, polar: Math.PI }
   if (axis === "x") return { azimuth: (sign * Math.PI) / 2, polar: Math.PI / 2 }
   // the model's +Y is three.js's -Z
   return { azimuth: sign > 0 ? Math.PI : 0, polar: Math.PI / 2 }

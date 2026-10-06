@@ -70,6 +70,31 @@ describe("viewFrom", () => {
   })
 })
 
+describe("viewFrom, looking straight down or up", () => {
+  // What is at the top of the view and what is on its right, in the model's frame. At
+  // these two angles the camera's own turn is all there is to tell them apart.
+  const frame = (azimuth: number, polar: number) => {
+    const towards = polar === 0 ? -1 : 1
+    const up = [towards * Math.sin(azimuth), 0, towards * Math.cos(azimuth)]
+    // the camera looks down three.js's Y from above, and up it from below
+    const right = [towards * up[2], 0, -towards * up[0]]
+    const model = ([x, y, z]: number[]) => [x, -z, y]
+    return { up: model(up), right: model(right) }
+  }
+
+  it("has the model's back at the top of the view from above, +X on the right", () => {
+    const { azimuth, polar } = viewFrom("z", 1)
+    close(frame(azimuth, polar).up, [0, 1, 0])
+    close(frame(azimuth, polar).right, [1, 0, 0])
+  })
+
+  it("keeps the back at the top from below, turning the model over sideways", () => {
+    const { azimuth, polar } = viewFrom("z", -1)
+    close(frame(azimuth, polar).up, [0, 1, 0])
+    close(frame(azimuth, polar).right, [-1, 0, 0])
+  })
+})
+
 describe("nearestTurn", () => {
   it("goes the short way round", () => {
     expect(nearestTurn(0.1, Math.PI * 2)).toBeCloseTo(0)

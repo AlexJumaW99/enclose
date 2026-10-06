@@ -67,6 +67,9 @@ is turning, never while it is still.
 | Cmd+4, Cmd+5 | Top, bottom |
 | Cmd+6, Cmd+7 | Right, left |
 
+From above and from below alike, the model's back is at the top of the view: the bottom
+view turns the model over sideways, not end over end.
+
 Down the right-hand edge:
 
 - **Solid, glass, wireframe.** Glass makes the outside see-through (the layers a manifest
