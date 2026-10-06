@@ -1,25 +1,31 @@
-// How the model is drawn - solid, glass or wireframe - chosen the way Blender has it
+// How the model is drawn - solid, glass, wireframe or outline - chosen the way Blender has it
 // chosen. Z brings the choices up round the pointer. Held, a flick towards one and letting
 // go of the key takes it; tapped, they stay up to be clicked. A choice is pointed at by
 // direction, not by getting the pointer onto it.
 import * as React from "react"
 import { cn } from "cn"
 
-import { GlassIcon, SolidIcon, WireframeIcon } from "@/components/icons"
+import {
+  GlassIcon,
+  OutlineIcon,
+  SolidIcon,
+  WireframeIcon,
+} from "@/components/icons"
 import { spokenFor } from "@/lib/keys"
 import { useStore, type DisplayMode } from "@/lib/store"
 
-// where each choice sits, in degrees anticlockwise from the right: wireframe to the left
-// and solid to the right, as Blender has them
+// where each choice sits, in degrees anticlockwise from the right: the ones that are all
+// lines to the left and solid to the right, as Blender has them
 const CHOICES: {
   mode: DisplayMode
   label: string
   icon: React.ReactNode
   at: number
 }[] = [
-  { mode: "wireframe", label: "Wireframe", icon: <WireframeIcon />, at: 144 },
-  { mode: "glass", label: "Glass", icon: <GlassIcon />, at: 90 },
-  { mode: "solid", label: "Solid", icon: <SolidIcon />, at: 36 },
+  { mode: "outline", label: "Outline", icon: <OutlineIcon />, at: 171 },
+  { mode: "wireframe", label: "Wireframe", icon: <WireframeIcon />, at: 117 },
+  { mode: "glass", label: "Glass", icon: <GlassIcon />, at: 63 },
+  { mode: "solid", label: "Solid", icon: <SolidIcon />, at: 9 },
 ]
 
 /** How far the choices sit from the pointer, in pixels. */

@@ -10,6 +10,8 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js"
 import { MeshBVH } from "three-mesh-bvh"
 
 import type { Model, Part } from "@/lib/model"
+import { contoursOf, type Contours } from "./contours"
+import { shellOf } from "./shell"
 
 /** The faces of one part that share a colour, as a single mesh. */
 export type Skin = {
@@ -26,6 +28,10 @@ export type LoadedPart = {
   skins: Skin[]
   /** x1 y1 z1 x2 y2 z2 per segment, model mm */
   edges: Float32Array
+  /** where its curved faces may show their outline, which no edge marks */
+  contours: Contours
+  /** its surfaces close a volume, so a cut through it leaves a face to fill in */
+  solid: boolean
   /** in the part's own frame */
   box: THREE.Box3
   /** where the part sits in the model */
@@ -166,10 +172,59 @@ async function loadPart(
     part,
     skins,
     edges: edges ?? creases(skins),
+    contours: contours(skins, edges !== null),
+    solid: enclose(skins),
     box,
     home,
     away: new THREE.Vector3(...part.explode),
     faces,
+  }
+}
+
+/**
+ * Whether a part's skins close a volume between them. Each is also told which way its
+ * points go when the part is drawn in a little, which is how one part is found to be
+ * inside another by more than the roughness of their surfaces.
+ */
+function enclose(skins: Skin[]): boolean {
+  const { closed, inward } = shellOf(
+    skins.map((skin) => ({
+      position: skin.geometry.attributes.position.array,
+      index: skin.geometry.index!.array,
+    }))
+  )
+  skins.forEach((skin, index) =>
+    skin.geometry.setAttribute(
+      "inward",
+      new THREE.BufferAttribute(inward[index], 3)
+    )
+  )
+  return closed
+}
+
+/** Two triangles that meet at more than this, in degrees, have an edge between them. */
+const CREASE = 20
+
+/**
+ * Where a part's curved faces may show their outline. With the CAD's own edges to go
+ * by, a surface is one of the part's faces: its edges are drawn already, and only the
+ * lines within it are in question. Without them, it is as far as the triangles go on
+ * meeting at no more than a slight angle, since the sharper meetings are drawn as edges.
+ */
+function contours(skins: Skin[], exact: boolean): Contours {
+  const slight = Math.cos((CREASE * Math.PI) / 180)
+  const runs = skins.map((skin) =>
+    contoursOf(
+      skin.geometry.attributes.position.array,
+      skin.geometry.index!.array,
+      exact
+        ? (triangle, other) => skin.faceOf[triangle] === skin.faceOf[other]
+        : (_, __, cos) => cos > slight
+    )
+  )
+  return {
+    ends: Float32Array.from(runs.flatMap((run) => run.ends)),
+    ways: Float32Array.from(runs.flatMap((run) => run.ways)),
   }
 }
 
@@ -180,7 +235,7 @@ async function loadPart(
  */
 function creases(skins: Skin[]): Float32Array {
   const runs = skins.map((skin) => {
-    const edges = new THREE.EdgesGeometry(skin.geometry, 20)
+    const edges = new THREE.EdgesGeometry(skin.geometry, CREASE)
     const positions = edges.attributes.position.array as Float32Array
     edges.dispose()
     return positions
@@ -282,6 +337,8 @@ export function standInModel(): LoadedModel {
         part,
         skins: [skin],
         edges: creases([skin]),
+        contours: contours([skin], false),
+        solid: enclose([skin]),
         box,
         home: new THREE.Matrix4(),
         away: new THREE.Vector3(),

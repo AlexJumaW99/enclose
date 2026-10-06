@@ -61,8 +61,18 @@ export function GlassIcon(props: IconProps) {
   )
 }
 
-/** Edges only, the hidden ones included. */
+/** Edges only, as far as the body itself does not hide them. */
 export function WireframeIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d={CUBE} />
+      <path d={NEAR_EDGES} />
+    </Icon>
+  )
+}
+
+/** Edges only, the hidden ones included. */
+export function OutlineIcon(props: IconProps) {
   return (
     <Icon {...props}>
       <path d={CUBE} />

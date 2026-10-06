@@ -4,6 +4,7 @@ import {
   FlipHorizontal2Icon,
   BoxesIcon,
   MessageSquareIcon,
+  RotateCcwIcon,
   UnfoldVerticalIcon,
 } from "lucide-react"
 
@@ -44,11 +45,14 @@ type Side = React.ComponentProps<typeof TooltipContent>["side"]
 /** A button that does one thing, named by its tooltip. */
 function Press({
   label,
+  side = "left",
   onClick,
   className,
   children,
 }: {
   label: string
+  /** where the tooltip goes, when something else has the left */
+  side?: Side
   onClick: () => void
   className?: string
   children: React.ReactNode
@@ -68,7 +72,7 @@ function Press({
         {children}
         <span className="sr-only">{label}</span>
       </TooltipTrigger>
-      <TooltipContent side="left">{label}</TooltipContent>
+      <TooltipContent side={side}>{label}</TooltipContent>
     </Tooltip>
   )
 }
@@ -138,6 +142,7 @@ export function Tools({
   const view = useStore((state) => state.view)
   const { section } = view
   const setView = useStore((state) => state.setView)
+  const cutOpen = useStore((state) => state.cutOpen)
   const threadOpen = useStore((state) => state.threadOpen)
   const setThreadOpen = useStore((state) => state.setThreadOpen)
   const partsOpen = useStore((state) => state.partsOpen)
@@ -167,28 +172,43 @@ export function Tools({
       {loaded && (
         <Stack className="absolute top-1/2 right-3 -translate-y-1/2">
           <div className="relative">
-            {/* while the model is cut open: which half of it to show, alongside */}
+            {/* while the model is cut open, alongside: the cut put back to where it
+                starts from, and which half of the model to show */}
             {section && (
-              <Press
-                label="Show the other side"
-                onClick={() =>
-                  setView({
-                    section: { ...section, flipped: !section.flipped },
-                  })
-                }
-                className="absolute top-0 right-full mr-1.5"
-              >
-                <FlipHorizontal2Icon />
-              </Press>
+              <div className="absolute top-0 right-full mr-1.5 flex gap-1.5">
+                <Press
+                  label="Start the cut again"
+                  side="top"
+                  onClick={() =>
+                    setView({ section: sectionFacing(loaded.box) })
+                  }
+                >
+                  <RotateCcwIcon />
+                </Press>
+                <Press
+                  label="Show the other side"
+                  side="top"
+                  onClick={() =>
+                    setView({
+                      section: { ...section, flipped: !section.flipped },
+                    })
+                  }
+                >
+                  <FlipHorizontal2Icon />
+                </Press>
+              </div>
             )}
             <Switch
               label="Section"
               shortcut="S"
-              // its neighbour has the left
+              // its neighbours have the left
               side={section ? "top" : "left"}
               on={section !== null}
+              // cut open again, it is as it was left
               onChange={(on) =>
-                setView({ section: on ? sectionFacing(loaded.box) : null })
+                on
+                  ? cutOpen(() => sectionFacing(loaded.box))
+                  : setView({ section: null })
               }
             >
               <SectionIcon />

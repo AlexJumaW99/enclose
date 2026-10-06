@@ -99,19 +99,29 @@ is turning, never while it is still.
 From above and from below alike, the model's back is at the top of the view: the bottom
 view turns the model over sideways, not end over end.
 
-**Shading** is on Z, the way it is in Blender: the key brings solid, glass and wireframe
-up round the pointer. Hold it, flick towards one and let go; or tap it, and click one.
-A choice is pointed at by direction, so the pointer need not reach it. Esc, Z again or a
-right-click puts the menu away. Glass makes the outside see-through (the groups a
-manifest marks as `shell`, or everything if it marks none); wireframe draws edges only.
+**Shading** is on Z, the way it is in Blender: the key brings solid, glass, wireframe and
+outline up round the pointer. Hold it, flick towards one and let go; or tap it, and click
+one. A choice is pointed at by direction, so the pointer need not reach it. Esc, Z again
+or a right-click puts the menu away. Glass makes the outside see-through (the groups a
+manifest marks as `shell`, or everything if it marks none). Wireframe draws the model's
+lines and nothing of its surfaces, which still hide the lines behind them; outline draws
+every line, the hidden ones too. In all three a curved face is given the line where it
+turns out of sight, which is no edge of the model's and moves as the model is turned.
 
 Down the right-hand edge:
 
 - **Section** (S) cuts the model open. Three squares appear by the axes, one per direction
   to cut across, which the X, Y and Z keys choose too; in the view, drag the arrow to push
-  the cut through the model and the arcs to tilt it. A second button appears to the left
-  of this one, and shows the other half. While the model is cut open a tap of Z is the
-  cut across Z, and holding the key, or flicking with it down, brings up the shading.
+  the cut through the model and the arcs to tilt it. Two more buttons appear to the left
+  of this one: one shows the other half, the other starts the cut again. A cut is kept
+  as it is left: cut open again, the model is cut the same way, until it is started
+  again. While the model is cut open a tap of Z is the cut across Z, and holding the
+  key, or flicking with it down, brings up the shading.
+  Where the cut passes through a solid part it leaves a face in the part's colour, with
+  lines across it, the way a drawing marks what has been cut through. Where two parts
+  are in the same place by more than a tenth of a millimetre, the cut shows it in red.
+  (A part whose surfaces do not close, and anything drawn as glass or by its lines, is
+  left open.)
 - **Explode** (E) pulls the parts apart by the distances the manifest gives (or straight
   out from the middle, if it gives none), and a slider along the bottom pulls them
   further.

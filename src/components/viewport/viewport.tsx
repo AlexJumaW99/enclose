@@ -154,11 +154,12 @@ function Model({ project }: { project: Project }) {
       }
       // a letter on its own: not one held down, and not one being typed somewhere
       if (!loaded || !middle || event.repeat || spokenFor(event.target)) return
-      const { view, setView } = useStore.getState()
+      const { view, setView, cutOpen } = useStore.getState()
       const letter = event.key.toLowerCase()
-      if (letter === "s")
-        setView({ section: view.section ? null : sectionFacing(loaded.box) })
-      else if (letter === "e")
+      if (letter === "s") {
+        if (view.section) setView({ section: null })
+        else cutOpen(() => sectionFacing(loaded.box))
+      } else if (letter === "e")
         setView({ exploded: !view.exploded, spread: SPREAD.min })
       else if (view.section && (letter === "x" || letter === "y"))
         setView({ section: sectionAcross(letter, middle) })
@@ -269,10 +270,10 @@ function Model({ project }: { project: Project }) {
         <PartsPanel
           loaded={loaded}
           thumbs={thumbs}
-          // further in while the section's second button stands where it would be
+          // further in while the section's other buttons stand where it would be
           className={cn(
             "absolute top-1/2 max-h-[70%] -translate-y-1/2 transition-[right]",
-            view.section ? "right-25.5" : "right-15"
+            view.section ? "right-36" : "right-15"
           )}
         />
       )}

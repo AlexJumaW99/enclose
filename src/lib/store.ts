@@ -3,6 +3,7 @@
 import { create } from "zustand"
 
 import { stackOf, type Stack } from "@/lib/conversations"
+import { cutsOf, readCuts } from "@/lib/cuts"
 import { mannerOf, savedAccess } from "@/lib/manner"
 import { usePreferences } from "@/lib/preferences"
 
@@ -19,8 +20,11 @@ import {
 } from "@shared/api"
 import type { Turn } from "@/lib/orient"
 
-/** solid: as built. glass: the outside goes see-through. wireframe: edges only. */
-export type DisplayMode = "solid" | "glass" | "wireframe"
+/**
+ * solid: as built. glass: the outside goes see-through. wireframe: lines only, as far as
+ * the model itself does not hide them. outline: every line, the hidden ones too.
+ */
+export type DisplayMode = "solid" | "glass" | "wireframe" | "outline"
 
 /** A flat cut through the model, with one side of it hidden. */
 export type Section = {
@@ -74,6 +78,7 @@ const MODEL_KEY = "enclose:model"
 const EFFORT_KEY = "enclose:effort"
 const MODE_KEY = "enclose:mode"
 const THREAD_WIDTH_KEY = "enclose:thread-width"
+const CUTS_KEY = "enclose:cuts"
 
 /** What was saved under a key, or under the name the app had before it was Enclose. */
 const saved = (key: string) =>
@@ -82,7 +87,9 @@ const saved = (key: string) =>
 
 const savedMode = (): DisplayMode => {
   const mode = saved(MODE_KEY)
-  return mode === "glass" || mode === "wireframe" ? mode : "solid"
+  return mode === "glass" || mode === "wireframe" || mode === "outline"
+    ? mode
+    : "solid"
 }
 const savedThreadWidth = (): number => {
   const width = Number(saved(THREAD_WIDTH_KEY))
@@ -141,6 +148,8 @@ type State = {
   models: ModelChoice[]
   claude: ClaudeStatus | null
   view: View
+  /** the cut each project was last left with: where cutting it open again starts from */
+  cuts: Record<string, Section>
   /** what the view has been put into, latest last: Esc leaves that one */
   entered: Entered[]
   selection: Selection | null
@@ -167,6 +176,11 @@ type State = {
   createProject(): Promise<void>
   removeProject(id: string): Promise<void>
   setView(patch: Partial<View>): void
+  /**
+   * Cut the model open: the way it was last left cut, or, if it never was, the way
+   * `fresh` gives.
+   */
+  cutOpen(fresh: () => Section): void
   goHome(): void
   select(selection: Selection | null): void
   hover(partId: string | null): void
@@ -205,6 +219,7 @@ export const useStore = create<State>()((set, get) => ({
   models: [],
   claude: null,
   view: homeView(),
+  cuts: readCuts(saved(CUTS_KEY)),
   entered: [],
   selection: null,
   hoveredId: null,
@@ -266,10 +281,20 @@ export const useStore = create<State>()((set, get) => ({
 
   setView(patch) {
     if (patch.mode) localStorage.setItem(MODE_KEY, patch.mode)
+    // a cut is kept as it is left, for the next time its project is cut open
+    const { activeId, cuts } = get()
+    const kept =
+      patch.section && activeId ? { ...cuts, [activeId]: patch.section } : cuts
+    if (kept !== cuts) localStorage.setItem(CUTS_KEY, JSON.stringify(kept))
     set((state) => {
       const view = { ...state.view, ...patch }
-      return { view, entered: enteredNow(view, state.entered) }
+      return { view, cuts: kept, entered: enteredNow(view, state.entered) }
     })
+  },
+
+  cutOpen(fresh) {
+    const { activeId, cuts, setView } = get()
+    setView({ section: (activeId && cuts[activeId]) || fresh() })
   },
 
   goHome() {
@@ -382,8 +407,10 @@ function withItem(items: ThreadItem[], item: ThreadItem): ThreadItem[] {
 }
 
 function reconcile(projects: Project[]) {
-  const { activeId, activate } = useStore.getState()
-  useStore.setState({ projects })
+  const { activeId, activate, cuts } = useStore.getState()
+  const kept = cutsOf(cuts, projects)
+  if (kept !== cuts) localStorage.setItem(CUTS_KEY, JSON.stringify(kept))
+  useStore.setState({ projects, cuts: kept })
   if (activeId && projects.some((p) => p.id === activeId)) return
   // the open project is gone, or nothing was open yet: fall back to one that exists
   const wanted = /^#project=(.+)$/.exec(location.hash)?.[1] ?? saved(ACTIVE_KEY)

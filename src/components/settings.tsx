@@ -316,7 +316,7 @@ const KEYS: { title: string; rows: [string, string[]][] }[] = [
   {
     title: "The model",
     rows: [
-      ["Shading: solid, glass or wireframe", ["Z"]],
+      ["Shading: solid, glass, wireframe or outline", ["Z"]],
       ["Section", ["S"]],
       ["Cut across an axis, while sectioned", ["X", "Y", "Z"]],
       ["Explode", ["E"]],
