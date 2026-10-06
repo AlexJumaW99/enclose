@@ -11,6 +11,8 @@ type Saved = {
   path: string
   sessionId: string | null
   addedAt: number
+  /** taken off the list, but remembered: adding the folder again brings back its conversation */
+  closed?: boolean
 }
 
 type Found = {
@@ -155,7 +157,12 @@ export class Projects {
     } catch {
       // first run
     }
-    for (const project of this.saved) this.locate(project)
+    for (const project of this.open()) this.locate(project)
+  }
+
+  /** The projects on the list. */
+  private open(): Saved[] {
+    return this.saved.filter((p) => !p.closed)
   }
 
   private save() {
@@ -206,7 +213,7 @@ export class Projects {
   }
 
   list(summary: (id: string) => ThreadSummary): Project[] {
-    return this.saved.map((p) => {
+    return this.open().map((p) => {
       const manifest = this.found.get(p.id)?.manifest ?? null
       return {
         id: p.id,
@@ -221,7 +228,7 @@ export class Projects {
   }
 
   get(id: string): (Saved & Found) | null {
-    const project = this.saved.find((p) => p.id === id)
+    const project = this.open().find((p) => p.id === id)
     if (!project) return null
     return {
       ...project,
@@ -229,11 +236,19 @@ export class Projects {
     }
   }
 
-  /** Add a folder, or return the project it already is. */
+  /** Add a folder, or return the project it already is - or was, before it was closed. */
   add(dir: string): string {
     const real = fs.realpathSync(dir)
     const existing = this.saved.find((p) => p.path === real)
-    if (existing) return existing.id
+    if (existing) {
+      if (existing.closed) {
+        existing.closed = false
+        this.locate(existing)
+        this.save()
+        this.onChange()
+      }
+      return existing.id
+    }
     // lower-case hex: the id is used as a host name in model URLs
     const project: Saved = {
       id: randomBytes(6).toString("hex"),
@@ -248,8 +263,11 @@ export class Projects {
     return project.id
   }
 
+  /** Take a project off the list. Nothing of it is deleted. */
   remove(id: string) {
-    this.saved = this.saved.filter((p) => p.id !== id)
+    const project = this.saved.find((p) => p.id === id)
+    if (!project) return
+    project.closed = true
     this.watchers.get(id)?.close()
     this.watchers.delete(id)
     this.found.delete(id)
@@ -271,7 +289,7 @@ export class Projects {
   }
 
   refreshAll() {
-    for (const project of this.saved) this.locate(project)
+    for (const project of this.open()) this.locate(project)
   }
 
   close() {

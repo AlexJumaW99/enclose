@@ -1,5 +1,5 @@
 // The only door between the window and the app's own process: `window.cad`.
-import { contextBridge, ipcRenderer } from "electron"
+import { contextBridge, ipcRenderer, webUtils } from "electron"
 
 import { CHANNEL, type CadApi } from "../shared/api"
 
@@ -20,6 +20,9 @@ const api: CadApi = {
   projects: {
     list: () => ipcRenderer.invoke(CHANNEL.projectsList),
     add: () => ipcRenderer.invoke(CHANNEL.projectsAdd),
+    addFolder: (dir) => ipcRenderer.invoke(CHANNEL.projectsAddFolder, dir),
+    create: (name) => ipcRenderer.invoke(CHANNEL.projectsCreate, name),
+    pathOf: (file) => webUtils.getPathForFile(file),
     remove: (id) => ipcRenderer.invoke(CHANNEL.projectsRemove, id),
     reveal: (id) => ipcRenderer.invoke(CHANNEL.projectsReveal, id),
     onChange: (listener) => on(CHANNEL.projectsChanged, listener),
@@ -42,6 +45,13 @@ const api: CadApi = {
   },
   claude: {
     status: () => ipcRenderer.invoke(CHANNEL.claudeStatus),
+  },
+  settings: {
+    get: () => ipcRenderer.invoke(CHANNEL.settingsGet),
+    chooseProjectsFolder: () =>
+      ipcRenderer.invoke(CHANNEL.settingsChooseProjectsFolder),
+    revealProjectsFolder: () =>
+      ipcRenderer.invoke(CHANNEL.settingsRevealProjectsFolder),
   },
   viewport: {
     onRequest: (listener) => on(CHANNEL.viewportRequest, listener),

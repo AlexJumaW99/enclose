@@ -1,13 +1,14 @@
 import * as React from "react"
 import { cn } from "cn"
-import { BoxIcon, TriangleAlertIcon } from "lucide-react"
+import { BoxIcon, FolderPlusIcon, TriangleAlertIcon } from "lucide-react"
 
 import type { Project } from "@shared/api"
+import { Composer } from "@/components/composer"
+import { NewProject } from "@/components/new-project"
 import { PartPrompt } from "@/components/part-prompt"
 import { PartsPanel } from "@/components/parts-panel"
 import { Tools } from "@/components/tools"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
 import {
   Empty,
   EmptyContent,
@@ -272,53 +273,78 @@ function Model({ project }: { project: Project }) {
   )
 }
 
+/** Where new projects go, as the user would write it. */
+function useProjectsFolder(): string | null {
+  const [folder, setFolder] = React.useState<string | null>(null)
+  React.useEffect(() => {
+    void window.cad.settings.get().then((settings) =>
+      // the home folder is written the short way
+      setFolder(settings.projectsFolder.replace(/^\/Users\/[^/]+(?=\/)/, "~"))
+    )
+  }, [])
+  return folder
+}
+
+/** No projects at all: how one is started. */
+function Welcome() {
+  const folder = useProjectsFolder()
+  return (
+    <Empty className="h-full">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <FolderPlusIcon />
+        </EmptyMedia>
+        <EmptyTitle>Drop a folder here</EmptyTitle>
+        <EmptyDescription>
+          Enclose works in a folder on your Mac. Drop one on this window, empty
+          or not, and it becomes a project. Or name a new one, and its folder is
+          made for you{folder ? ` in ${folder}` : ""}.
+        </EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent>
+        <NewProject />
+      </EmptyContent>
+    </Empty>
+  )
+}
+
+/** A project with no model yet: where it is asked for. */
+function Blank({ project }: { project: Project }) {
+  const threadOpen = useStore((s) => s.threadOpen)
+  const working = project.thread.status !== "idle"
+  return (
+    <Empty className="h-full">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <BoxIcon />
+        </EmptyMedia>
+        <EmptyTitle>
+          {working ? "Claude is working on it" : "Nothing to show yet"}
+        </EmptyTitle>
+        <EmptyDescription>
+          {working
+            ? "The model appears here as soon as it is built."
+            : "Say what you want to make and Claude builds it in this folder. The model appears here as soon as it is built."}
+        </EmptyDescription>
+      </EmptyHeader>
+      {/* with the conversation up, that is where it is written */}
+      {!threadOpen && !working && (
+        <EmptyContent className="w-full max-w-xl">
+          <Composer
+            part={null}
+            placeholder="A case for a Raspberry Pi Zero, with a lid that screws on…"
+            autoFocus
+          />
+        </EmptyContent>
+      )}
+    </Empty>
+  )
+}
+
 /** The middle of the window: the open project's model, or what to do about not having one. */
 export function Viewport({ project }: { project: Project | null }) {
-  const addProject = useStore((s) => s.addProject)
-  const setThreadOpen = useStore((s) => s.setThreadOpen)
-  const threadOpen = useStore((s) => s.threadOpen)
-
-  if (!project) {
-    return (
-      <Empty className="h-full">
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <BoxIcon />
-          </EmptyMedia>
-          <EmptyTitle>Add a project folder</EmptyTitle>
-          <EmptyDescription>
-            A project is a folder with the source of a CAD model. Add one to see
-            the model and work on it with Claude.
-          </EmptyDescription>
-        </EmptyHeader>
-        <EmptyContent>
-          <Button onClick={() => void addProject()}>Add a folder</Button>
-        </EmptyContent>
-      </Empty>
-    )
-  }
-  if (!project.manifest) {
-    return (
-      <Empty className="h-full">
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <BoxIcon />
-          </EmptyMedia>
-          <EmptyTitle>No model in this folder yet</EmptyTitle>
-          <EmptyDescription>
-            This app shows the model a project builds. Ask Claude to set one up
-            here, for example from a STEP file in the folder, and it will appear
-            as soon as it is built.
-          </EmptyDescription>
-        </EmptyHeader>
-        {!threadOpen && (
-          <EmptyContent>
-            <Button onClick={() => setThreadOpen(true)}>Ask Claude</Button>
-          </EmptyContent>
-        )}
-      </Empty>
-    )
-  }
+  if (!project) return <Welcome />
+  if (!project.manifest) return <Blank key={project.id} project={project} />
   // keyed by project, so one project's model never lingers under another's name
   return <Model key={project.id} project={project} />
 }

@@ -13,18 +13,20 @@ import {
   type PartRef,
   type PermissionAnswer,
   type Project,
+  type Settings,
   type ViewportRequest,
   type ViewportResponse,
 } from "../shared/api"
 import { findClaude } from "./claude"
 import { Projects, resolveInside } from "./projects"
+import { SettingsStore } from "./settings"
 import { Threads } from "./threads"
 
 const HERE = import.meta.dirname
 const DEV_URL = process.env.VITE_DEV_SERVER_URL
 
 // For checking the app without clicking through it:
-//   CAD_AI_USER_DATA=<dir>   keep state somewhere other than the real profile
+//   ENCLOSE_USER_DATA=<dir>  keep state, and new projects, somewhere other than the real ones
 //   --capture=<file.png>     load (window hidden), save a picture of it, quit
 //   --script=<file.js>       run this in the window first; it may return a promise
 //   --wait=<ms>              how long to let the window settle before each step
@@ -35,8 +37,10 @@ const flag = (name: string) =>
     ?.slice(name.length + 3) ?? null
 const CAPTURE = flag("capture")
 
-if (process.env.CAD_AI_USER_DATA)
-  app.setPath("userData", process.env.CAD_AI_USER_DATA)
+// (the second is what the variable was called before the app had its name)
+const ELSEWHERE =
+  process.env.ENCLOSE_USER_DATA ?? process.env.CAD_AI_USER_DATA ?? null
+if (ELSEWHERE) app.setPath("userData", ELSEWHERE)
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -61,6 +65,7 @@ const MIME: Record<string, string> = {
 let win: BrowserWindow | null = null
 let projects: Projects
 let threads: Threads
+let settings: SettingsStore
 let claude: ClaudeStatus = { path: null, version: null }
 
 const list = (): Project[] => projects.list((id) => threads.summary(id))
@@ -177,6 +182,25 @@ async function capture(window: BrowserWindow, file: string) {
   app.quit()
 }
 
+/**
+ * Make the folder for a new project, where new projects go: named as the user named it,
+ * as far as a folder can be, and numbered if that name is already taken.
+ */
+function newFolder(name: string): string {
+  const base =
+    name
+      .replace(/[/\\:]/g, "-")
+      .replace(/\s+/g, " ")
+      .replace(/^[.\s]+|[.\s]+$/g, "") || "Untitled"
+  const { projectsFolder } = settings.get()
+  for (let n = 1; ; n++) {
+    const dir = path.join(projectsFolder, n === 1 ? base : `${base} ${n}`)
+    if (fs.existsSync(dir)) continue
+    fs.mkdirSync(dir, { recursive: true })
+    return dir
+  }
+}
+
 // --- wiring ---------------------------------------------------------------------------
 
 function wire() {
@@ -213,6 +237,19 @@ function wire() {
     })
     if (picked.canceled || !picked.filePaths[0]) return null
     const id = projects.add(picked.filePaths[0])
+    return list().find((p) => p.id === id) ?? null
+  })
+  ipcMain.handle(CHANNEL.projectsAddFolder, (_, dir: string) => {
+    try {
+      if (!fs.statSync(String(dir)).isDirectory()) return null
+    } catch {
+      return null
+    }
+    const id = projects.add(String(dir))
+    return list().find((p) => p.id === id) ?? null
+  })
+  ipcMain.handle(CHANNEL.projectsCreate, (_, name: string) => {
+    const id = projects.add(newFolder(String(name)))
     return list().find((p) => p.id === id) ?? null
   })
   ipcMain.handle(CHANNEL.projectsRemove, (_, id: string) => {
@@ -275,6 +312,27 @@ function wire() {
   const claudeFound = findClaude().then((status) => (claude = status))
   ipcMain.handle(CHANNEL.claudeStatus, () => claudeFound)
 
+  ipcMain.handle(CHANNEL.settingsGet, (): Settings => settings.get())
+  ipcMain.handle(
+    CHANNEL.settingsChooseProjectsFolder,
+    async (): Promise<Settings> => {
+      if (!win) return settings.get()
+      const picked = await dialog.showOpenDialog(win, {
+        title: "Where new projects go",
+        buttonLabel: "Use this folder",
+        defaultPath: settings.get().projectsFolder,
+        properties: ["openDirectory", "createDirectory"],
+      })
+      if (picked.canceled || !picked.filePaths[0]) return settings.get()
+      return settings.set({ projectsFolder: picked.filePaths[0] })
+    }
+  )
+  ipcMain.handle(CHANNEL.settingsRevealProjectsFolder, () => {
+    const { projectsFolder } = settings.get()
+    fs.mkdirSync(projectsFolder, { recursive: true })
+    void shell.openPath(projectsFolder)
+  })
+
   ipcMain.on(CHANNEL.viewportResponse, (_, response: ViewportResponse) => {
     const request = waiting.get(response.id)
     if (!request) return
@@ -296,6 +354,13 @@ if (!app.requestSingleInstanceLock()) {
 
   void app.whenReady().then(() => {
     const data = app.getPath("userData")
+    settings = new SettingsStore(path.join(data, "settings.json"), {
+      // Documents is where a Mac keeps what its user makes; a run that keeps its state
+      // elsewhere keeps its projects there too
+      projectsFolder: ELSEWHERE
+        ? path.join(ELSEWHERE, "Projects")
+        : path.join(app.getPath("documents"), "Enclose"),
+    })
     projects = new Projects(path.join(data, "projects.json"), broadcast)
     threads = new Threads({
       dir: path.join(data, "threads"),

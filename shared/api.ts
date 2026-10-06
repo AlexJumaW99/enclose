@@ -99,12 +99,25 @@ export type ViewportResponse =
   | { id: number; ok: true; data: unknown }
   | { id: number; ok: false; error: string }
 
+/** What the user has chosen for the app as a whole. */
+export type Settings = {
+  /** where a new project's folder is made when the user does not give one */
+  projectsFolder: string
+}
+
 export type CadApi = {
   platform: string
   projects: {
     list(): Promise<Project[]>
     /** opens the folder picker; resolves to the project, or null if cancelled */
     add(): Promise<Project | null>
+    /** add a folder the user dropped on the window; null if it is not a folder */
+    addFolder(dir: string): Promise<Project | null>
+    /** make a folder of this name where new projects go, and add it */
+    create(name: string): Promise<Project>
+    /** where on disk something dropped on the window is */
+    pathOf(file: File): string
+    /** take the project off the list; its folder and its conversation are kept */
     remove(id: string): Promise<void>
     reveal(id: string): Promise<void>
     onChange(listener: (projects: Project[]) => void): () => void
@@ -136,6 +149,13 @@ export type CadApi = {
   claude: {
     status(): Promise<ClaudeStatus>
   }
+  settings: {
+    get(): Promise<Settings>
+    /** opens the folder picker; resolves to the settings as they then are */
+    chooseProjectsFolder(): Promise<Settings>
+    /** show the folder new projects go in, making it if it is not there yet */
+    revealProjectsFolder(): Promise<void>
+  }
   viewport: {
     onRequest(listener: (request: ViewportRequest) => void): () => void
     respond(response: ViewportResponse): void
@@ -145,6 +165,8 @@ export type CadApi = {
 export const CHANNEL = {
   projectsList: "projects:list",
   projectsAdd: "projects:add",
+  projectsAddFolder: "projects:add-folder",
+  projectsCreate: "projects:create",
   projectsRemove: "projects:remove",
   projectsReveal: "projects:reveal",
   projectsChanged: "projects:changed",
@@ -158,6 +180,9 @@ export const CHANNEL = {
   threadItem: "thread:item",
   threadWasReset: "thread:was-reset",
   claudeStatus: "claude:status",
+  settingsGet: "settings:get",
+  settingsChooseProjectsFolder: "settings:choose-projects-folder",
+  settingsRevealProjectsFolder: "settings:reveal-projects-folder",
   viewportRequest: "viewport:request",
   viewportResponse: "viewport:response",
 } as const

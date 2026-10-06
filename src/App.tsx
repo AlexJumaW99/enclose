@@ -1,4 +1,5 @@
 import * as React from "react"
+import { FolderPlusIcon } from "lucide-react"
 
 import { Sidebar } from "@/components/sidebar"
 import { Thread } from "@/components/thread"
@@ -60,10 +61,63 @@ function useConversationKey() {
   }, [])
 }
 
+/**
+ * A folder dropped anywhere on the window becomes a project. True while one is being
+ * dragged over it.
+ */
+function useFolderDrop(): boolean {
+  const [over, setOver] = React.useState(false)
+  React.useEffect(() => {
+    // entering a child fires before leaving its parent: count, so the two cancel
+    let inside = 0
+    const carriesFiles = (event: DragEvent) =>
+      event.dataTransfer?.types.includes("Files") ?? false
+    const enter = (event: DragEvent) => {
+      if (!carriesFiles(event)) return
+      event.preventDefault()
+      inside++
+      setOver(true)
+    }
+    const hover = (event: DragEvent) => {
+      if (!carriesFiles(event) || !event.dataTransfer) return
+      // without this the window would open what is dropped instead
+      event.preventDefault()
+      event.dataTransfer.dropEffect = "copy"
+    }
+    const leave = (event: DragEvent) => {
+      if (!carriesFiles(event)) return
+      inside = Math.max(0, inside - 1)
+      if (inside === 0) setOver(false)
+    }
+    const drop = (event: DragEvent) => {
+      if (!carriesFiles(event) || !event.dataTransfer) return
+      event.preventDefault()
+      inside = 0
+      setOver(false)
+      const dirs = [...event.dataTransfer.files]
+        .map((file) => window.cad.projects.pathOf(file))
+        .filter(Boolean)
+      void useStore.getState().addFolders(dirs)
+    }
+    window.addEventListener("dragenter", enter)
+    window.addEventListener("dragover", hover)
+    window.addEventListener("dragleave", leave)
+    window.addEventListener("drop", drop)
+    return () => {
+      window.removeEventListener("dragenter", enter)
+      window.removeEventListener("dragover", hover)
+      window.removeEventListener("dragleave", leave)
+      window.removeEventListener("drop", drop)
+    }
+  }, [])
+  return over
+}
+
 export function App() {
   const ready = useStore((state) => state.ready)
   const threadOpen = useStore((state) => state.threadOpen)
   const project = useActiveProject()
+  const dropping = useFolderDrop()
   useViewportRequests()
   useConversationKey()
 
@@ -77,6 +131,14 @@ export function App() {
           <Sidebar />
         </main>
         {threadOpen && project && <Thread project={project} />}
+        {dropping && (
+          <div className="pointer-events-none fixed inset-2 z-50 flex items-center justify-center rounded-2xl bg-background/70 ring-2 ring-foreground/40 backdrop-blur-sm ring-inset">
+            <div className="flex items-center gap-2.5 text-sm font-medium">
+              <FolderPlusIcon className="size-5" />
+              Drop a folder to make it a project
+            </div>
+          </div>
+        )}
       </div>
     </TooltipProvider>
   )

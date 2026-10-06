@@ -4,7 +4,7 @@ import path from "node:path"
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
-import { findModel, readBranch, resolveInside } from "./projects"
+import { findModel, Projects, readBranch, resolveInside } from "./projects"
 
 let root: string
 const write = (file: string, content: unknown) => {
@@ -104,5 +104,37 @@ describe("readBranch", () => {
     write("main/.git/worktrees/wt/HEAD", "ref: refs/heads/side\n")
     write("wt/.git", `gitdir: ${path.join(root, "main/.git/worktrees/wt")}\n`)
     expect(readBranch(path.join(root, "wt"))).toBe("side")
+  })
+})
+
+describe("Projects", () => {
+  const idle = () => ({
+    status: "idle" as const,
+    since: null,
+    updatedAt: null,
+    lastMessage: null,
+  })
+
+  it("remembers a closed project, so adding its folder again is the same project", () => {
+    write("thing/model.json", MANIFEST)
+    const file = path.join(root, "state/projects.json")
+    const projects = new Projects(file, () => {})
+    const id = projects.add(path.join(root, "thing"))
+    projects.setSession(id, "session-1")
+    expect(projects.list(idle).map((p) => p.id)).toEqual([id])
+
+    projects.remove(id)
+    expect(projects.list(idle)).toEqual([])
+    expect(projects.get(id)).toBeNull()
+    // and it stays closed across a restart
+    expect(new Projects(file, () => {}).list(idle)).toEqual([])
+
+    expect(projects.add(path.join(root, "thing"))).toBe(id)
+    expect(projects.get(id)).toMatchObject({ sessionId: "session-1" })
+    expect(projects.list(idle)[0]).toMatchObject({
+      id,
+      manifest: "model.json",
+    })
+    projects.close()
   })
 })

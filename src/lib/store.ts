@@ -111,7 +111,12 @@ type State = {
   homeRequests: number
 
   activate(id: string): void
-  addProject(): Promise<void>
+  /** Pick a folder to add; true if one was added. */
+  addProject(): Promise<boolean>
+  /** Add folders dropped on the window, and open the last of them. */
+  addFolders(dirs: string[]): Promise<void>
+  /** Make a new project's folder where new projects go, and open it. */
+  createProject(name: string): Promise<void>
   removeProject(id: string): Promise<void>
   setView(patch: Partial<View>): void
   goHome(): void
@@ -166,6 +171,21 @@ export const useStore = create<State>()((set, get) => ({
   async addProject() {
     const project = await window.cad.projects.add()
     if (project) get().activate(project.id)
+    return project !== null
+  },
+
+  async addFolders(dirs) {
+    let last: string | null = null
+    for (const dir of dirs) {
+      const project = await window.cad.projects.addFolder(dir)
+      if (project) last = project.id
+    }
+    if (last) get().activate(last)
+  },
+
+  async createProject(name) {
+    const project = await window.cad.projects.create(name)
+    get().activate(project.id)
   },
 
   async removeProject(id) {
