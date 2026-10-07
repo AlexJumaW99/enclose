@@ -24,7 +24,10 @@ export const bridge: {
    * take it back to where it was before
    */
   focus: ((box: THREE.Box3 | null) => void) | null
-  /** true while a handle in the view is being dragged: not the moment to pick a part */
+  /**
+   * true while a handle in the view is being dragged, or a box drawn across it: not the
+   * moment to pick the part under the pointer
+   */
   handling: boolean
 } = {
   screenshot: null,

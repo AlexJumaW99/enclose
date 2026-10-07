@@ -5,6 +5,7 @@ import { create } from "zustand"
 import { finishedNow, stackOf, type Stack } from "@/lib/conversations"
 import { cutsOf, readCuts } from "@/lib/cuts"
 import { mannerOf, savedAccess } from "@/lib/manner"
+import { callingOn, notCalledOn } from "@/lib/mentions"
 import { usePreferences } from "@/lib/preferences"
 import { PALETTE, type PaletteName } from "@shared/palette"
 
@@ -52,16 +53,14 @@ export type View = {
 }
 
 /**
- * What is picked out of the model, to be shown on its own: one part, a group of them, or
- * the keep-outs, which are not parts but are listed with them. A part picked out in the
- * view, with I, is gone up to as well: the camera is brought to it, and taken back when
- * the rest is shown again.
+ * What is picked out of the model, to be shown on its own: one part, a group of them,
+ * several parts picked out together in the view, or the keep-outs, which are not parts
+ * but are listed with them. What is picked out in the view, with I, is gone up to as
+ * well: the camera is brought to it, and taken back when the rest is shown again.
  */
-export type Only = {
-  kind: "part" | "group" | "keepouts"
-  id: string
-  near?: boolean
-}
+export type Only =
+  | { kind: "part" | "group" | "keepouts"; id: string; near?: boolean }
+  | { kind: "parts"; ids: string[]; near?: boolean }
 
 /** Exploding starts at the model's own distances and can be pushed this much further. */
 export const SPREAD = { min: 1, max: 4 }
@@ -82,6 +81,9 @@ export function fitThread(width: number, windowWidth: number): number {
  * prompt opens beside.
  */
 export type Selection = { part: PartRef; at: { x: number; y: number } | null }
+
+/** Stable while no parts are picked out together. */
+const NONE: string[] = []
 
 const ACTIVE_KEY = "enclose:project"
 const ACCESS_KEY = "enclose:access"
@@ -130,15 +132,17 @@ const savedColours = (): Record<string, Record<string, PaletteName>> => {
   }
 }
 /**
- * What was waiting to be sent when the window was last up: what was said of parts, and
- * what was written in the message boxes. Whatever of it does not read as that is dropped.
+ * What was waiting to be sent when the window was last up: what was said of parts, the
+ * parts called on from the view, and what was written in the message boxes. Whatever of
+ * it does not read as that is dropped.
  */
-function savedWaiting(): Pick<State, "notes" | "drafts"> {
-  const nothing = { notes: {}, drafts: {} }
+function savedWaiting(): Pick<State, "notes" | "drafts" | "called"> {
+  const nothing = { notes: {}, drafts: {}, called: {} }
   try {
     const kept = JSON.parse(saved(WAITING_KEY) ?? "null") as {
       notes?: unknown
       drafts?: unknown
+      called?: unknown
     } | null
     if (!kept || typeof kept !== "object") return nothing
     const notes = Object.fromEntries(
@@ -160,7 +164,18 @@ function savedWaiting(): Pick<State, "notes" | "drafts"> {
         (entry): entry is [string, string] => typeof entry[1] === "string"
       )
     )
-    return { notes, drafts }
+    const called = Object.fromEntries(
+      Object.entries((kept.called ?? {}) as Record<string, unknown>).map(
+        ([project, parts]) => [
+          project,
+          (Array.isArray(parts) ? parts : []).filter(
+            (part: Partial<Called> | null): part is Called =>
+              typeof part?.id === "string" && typeof part.label === "string"
+          ),
+        ]
+      )
+    )
+    return { notes, drafts, called }
   } catch {
     return nothing
   }
@@ -244,6 +259,17 @@ type State = {
   /** what the view has been put into, latest last: Esc leaves that one */
   entered: Entered[]
   selection: Selection | null
+  /**
+   * The parts picked out together, by id: with a box drawn across the view, or one after
+   * another with Shift held. While there are any, no one part is picked out with a click
+   * (`selection`), and a hint of them shows through whatever of the model is in front.
+   */
+  several: string[]
+  /**
+   * The parts a box being drawn across the view takes in so far, by id; null while no
+   * box is being drawn. While one is, they are solid and all the rest see-through.
+   */
+  sweep: string[] | null
   /** the part under the pointer, in the view or in the parts list */
   hoveredId: string | null
   /**
@@ -269,12 +295,19 @@ type State = {
   /** what is written in each project's message box so far */
   drafts: Record<string, string>
   /**
+   * The parts called on from the view for each project's next message. They go with it
+   * by name, as if written in it with @, and until then show as chips on the message box.
+   */
+  called: Record<string, Called[]>
+  /**
    * The colour the user has given a part, by project and part: one of the app's own, by
    * name. It is how the app draws the part, whatever the model says of its colour.
    */
   colours: Record<string, Record<string, PaletteName>>
   /** bumps to ask the viewport to return to its home view */
   homeRequests: number
+  /** bumps to ask the message box to take the typing, after what is written in it */
+  writeRequests: number
 
   activate(id: string): void
   /**
@@ -299,6 +332,9 @@ type State = {
   cutOpen(fresh: () => Section): void
   goHome(): void
   select(selection: Selection | null): void
+  /** Pick parts out together, in place of whatever was picked out; or none, with none. */
+  selectSeveral(partIds: string[]): void
+  sweepOver(partIds: string[] | null): void
   hover(partId: string | null): void
   seek(seeking: boolean): void
   showPlain(plain: boolean): void
@@ -314,6 +350,12 @@ type State = {
   keepNote(text: string): string | null
   dropNote(id: string): void
   setDraft(text: string): void
+  /**
+   * Call on parts for the open project's next message, those of them it does not name
+   * already, and bring the message up to be written in.
+   */
+  callOn(parts: Called[]): void
+  dropCalled(partId: string): void
   /** Give a part of the open project a colour of the app's, or (null) the model's own back. */
   setColour(partId: string, colour: PaletteName | null): void
   setThreadOpen(open: boolean): void
@@ -334,6 +376,9 @@ type State = {
 
 /** Something said of a part, waiting to be sent: the part and point, and the words. */
 export type Note = PartNote & { id: string }
+
+/** A part called on from the view for the next message: what it goes by, and is shown as. */
+export type Called = { id: string; label: string }
 
 /** The conversations whose items have been asked for, so that none is asked for twice. */
 const fetched = new Set<string>()
@@ -359,6 +404,8 @@ export const useStore = create<State>()((set, get) => ({
   cuts: readCuts(saved(CUTS_KEY)),
   entered: [],
   selection: null,
+  several: NONE,
+  sweep: null,
   hoveredId: null,
   seeking: false,
   plain: false,
@@ -366,6 +413,7 @@ export const useStore = create<State>()((set, get) => ({
   ...savedWaiting(),
   colours: savedColours(),
   homeRequests: 0,
+  writeRequests: 0,
 
   activate(id) {
     if (get().activeId === id) return
@@ -373,6 +421,8 @@ export const useStore = create<State>()((set, get) => ({
     set((state) => ({
       activeId: id,
       selection: null,
+      several: NONE,
+      sweep: null,
       hoveredId: null,
       writing: null,
       view: homeView(),
@@ -446,7 +496,19 @@ export const useStore = create<State>()((set, get) => ({
 
   select(selection) {
     // picking another part, or none, is done with what was being written of the last
-    set({ selection, writing: null })
+    set({ selection, several: NONE, writing: null })
+  },
+
+  selectSeveral(partIds) {
+    set({
+      selection: null,
+      several: partIds.length > 0 ? partIds : NONE,
+      writing: null,
+    })
+  },
+
+  sweepOver(sweep) {
+    set({ sweep })
   },
 
   hover(hoveredId) {
@@ -471,7 +533,12 @@ export const useStore = create<State>()((set, get) => ({
     const made = (activeId ? notes[activeId] : undefined)?.find(
       (one) => one.id === note
     )
-    if (made) set({ selection: { part: made.part, at: null }, writing: note })
+    if (made)
+      set({
+        selection: { part: made.part, at: null },
+        several: NONE,
+        writing: note,
+      })
   },
 
   keepNote(text) {
@@ -509,6 +576,43 @@ export const useStore = create<State>()((set, get) => ({
   setDraft(text) {
     const { activeId, drafts } = get()
     if (activeId) set({ drafts: { ...drafts, [activeId]: text } })
+  },
+
+  callOn(parts) {
+    const { activeId, called, drafts } = get()
+    if (!activeId) return
+    const before = called[activeId] ?? []
+    // not those the message names as it is, in its own words or by a chip
+    const unnamed = notCalledOn(
+      drafts[activeId] ?? "",
+      parts.map((part) => part.id)
+    )
+    const fresh = parts.filter(
+      (part) =>
+        unnamed.includes(part.id) &&
+        !before.some((other) => other.id === part.id)
+    )
+    set((state) => ({
+      called:
+        fresh.length > 0
+          ? { ...called, [activeId]: [...before, ...fresh] }
+          : called,
+      threadOpen: true,
+      writeRequests: state.writeRequests + 1,
+    }))
+  },
+
+  dropCalled(partId) {
+    const { activeId, called } = get()
+    if (!activeId) return
+    set({
+      called: {
+        ...called,
+        [activeId]: (called[activeId] ?? []).filter(
+          (part) => part.id !== partId
+        ),
+      },
+    })
   },
 
   setColour(partId, colour) {
@@ -576,7 +680,11 @@ export const useStore = create<State>()((set, get) => ({
     const { activeId, access, model, effort, models, projects, picked } = get()
     const project = projects.find((p) => p.id === activeId)
     if (!project) return
-    const message = (get().drafts[project.id] ?? "").trim()
+    // the parts called on from the view go ahead of what is written, by name
+    const message = callingOn(
+      (get().drafts[project.id] ?? "").trim(),
+      (get().called[project.id] ?? []).map((part) => part.id)
+    )
     const notes = get().notes[project.id] ?? []
     if (!message && notes.length === 0) return
     // into the conversation the panel is showing; if that is a new one, this begins it
@@ -591,6 +699,7 @@ export const useStore = create<State>()((set, get) => ({
       writing: null,
       drafts: { ...state.drafts, [project.id]: "" },
       notes: { ...state.notes, [project.id]: [] },
+      called: { ...state.called, [project.id]: [] },
     }))
     void window.cad.thread
       .send(
@@ -659,7 +768,13 @@ function reconcile(projects: Project[]) {
   const wanted = /^#project=(.+)$/.exec(location.hash)?.[1] ?? saved(ACTIVE_KEY)
   const next = projects.find((p) => p.id === wanted) ?? projects[0]
   if (next) activate(next.id)
-  else useStore.setState({ activeId: null, selection: null, writing: null })
+  else
+    useStore.setState({
+      activeId: null,
+      selection: null,
+      several: NONE,
+      writing: null,
+    })
 }
 
 /** The conversation in front of the user: the one the panel shows, while it is up. */
@@ -703,10 +818,18 @@ export function connect() {
   // what is waiting to be sent is kept as it changes, so that the window can be loaded
   // again without losing it
   useStore.subscribe((state, was) => {
-    if (state.notes !== was.notes || state.drafts !== was.drafts)
+    if (
+      state.notes !== was.notes ||
+      state.drafts !== was.drafts ||
+      state.called !== was.called
+    )
       localStorage.setItem(
         WAITING_KEY,
-        JSON.stringify({ notes: state.notes, drafts: state.drafts })
+        JSON.stringify({
+          notes: state.notes,
+          drafts: state.drafts,
+          called: state.called,
+        })
       )
   })
   // turning to a conversation, or bringing the panel up, is looking at what is in it

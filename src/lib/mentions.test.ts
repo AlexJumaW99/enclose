@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest"
 
-import { matching, putIn, stretches, tokenAt } from "./mentions"
+import {
+  callingOn,
+  matching,
+  notCalledOn,
+  putIn,
+  stretches,
+  tokenAt,
+} from "./mentions"
 
 describe("tokenAt", () => {
   it("finds a part being named", () => {
@@ -122,5 +129,38 @@ describe("stretches", () => {
     expect(stretches("$5 to me@home.org")).toEqual([
       { text: "$5 to me@home.org", kind: null },
     ])
+  })
+})
+
+describe("notCalledOn", () => {
+  it("gives the parts a message does not name", () => {
+    expect(notCalledOn("make @lid thicker", ["lid", "cube"])).toEqual(["cube"])
+    expect(notCalledOn("", ["lid", "cube"])).toEqual(["lid", "cube"])
+  })
+
+  it("knows a name with the sentence's full stop after it", () => {
+    expect(notCalledOn("thicken @lid, and @cube.", ["lid", "cube"])).toEqual([])
+  })
+
+  it("does not take a longer name for a shorter one", () => {
+    expect(notCalledOn("move @tube_10", ["tube_1"])).toEqual(["tube_1"])
+  })
+})
+
+describe("callingOn", () => {
+  it("names the parts ahead of what the message says", () => {
+    expect(callingOn("make these thicker", ["lid", "cube"])).toBe(
+      "@lid @cube make these thicker"
+    )
+  })
+
+  it("is the names alone, of a message that says nothing", () => {
+    expect(callingOn("", ["lid", "cube"])).toBe("@lid @cube")
+  })
+
+  it("names only those not named already", () => {
+    expect(callingOn("round @lid", ["lid", "cube"])).toBe("@cube round @lid")
+    expect(callingOn("round @lid", ["lid"])).toBe("round @lid")
+    expect(callingOn("as it is", [])).toBe("as it is")
   })
 })

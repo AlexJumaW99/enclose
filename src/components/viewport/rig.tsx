@@ -700,6 +700,11 @@ export function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
     // takes the camera on over the top where they would stop it
     const rotate = impl.rotate.bind(impl)
     impl.rotate = (azimuth, polar) => made.turn(azimuth, polar)
+    // The main button is not the camera's: it picks parts out, at a click or by drawing
+    // a box across them (see Marquee). With a mouse it is the other button that turns
+    // the view.
+    impl.mouseButtons.left = ACTION.NONE
+    impl.mouseButtons.right = ACTION.ROTATE
     const made = direct({
       controls: impl,
       lens,
@@ -747,7 +752,7 @@ export function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
 
   // What the hand does on the view. Fingers moving across a trackpad turn the model, a
   // pinch zooms, and so does a mouse wheel. Holding Shift pans instead: with the fingers,
-  // and with a drag.
+  // and with a drag, which is a drag with a mouse's other button.
   React.useEffect(() => {
     const canvas = gl.domElement
     const around = canvas.parentElement
@@ -763,8 +768,18 @@ export function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
     const choose = (event: WheelEvent | PointerEvent) => {
       const camera = controls.current
       if (!camera) return
-      camera.mouseButtons.left = event.shiftKey ? ACTION.TRUCK : ACTION.ROTATE
+      camera.mouseButtons.right = event.shiftKey ? ACTION.TRUCK : ACTION.ROTATE
       camera.mouseButtons.wheel = event.shiftKey ? ACTION.TRUCK : ACTION.DOLLY
+    }
+    // The controls sit a press of the main button out altogether: left to hear of it,
+    // they would take the view for moved by a drag that moves nothing.
+    const press = (event: PointerEvent) => {
+      choose(event)
+      if (event.button === 0 && controls.current)
+        controls.current.enabled = false
+    }
+    const lift = () => {
+      if (controls.current) controls.current.enabled = true
     }
     const swallow = (event: Event) => {
       event.preventDefault()
@@ -857,10 +872,14 @@ export function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
     }
     // capturing, one element up: these run before the controls' own listeners on the canvas
     around.addEventListener("wheel", wheel, { capture: true, passive: false })
-    around.addEventListener("pointerdown", choose, { capture: true })
+    around.addEventListener("pointerdown", press, { capture: true })
+    window.addEventListener("pointerup", lift)
+    window.addEventListener("pointercancel", lift)
     return () => {
       around.removeEventListener("wheel", wheel, { capture: true })
-      around.removeEventListener("pointerdown", choose, { capture: true })
+      around.removeEventListener("pointerdown", press, { capture: true })
+      window.removeEventListener("pointerup", lift)
+      window.removeEventListener("pointercancel", lift)
     }
   }, [gl])
 

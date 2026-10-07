@@ -15,6 +15,7 @@ import type { Note, Section, Selection, View } from "@/lib/store"
 import { bridge } from "./bridge"
 import { Ground } from "./ground"
 import type { LoadedModel, LoadedPart } from "./load"
+import { DRAG_FROM, Marquee } from "./marquee"
 import { EDGE, finish, skinColour } from "./paint"
 import { NoteMark, PartMarks } from "./part-marks"
 import { FOV, MODEL_TO_WORLD, REACH, Rig, toWorld } from "./rig"
@@ -30,6 +31,7 @@ const NO_CLIP = { normal: new THREE.Vector3(0, 1, 0), constant: 1e6 }
 const ONE = new THREE.Vector3(1, 1, 1)
 const WHITE = new THREE.Color("#ffffff")
 const NOT_PICKED = () => {}
+const NOT_HINTED: string[] = []
 /** A shell part smaller than this share of the model stays solid in glass mode: buttons, feet. */
 const GLASS_FROM = 0.25
 // drawn in this order, so what is behind glass is tinted by it and the glass keeps its outline
@@ -41,6 +43,10 @@ const ORDER = {
   glass: 2,
   glassEdges: 3,
   keepouts: 4,
+  // over all of the model: where the parts picked out together are, and then their own
+  // lines, which the hint of them is not to dim
+  hint: 5,
+  hinted: 6,
 }
 
 /**
@@ -63,6 +69,8 @@ const SEEN = only(0)
 const GLASS = only(1)
 /** In front of glass: drawn with it only as far as how near it is, to hide what is behind. */
 const COVER = only(2)
+/** In the picture of where the parts picked out together are (see Hint). */
+const HINT = only(3)
 /** Lights fall on whatever is being drawn. */
 const EVERY = new THREE.Layers()
 EVERY.enableAll()
@@ -75,6 +83,21 @@ const GLASS_OPACITY = { plain: 0.2, hovered: 0.28, selected: 0.4 }
  */
 const PICKED_LINE = 2
 const HOVERED_LINE = 1.5
+/**
+ * How strongly the parts picked out together show through what is in front of them: the
+ * veil over where each is, and the line round it. And how wide that line is, in pixels.
+ */
+const HINTED = { veil: 0.4, line: 0.7, width: 1.5 }
+/**
+ * What a part is drawn in where the parts picked out together are told apart: a colour
+ * of its own, none of them near another, for as many as sixty-four of them.
+ */
+const tell = (place: number) =>
+  new THREE.Color().setRGB(
+    ((place & 3) + 1) / 4,
+    (((place >> 2) & 3) + 1) / 4,
+    (((place >> 4) & 3) + 1) / 4
+  )
 /** How much of its own light a part gives off, picked out and under the pointer. */
 const GLOW = { picked: 0.3, hovered: 0.07 }
 /** How fast a part takes the selection's colour and gives it up again. */
@@ -257,11 +280,12 @@ export function appearance(
   model: LoadedModel,
   view: View
 ): { shown: boolean; look: Look } {
-  // with something picked out in the parts list, only that is drawn
+  // with something picked out to be shown on its own, only that is drawn
   const { only } = view
   const shown =
     !only ||
     (only.kind === "part" && only.id === loaded.part.id) ||
+    (only.kind === "parts" && only.ids.includes(loaded.part.id)) ||
     (only.kind === "group" && only.id === loaded.part.group)
   if (view.mode === "wireframe") return { shown, look: "wire" }
   if (view.mode === "outline") return { shown, look: "outline" }
@@ -285,6 +309,7 @@ const PartModel = React.memo(function PartModel({
   cut,
   hovered,
   selected,
+  hint,
   plain,
   explode,
   plane,
@@ -304,6 +329,11 @@ const PartModel = React.memo(function PartModel({
   cut: number | null
   hovered: boolean
   selected: boolean
+  /**
+   * Its place among the parts picked out together, which are hinted at through whatever
+   * is in front of them; null if it is not one of them.
+   */
+  hint: number | null
   /** picked out, but to be seen in its own colour: one is being chosen for it */
   plain: boolean
   /** how far along its way out the part is: 0 assembled, 1 the model's own distance */
@@ -326,6 +356,7 @@ const PartModel = React.memo(function PartModel({
   }, [loaded.home])
 
   const planes = React.useMemo(() => [plane], [plane])
+  const told = React.useMemo(() => (hint === null ? null : tell(hint)), [hint])
   const skinColors = React.useMemo(
     () =>
       loaded.skins.map((skin) => skinColour(loaded, skin, colors.dark, colour)),
@@ -463,6 +494,9 @@ const PartModel = React.memo(function PartModel({
     : hovered
       ? GLASS_OPACITY.hovered
       : GLASS_OPACITY.plain
+  // its own lines go over the hint of it, where they are seen at all
+  const lineOrder =
+    hint !== null ? ORDER.hinted : glass ? ORDER.glassEdges : ORDER.edges
   return (
     <group ref={group}>
       {loaded.skins.map((skin, index) => (
@@ -528,21 +562,25 @@ const PartModel = React.memo(function PartModel({
               />
             </mesh>
           )}
+          {told && (
+            <mesh geometry={skin.geometry} layers={HINT} raycast={NOT_PICKED}>
+              <meshBasicMaterial
+                color={told}
+                toneMapped={false}
+                side={THREE.DoubleSide}
+                clippingPlanes={planes}
+              />
+            </mesh>
+          )}
         </React.Fragment>
       ))}
-      <primitive
-        object={lines}
-        renderOrder={glass ? ORDER.glassEdges : ORDER.edges}
-      >
+      <primitive object={lines} renderOrder={lineOrder}>
         <primitive object={lines.material} attach="material" {...line} />
       </primitive>
       {/* A solid part shows where it curves by how the light falls on it: unless it is
           picked out, when it is all of a colour. */}
       {turns && (look !== "solid" || filled) && (
-        <primitive
-          object={turns}
-          renderOrder={glass ? ORDER.glassEdges : ORDER.edges}
-        >
+        <primitive object={turns} renderOrder={lineOrder}>
           <primitive object={turns.material} attach="material" {...line} />
         </primitive>
       )}
@@ -666,6 +704,135 @@ function Glass() {
       renderOrder={ORDER.glass}
       raycast={NOT_PICKED}
       onBeforeRender={addUp}
+    />
+  )
+}
+
+/**
+ * A hint of the parts picked out together, laid over the view: where each of them is,
+ * whatever is in front of it. A box takes in what is inside other parts as readily as
+ * what is not, and what it took would otherwise be nowhere to be seen.
+ *
+ * The parts are drawn on their own into a picture that is not shown, each all of one
+ * colour that is no other's, the nearer in front of the further. Where the picture has a
+ * part, the view is veiled in the selection's colour; where one colour gives way to
+ * another, or to none, is the edge of a part as it is seen from here, and gets a line.
+ */
+function Hint({ colors }: { colors: ThemeColors }) {
+  const picture = React.useMemo(
+    // as smooth at its edges as the view, which is what keeps the line smooth
+    () => new THREE.WebGLRenderTarget(1, 1, { samples: 4 }),
+    []
+  )
+  const material = React.useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        uniforms: {
+          picture: { value: picture.texture },
+          reach: { value: new THREE.Vector2() },
+          veil: { value: new THREE.Color() },
+          ink: { value: new THREE.Color(EDGE) },
+          veiled: { value: HINTED.veil },
+          inked: { value: HINTED.line },
+        },
+        vertexShader: `
+          varying vec2 at;
+          void main() {
+            at = uv;
+            gl_Position = vec4(position.xy, 0.0, 1.0);
+          }`,
+        fragmentShader: `
+          uniform sampler2D picture;
+          uniform vec2 reach;
+          uniform vec3 veil;
+          uniform vec3 ink;
+          uniform float veiled;
+          uniform float inked;
+          varying vec2 at;
+          float unlike(vec4 here, vec2 by) {
+            return distance(here, texture2D(picture, at + by * reach));
+          }
+          void main() {
+            vec4 here = texture2D(picture, at);
+            // a line goes where a place is unlike what is round it, any way from it
+            float edge = max(
+              max(unlike(here, vec2(1.0, 0.0)), unlike(here, vec2(-1.0, 0.0))),
+              max(unlike(here, vec2(0.0, 1.0)), unlike(here, vec2(0.0, -1.0))));
+            edge = max(edge, max(
+              max(unlike(here, vec2(0.7, 0.7)), unlike(here, vec2(-0.7, 0.7))),
+              max(unlike(here, vec2(0.7, -0.7)), unlike(here, vec2(-0.7, -0.7)))));
+            float line = smoothstep(0.02, 0.2, edge) * inked;
+            float fill = here.a * veiled * (1.0 - line);
+            float alpha = line + fill;
+            if (alpha < 0.002) discard;
+            gl_FragColor = vec4((ink * line + veil * fill) / alpha, alpha);
+            #include <colorspace_fragment>
+          }`,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    [picture]
+  )
+  React.useEffect(() => {
+    material.uniforms.veil.value.copy(colors.picked)
+  }, [material, colors.picked])
+  React.useEffect(
+    () => () => {
+      picture.dispose()
+      material.dispose()
+    },
+    [picture, material]
+  )
+
+  // whenever the view is drawn, by whoever draws it, the picture is drawn first
+  const draw = React.useMemo(() => {
+    const size = new THREE.Vector2()
+    const cleared = new THREE.Color()
+    return (
+      renderer: THREE.WebGLRenderer,
+      scene: THREE.Scene,
+      camera: THREE.Camera
+    ) => {
+      renderer.getDrawingBufferSize(size)
+      if (picture.width !== size.x || picture.height !== size.y)
+        picture.setSize(size.x, size.y)
+      // half the line's width either side of an edge, in the picture's own measure
+      const half = (HINTED.width * renderer.getPixelRatio()) / 2
+      material.uniforms.reach.value.set(half / size.x, half / size.y)
+      const was = {
+        target: renderer.getRenderTarget(),
+        autoClear: renderer.autoClear,
+        alpha: renderer.getClearAlpha(),
+        background: scene.background,
+        occasions: camera.layers.mask,
+      }
+      renderer.getClearColor(cleared)
+      // it starts from nothing, which what was last drawn may have left it unable to do
+      renderer.state.buffers.depth.setMask(true)
+      renderer.state.buffers.color.setMask(true)
+      renderer.setClearColor(0x000000, 0)
+      renderer.autoClear = true
+      scene.background = null
+      camera.layers.mask = HINT.mask
+      renderer.setRenderTarget(picture)
+      renderer.render(scene, camera)
+      renderer.setRenderTarget(was.target)
+      camera.layers.mask = was.occasions
+      scene.background = was.background
+      renderer.autoClear = was.autoClear
+      renderer.setClearColor(cleared, was.alpha)
+    }
+  }, [picture, material])
+
+  return (
+    <mesh
+      geometry={SCREEN}
+      material={material}
+      frustumCulled={false}
+      renderOrder={ORDER.hint}
+      raycast={NOT_PICKED}
+      onBeforeRender={draw}
     />
   )
 }
@@ -907,7 +1074,8 @@ function Picker({
   loaded: LoadedModel
   plane: THREE.Plane
   onHover: (partId: string | null) => void
-  onPick: (selection: Selection | null) => void
+  /** a part was clicked, or nothing was; with Shift held, to add to what is picked out */
+  onPick: (selection: Selection | null, add: boolean) => void
 }) {
   const gl = useThree((state) => state.gl)
   const camera = useThree((state) => state.camera)
@@ -968,7 +1136,8 @@ function Picker({
       pressed = { x: event.clientX, y: event.clientY }
     }
     const move = (event: PointerEvent) => {
-      // orbiting, or dragging the section's handle: not pointing at a part
+      // turning the view, drawing a box across it, or dragging the section's handle:
+      // not pointing at a part
       if (event.buttons !== 0 || bridge.handling) return
       const hit = cast(event)
       onHover((hit?.object.userData.partId as string | undefined) ?? null)
@@ -979,12 +1148,16 @@ function Picker({
       if (
         bridge.handling ||
         (pressed &&
-          Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y) > 4)
+          Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y) >
+            DRAG_FROM)
       )
         return
       const hit = cast(event)
       const part = hit && describe(hit)
-      onPick(part ? { part, at: { x: event.clientX, y: event.clientY } } : null)
+      onPick(
+        part ? { part, at: { x: event.clientX, y: event.clientY } } : null,
+        event.shiftKey
+      )
     }
 
     canvas.addEventListener("pointerdown", down)
@@ -1053,6 +1226,8 @@ export function Scene({
   projectId,
   view,
   selectedId,
+  several,
+  sweep,
   hoveredId,
   seeking,
   plain,
@@ -1060,6 +1235,8 @@ export function Scene({
   colours,
   homeKey,
   onPick,
+  onSweep,
+  onTake,
   onHover,
   onSection,
 }: {
@@ -1071,6 +1248,10 @@ export function Scene({
   /** the colours the user has given parts, by part */
   colours: Record<string, string>
   selectedId: string | null
+  /** the parts picked out together, with a box or with Shift: hinted at through the rest */
+  several: string[]
+  /** what a box being drawn across the view takes in so far; null while none is drawn */
+  sweep: string[] | null
   hoveredId: string | null
   /** a part is being looked for by name: the one lit up is shown through all the rest */
   seeking: boolean
@@ -1078,7 +1259,11 @@ export function Scene({
   plain: boolean
   /** changes when the camera should go back to its home view */
   homeKey: string
-  onPick: (selection: Selection | null) => void
+  onPick: (selection: Selection | null, add: boolean) => void
+  /** a box is being drawn across the view, and takes these in so far; null once it is not */
+  onSweep: (partIds: string[] | null, add: boolean) => void
+  /** the box was let go, having taken these in */
+  onTake: (partIds: string[], add: boolean) => void
   onHover: (partId: string | null) => void
   /** the section's handle was dragged */
   onSection: (moved: { position: Vec3; turn: Turn }) => void
@@ -1091,14 +1276,34 @@ export function Scene({
   )
   const radius = loaded.box.getSize(new THREE.Vector3()).length() / 2
   const explode = view.exploded ? view.spread : 0
+  // What is lit as picked out: the one part or the several; or, while a box is being
+  // drawn across the view, what it takes in so far.
+  const sweeping = sweep !== null
+  const lit = React.useMemo(
+    () =>
+      new Set(
+        sweep ?? (several.length > 0 ? several : selectedId ? [selectedId] : [])
+      ),
+    [sweep, several, selectedId]
+  )
   const looks = loaded.parts.map((part): ReturnType<typeof appearance> => {
     const seen = appearance(part, loaded, view)
     // While a part is looked for, it alone is solid and all the rest is see-through,
     // whatever the shading: it is found wherever it is, inside another part or behind.
-    return seeking
-      ? { ...seen, look: part.part.id === hoveredId ? "solid" : "glass" }
-      : seen
+    // It is the same while a box is drawn: what it takes in so far is seen through all
+    // the rest, since it takes in what is inside other parts as readily as what is not.
+    if (seeking)
+      return { ...seen, look: part.part.id === hoveredId ? "solid" : "glass" }
+    if (sweeping)
+      return { ...seen, look: lit.has(part.part.id) ? "solid" : "glass" }
+    return seen
   })
+  // Once the box is let go the model is drawn as it was, and the parts picked out
+  // together are hinted at through whatever of it is in front of them (see Hint).
+  const hinted = seeking || sweeping ? NOT_HINTED : several
+  /** Picked out, and drawn in the selection's colour for it. */
+  const filled = (id: string) =>
+    lit.has(id) && !(plain && !sweeping && id === selectedId)
   const anyGlass = looks.some(({ shown, look }) => shown && look === "glass")
   // The parts a cut leaves a face on: the solid ones, drawn as such. Each has its place
   // among them, which is the order their cut faces are drawn in.
@@ -1112,7 +1317,7 @@ export function Scene({
 
   return (
     <Canvas
-      className={hoveredId ? "cursor-pointer" : undefined}
+      className={hoveredId && !sweeping ? "cursor-pointer" : undefined}
       frameloop="demand"
       // Keep to the view's size as it changes, not once it has stopped changing. Left
       // alone, the canvas waits for a pause whenever it is not the window that is
@@ -1145,6 +1350,7 @@ export function Scene({
         intensity={0.55}
       />
       {anyGlass && <Glass />}
+      {hinted.length > 0 && <Hint colors={colors} />}
       <Rig box={loaded.box} homeKey={homeKey} />
       <Cut plane={plane} section={view.section} />
       <Picker
@@ -1153,6 +1359,13 @@ export function Scene({
         plane={plane}
         onHover={onHover}
         onPick={onPick}
+      />
+      <Marquee
+        root={root}
+        plane={plane}
+        cut={view.section !== null}
+        onSweep={onSweep}
+        onTake={onTake}
       />
       <Camera />
       <Redraw on={view} />
@@ -1169,19 +1382,24 @@ export function Scene({
               cover={anyGlass}
               cut={place(index)}
               // the part that is looked for is the one thing picked out, while it is
-              hovered={!seeking && hoveredId === part.part.id}
+              hovered={!seeking && !sweeping && hoveredId === part.part.id}
               selected={
-                seeking
-                  ? hoveredId === part.part.id
-                  : selectedId === part.part.id
+                seeking ? hoveredId === part.part.id : lit.has(part.part.id)
               }
-              plain={plain && !seeking && selectedId === part.part.id}
+              hint={
+                hinted.includes(part.part.id)
+                  ? hinted.indexOf(part.part.id)
+                  : null
+              }
+              plain={
+                plain && !seeking && !sweeping && selectedId === part.part.id
+              }
               explode={explode}
               plane={plane}
               colors={colors}
               colour={colours[part.part.id] ?? null}
             >
-              {selectedId === part.part.id && (
+              {selectedId === part.part.id && !sweeping && (
                 <PartMarks
                   loaded={part}
                   model={loaded.model}
@@ -1220,17 +1438,16 @@ export function Scene({
                       key: part.part.id,
                       // a little lighter than the part: what a cut shows is not its
                       // outside. Picked out, it is the selection's colour as the part is.
-                      color:
-                        selectedId === part.part.id && !plain
-                          ? colors.picked
-                          : skinColour(
-                              part,
-                              part.skins[0],
-                              colors.dark,
-                              colours[part.part.id]
-                            ).lerp(WHITE, 0.14),
-                      hovered: hoveredId === part.part.id,
-                      selected: selectedId === part.part.id && !plain,
+                      color: filled(part.part.id)
+                        ? colors.picked
+                        : skinColour(
+                            part,
+                            part.skins[0],
+                            colors.dark,
+                            colours[part.part.id]
+                          ).lerp(WHITE, 0.14),
+                      hovered: !sweeping && hoveredId === part.part.id,
+                      selected: filled(part.part.id),
                     },
                   ]
                 : []

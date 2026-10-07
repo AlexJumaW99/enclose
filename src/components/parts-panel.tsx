@@ -10,8 +10,13 @@ import {
 import { useStore, type Only } from "@/lib/store"
 import type { LoadedModel } from "./viewport/load"
 
-const same = (a: Only | null, b: Only) =>
-  a !== null && a.kind === b.kind && a.id === b.id
+/** What the list can pick out: one thing, by its id. */
+type Listed = Extract<Only, { id: string }>
+
+const same = (a: Only | null, b: Listed) =>
+  a !== null && "id" in a && a.kind === b.kind && a.id === b.id
+/** Stable when it is not several parts that are shown on their own. */
+const NONE: string[] = []
 
 /** A row that is picked out is lit the way a button that is on is. */
 const ROW =
@@ -56,7 +61,10 @@ export function PartsPanel({
   const panel = React.useRef<HTMLDivElement>(null)
   const { model } = loaded
 
-  const pick = (what: Only) => setView({ only: same(only, what) ? null : what })
+  const pick = (what: Listed) =>
+    setView({ only: same(only, what) ? null : what })
+  // several picked out together in the view, and shown on their own, are each lit here
+  const among = only?.kind === "parts" ? only.ids : NONE
 
   React.useEffect(() => {
     const away = (event: PointerEvent) => {
@@ -87,7 +95,7 @@ export function PartsPanel({
         {model.groups.map((group) => {
           const parts = model.parts.filter((part) => part.group === group.id)
           if (parts.length === 0) return null
-          const whole: Only = { kind: "group", id: group.id }
+          const whole: Listed = { kind: "group", id: group.id }
           const picked = same(only, whole)
           return (
             <Collapsible key={group.id} defaultOpen>
@@ -120,8 +128,8 @@ export function PartsPanel({
               </div>
               <CollapsibleContent className="flex flex-col gap-px pt-px">
                 {parts.map((part) => {
-                  const one: Only = { kind: "part", id: part.id }
-                  const lit = same(only, one)
+                  const one: Listed = { kind: "part", id: part.id }
+                  const lit = same(only, one) || among.includes(part.id)
                   return (
                     <button
                       key={part.id}
@@ -153,7 +161,7 @@ export function PartsPanel({
         {/* not parts, but space the parts have to leave: listed with them all the same */}
         {model.keepouts.length > 0 &&
           (() => {
-            const all: Only = { kind: "keepouts", id: "keepouts" }
+            const all: Listed = { kind: "keepouts", id: "keepouts" }
             const lit = same(only, all)
             return (
               <button

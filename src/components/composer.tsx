@@ -52,6 +52,7 @@ import {
   useActiveProject,
   useStack,
   useStore,
+  type Called,
   type Note,
 } from "@/lib/store"
 import { useNow } from "@/lib/time"
@@ -297,18 +298,44 @@ function AccessMenu() {
   )
 }
 
+/** The cross on a chip, which takes it back off the message. */
+const OFF =
+  "shrink-0 cursor-pointer rounded-full p-0.5 text-muted-foreground outline-none hover:text-foreground"
+
 /**
- * What has been said of parts and is waiting to go with the next message: a chip for
- * each, in a row that scrolls sideways when there are more than fit. A chip says which
- * part and how what was said of it begins; pressed, it opens that again beside the part.
+ * What is waiting to go with the next message: the parts called on from the view, and
+ * what has been said of parts. A chip for each, in one row that scrolls sideways when
+ * there are more than fit, so that however many there are the box is no taller for
+ * them. A part called on is a chip of its name. What was said of a part is a chip that
+ * says which part and how it begins; pressed, it opens that again beside the part.
  */
-function Notes({ notes }: { notes: Note[] }) {
+function Waiting({ called, notes }: { called: Called[]; notes: Note[] }) {
   const write = useStore((state) => state.write)
   const dropNote = useStore((state) => state.dropNote)
+  const dropCalled = useStore((state) => state.dropCalled)
   const writing = useStore((state) => state.writing)
   return (
     <InputGroupAddon align="block-start" className="pb-0">
       <div className="flex min-w-0 [scrollbar-width:none] gap-1.5 overflow-x-auto">
+        {called.map((part) => (
+          <Badge
+            key={part.id}
+            data-called={part.id}
+            variant="secondary"
+            title={`@${part.id}`}
+            className="h-6 max-w-44 shrink-0 gap-1 pr-1"
+          >
+            <span className="truncate">{part.label}</span>
+            <button
+              type="button"
+              onClick={() => dropCalled(part.id)}
+              aria-label={`Leave ${part.label} out of the message`}
+              className={OFF}
+            >
+              <XIcon className="size-3" />
+            </button>
+          </Badge>
+        ))}
         {notes.map((note) => (
           <Badge
             key={note.id}
@@ -334,7 +361,7 @@ function Notes({ notes }: { notes: Note[] }) {
               type="button"
               onClick={() => dropNote(note.id)}
               aria-label={`Take back what was said of ${note.part.label}`}
-              className="shrink-0 cursor-pointer rounded-full p-0.5 text-muted-foreground outline-none hover:text-foreground"
+              className={OFF}
             >
               <XIcon className="size-3" />
             </button>
@@ -345,9 +372,13 @@ function Notes({ notes }: { notes: Note[] }) {
   )
 }
 
-/** Stable when a project has nothing said of its parts. */
+/** Stable when a project has nothing said of its parts, and none of them called on. */
 const NO_NOTES: Note[] = []
+const NO_CALLED: Called[] = []
 const NO_CHOICES: Choice[] = []
+
+/** How many times the message box has taken the typing for being asked to. */
+let answered = 0
 
 /** The parts of the model on screen, as what @ can name: each by its id, shown by its label. */
 function partChoices(): Choice[] {
@@ -376,6 +407,9 @@ export function Composer({
   const setText = useStore((state) => state.setDraft)
   const notes = useStore((state) =>
     project ? (state.notes[project.id] ?? NO_NOTES) : NO_NOTES
+  )
+  const called = useStore((state) =>
+    project ? (state.called[project.id] ?? NO_CALLED) : NO_CALLED
   )
   // a line high until it is being written in: then it has room for what is written
   const [within, setWithin] = React.useState(false)
@@ -441,6 +475,18 @@ export function Composer({
   }
   const follow = (at: HTMLTextAreaElement) => setCaret(at.selectionStart)
 
+  // Parts called on from the view go on the box as chips, for the user to say what of
+  // them: the box takes the typing. It may only now be on show, having been asked before.
+  const asked = useStore((state) => state.writeRequests)
+  React.useEffect(() => {
+    const at = box.current
+    if (asked === answered || !at) return
+    answered = asked
+    at.focus()
+    at.setSelectionRange(at.value.length, at.value.length)
+    setCaret(at.value.length)
+  }, [asked])
+
   // The part the keys are on lights up in the view, as it does under the pointer; and
   // for as long as a part is being named, the view shows it through all the others.
   const hover = useStore((state) => state.hover)
@@ -468,7 +514,7 @@ export function Composer({
   const busy = !project || (running !== undefined && running.id === open?.id)
   const elsewhere = running !== undefined && !busy
 
-  const something = text.trim() !== "" || notes.length > 0
+  const something = text.trim() !== "" || notes.length > 0 || called.length > 0
   const submit = () => {
     if (!busy && !elsewhere && something) send()
   }
@@ -500,7 +546,9 @@ export function Composer({
           onPick={pick}
         />
       )}
-      {notes.length > 0 && <Notes notes={notes} />}
+      {(called.length > 0 || notes.length > 0) && (
+        <Waiting called={called} notes={notes} />
+      )}
       <InputGroupTextarea
         value={text}
         ref={box}

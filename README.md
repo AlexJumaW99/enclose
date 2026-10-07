@@ -76,8 +76,9 @@ they are, and bare metal. A part given no colour takes the one that falls to its
 project's files is changed by this: it is only how the app draws them.
 
 Moving around on a trackpad: move two fingers across it to orbit, pinch to zoom in on
-whatever is under the pointer, and hold Shift to pan. With a mouse: drag to orbit, turn
-the wheel to zoom, and drag with Shift held, or with the right button, to pan.
+whatever is under the pointer, and hold Shift to pan. With a mouse: drag with the right
+button to orbit, turn the wheel to zoom, and hold Shift with either to pan. The main
+button is not the camera's: it picks parts out.
 
 Orbiting does not stop straight above the model or straight below: it carries on over
 the top and round the far side, with the model upside down, as it does in Blender. A set
@@ -189,6 +190,20 @@ chip on the message box and as a mark on the part, and you can go on to say thin
 other parts, which gather there. Click a chip or a mark to change what you said. Cmd+Enter
 sends at once, with everything gathered and whatever is in the message box. Each thing
 said goes to Claude with its part and the point clicked, in the model's coordinates.
+
+Drag across the view and a box is drawn, which picks out several parts at once: drawn
+from left to right, the parts wholly inside it; from right to left, every part it
+touches, and its edge is dashed to say so. Shift adds to what is picked out, with a box
+or with a click, and a click with Shift on a part already among it takes that part back
+out. What a box takes in goes right through the model, so while it is drawn the view
+shows what it takes in so far solid and everything else see-through, whatever the
+shading. Let go, the model is drawn as it was, and the parts picked out show through
+whatever is in front of them: veiled in white where each is, with a line round it. I
+shows them on their own, as it does one part. A button at the foot of the view, Add
+parts to chat, puts them on the message box, a chip for each in a row that scrolls
+sideways, and opens the conversation to go on from there; they go to Claude by name,
+ahead of what you write, as if you had written them with @. Click where there is nothing
+to let go of them; Esc drops a box that is still being drawn.
 
 A message can call on things by name. Write @ and a list of the model's parts comes up
 over the box: the arrow keys move through it, and Enter or Tab puts the part in, by its

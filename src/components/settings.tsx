@@ -321,7 +321,7 @@ const KEYS: { title: string; rows: [string, string[]][] }[] = [
       ["Section", ["S"]],
       ["Cut across an axis, while sectioned", ["X", "Y", "Z"]],
       ["Explode", ["E"]],
-      ["Show the part picked out on its own, close to", ["I"]],
+      ["Show what is picked out on its own, close to", ["I"]],
       ["Parts", ["P"]],
       ["Grid: the ground and the world's axes", [SHIFT, "G"]],
       ["Put away the list, then leave the last thing gone into", ["Esc"]],
@@ -352,8 +352,15 @@ function Shortcuts() {
       ))}
       <p className="px-1 text-sm text-muted-foreground">
         With a trackpad: two fingers turn the model, a pinch zooms, and Shift
-        with two fingers pans. With a mouse: drag to turn, the wheel zooms, and
-        Shift with a drag pans.
+        with two fingers pans. With a mouse: drag with the right button to turn,
+        the wheel zooms, and Shift with that drag pans.
+      </p>
+      <p className="px-1 text-sm text-muted-foreground">
+        A click picks a part out, and a drag draws a box that picks out several:
+        from left to right the parts wholly inside it, from right to left every
+        part it touches. Shift adds to what is picked out, or with a click on a
+        part already among it, takes that part back out. Parts picked out
+        together show through whatever is in front of them.
       </p>
     </>
   )

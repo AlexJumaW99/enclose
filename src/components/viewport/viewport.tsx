@@ -1,6 +1,6 @@
 import * as React from "react"
 import { cn } from "cn"
-import { FolderPlusIcon, TriangleAlertIcon } from "lucide-react"
+import { FolderPlusIcon, PlusIcon, TriangleAlertIcon } from "lucide-react"
 
 import type { Project } from "@shared/api"
 import { PartsPanel } from "@/components/parts-panel"
@@ -18,8 +18,16 @@ import {
 import { Spinner } from "@/components/ui/spinner"
 import { readModel } from "@/lib/model"
 import { spokenFor } from "@/lib/keys"
+import { notCalledOn } from "@/lib/mentions"
 import { VIEWS } from "@/lib/orient"
-import { SPREAD, useStore, type Note } from "@/lib/store"
+import {
+  SPREAD,
+  useStore,
+  type Called,
+  type Note,
+  type Only,
+  type Selection,
+} from "@/lib/store"
 import { AxisGizmo } from "./axis-gizmo"
 import { bridge } from "./bridge"
 import { ExplodeSlider } from "./explode-slider"
@@ -32,6 +40,65 @@ import { sectionAcross, sectionFacing, SectionPlanes } from "./section-planes"
 /** Stable when a project has nothing said of its parts, or no colours given. */
 const NO_NOTES: Note[] = []
 const NO_COLOURS: Record<string, string> = {}
+const NO_PARTS: string[] = []
+const NO_CALLED: Called[] = []
+
+/** The parts that I has shown on their own and gone up to: none, if nothing is. */
+function nearOf(only: Only | null): string[] {
+  if (!only?.near) return NO_PARTS
+  return only.kind === "parts"
+    ? only.ids
+    : only.kind === "part"
+      ? [only.id]
+      : NO_PARTS
+}
+
+/** The parts picked out, by id: the several, or the one. */
+function pickedOut(): string[] {
+  const { several, selection } = useStore.getState()
+  return several.length > 0
+    ? several
+    : selection
+      ? [selection.part.id]
+      : NO_PARTS
+}
+
+/**
+ * With parts picked out together, at the foot of the view: they are called on for the
+ * message to Claude, where each shows as a chip, and the message is brought up to be
+ * gone on with. It is there for as long as the message does not name them all, by a
+ * chip or in its own words.
+ */
+function AddToChat({
+  loaded,
+  projectId,
+}: {
+  loaded: LoadedModel
+  projectId: string
+}) {
+  const several = useStore((s) => s.several)
+  const sweeping = useStore((s) => s.sweep !== null)
+  const draft = useStore((s) => s.drafts[projectId] ?? "")
+  const called = useStore((s) => s.called[projectId] ?? NO_CALLED)
+  const callOn = useStore((s) => s.callOn)
+  const count = notCalledOn(draft, several).filter(
+    (id) => !called.some((part) => part.id === id)
+  ).length
+  if (count === 0 || sweeping) return null
+  const picked = loaded.parts.flatMap(({ part }) =>
+    several.includes(part.id) ? [{ id: part.id, label: part.label }] : []
+  )
+  return (
+    <Button
+      // room either side of the words, a little less of it past the sign
+      className="pointer-events-auto animate-in gap-2 pl-5 shadow-md duration-150 fade-in slide-in-from-bottom-2 has-data-[icon=inline-end]:pr-4"
+      onClick={() => callOn(picked)}
+    >
+      Add {count} {count === 1 ? "part" : "parts"} to chat
+      <PlusIcon data-icon="inline-end" />
+    </Button>
+  )
+}
 
 type Loading =
   | { status: "loading"; done: number; total: number }
@@ -107,7 +174,8 @@ function Model({ project }: { project: Project }) {
   const view = useStore((s) => s.view)
   const setView = useStore((s) => s.setView)
   const selection = useStore((s) => s.selection)
-  const select = useStore((s) => s.select)
+  const several = useStore((s) => s.several)
+  const sweep = useStore((s) => s.sweep)
   const hoveredId = useStore((s) => s.hoveredId)
   const seeking = useStore((s) => s.seeking)
   const plain = useStore((s) => s.plain)
@@ -132,14 +200,62 @@ function Model({ project }: { project: Project }) {
     [loaded]
   )
 
+  // Picking parts out. A click picks one, at the place on it that was clicked, and what
+  // can be done with that part is shown there. A box drawn across the view picks every
+  // part it takes in, together, and so does a click with Shift held: it adds a part to
+  // what is picked out, or takes back out one that was among it. Parts picked out
+  // together are hinted at through whatever of the model is in front of them.
+  /** These parts with what is picked out already, in the order the model has them. */
+  const withPicked = React.useCallback(
+    (ids: string[]) => {
+      const had = pickedOut()
+      return (loaded?.parts ?? [])
+        .map((part) => part.part.id)
+        .filter((id) => had.includes(id) || ids.includes(id))
+    },
+    [loaded]
+  )
+  const pick = React.useCallback(
+    (selection: Selection | null, add: boolean) => {
+      const { select, selectSeveral } = useStore.getState()
+      const had = pickedOut()
+      // the first part picked out is picked out the same, Shift or no
+      if (!add || (selection && had.length === 0)) return select(selection)
+      // Shift on nothing leaves what is picked out as it is
+      if (!selection) return
+      const { id } = selection.part
+      selectSeveral(
+        had.includes(id)
+          ? had.filter((other) => other !== id)
+          : withPicked([id])
+      )
+    },
+    [withPicked]
+  )
+  const sweepTo = React.useCallback(
+    (ids: string[] | null, add: boolean) =>
+      useStore.getState().sweepOver(ids && add ? withPicked(ids) : ids),
+    [withPicked]
+  )
+  const take = React.useCallback(
+    (ids: string[], add: boolean) => {
+      const { selectSeveral } = useStore.getState()
+      if (!add) return selectSeveral(ids)
+      // nothing more than was picked out already: it stays as it was
+      const had = pickedOut()
+      if (!ids.every((id) => had.includes(id))) selectSeveral(withPicked(ids))
+    },
+    [withPicked]
+  )
+
   // Cmd+1 is the view the model opened with; Cmd+2 to 7 are the six flat ones. S cuts
-  // the model open and E pulls it apart, both again to undo. I shows the part that is
-  // picked out on its own, close to, and again brings the rest back. P brings up the
-  // list of parts, and puts it away. While the model is cut open, X and Y choose the axis
-  // the cut goes across (and Z, which the shading menu passes on). Esc puts the parts
-  // list away, and then gets out of the section, the explode or what was shown on its
-  // own, whichever was gone into last. Shift+G rules the ground and draws the world's
-  // axes, as it brings up the grid in Figma, and again takes them away.
+  // the model open and E pulls it apart, both again to undo. I shows what is picked
+  // out, one part or several, on its own and close to, and again brings the rest back.
+  // P brings up the list of parts, and puts it away. While the model is cut open, X and
+  // Y choose the axis the cut goes across (and Z, which the shading menu passes on). Esc
+  // puts the parts list away, and then gets out of the section, the explode or what was
+  // shown on its own, whichever was gone into last. Shift+G rules the ground and draws
+  // the world's axes, as it brings up the grid in Figma, and again takes them away.
   React.useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.altKey) return
@@ -174,7 +290,7 @@ function Model({ project }: { project: Project }) {
       }
       // a letter on its own: not one held down, and not one being typed somewhere
       if (!loaded || !middle || event.repeat || spokenFor(event.target)) return
-      const { view, setView, cutOpen, selection } = useStore.getState()
+      const { view, setView, cutOpen } = useStore.getState()
       const letter = event.key.toLowerCase()
       if (letter === "s") {
         if (view.section) setView({ section: null })
@@ -182,11 +298,19 @@ function Model({ project }: { project: Project }) {
       } else if (letter === "e")
         setView({ exploded: !view.exploded, spread: SPREAD.min })
       else if (letter === "i") {
-        const id = selection?.part.id
-        const near = view.only?.near ? view.only.id : null
-        if (id && id !== near)
-          setView({ only: { kind: "part", id, near: true } })
-        else if (near) setView({ only: null })
+        const wanted = pickedOut()
+        const near = nearOf(view.only)
+        const there =
+          wanted.length === near.length &&
+          wanted.every((id) => near.includes(id))
+        if (wanted.length > 0 && !there)
+          setView({
+            only:
+              wanted.length > 1
+                ? { kind: "parts", ids: wanted, near: true }
+                : { kind: "part", id: wanted[0], near: true },
+          })
+        else if (near.length > 0) setView({ only: null })
         else return
       } else if (letter === "p") {
         const { partsOpen, setPartsOpen } = useStore.getState()
@@ -200,19 +324,22 @@ function Model({ project }: { project: Project }) {
     return () => window.removeEventListener("keydown", key)
   }, [goHome, loaded, middle])
 
-  // The camera goes to the part that I shows on its own, and follows it if it is pulled
-  // out from the rest; and goes back when that part is no longer the one shown.
-  const near = view.only?.near ? view.only.id : null
+  // The camera goes to what I shows on its own, one part or several together, and
+  // follows it if it is pulled out from the rest; and goes back when that is no longer
+  // what is shown.
+  const near = React.useMemo(() => nearOf(view.only), [view.only])
   const explode = view.exploded ? view.spread : 0
   React.useEffect(() => {
-    const part = loaded?.parts.find((part) => part.part.id === near)
+    const boxes = (loaded?.parts ?? [])
+      .filter((part) => near.includes(part.part.id))
+      .map((part) =>
+        part.box
+          .clone()
+          .applyMatrix4(part.home)
+          .translate(part.away.clone().multiplyScalar(explode))
+      )
     bridge.focus?.(
-      part
-        ? part.box
-            .clone()
-            .applyMatrix4(part.home)
-            .translate(part.away.clone().multiplyScalar(explode))
-        : null
+      boxes.length > 0 ? boxes.reduce((all, box) => all.union(box)) : null
     )
   }, [loaded, near, explode])
 
@@ -236,12 +363,23 @@ function Model({ project }: { project: Project }) {
     const there =
       only.kind === "part"
         ? parts.some((part) => part.id === only.id)
-        : only.kind === "group"
-          ? groups.some((group) => group.id === only.id) &&
-            parts.some((part) => part.group === only.id)
-          : keepouts.length > 0
+        : only.kind === "parts"
+          ? parts.some((part) => only.ids.includes(part.id))
+          : only.kind === "group"
+            ? groups.some((group) => group.id === only.id) &&
+              parts.some((part) => part.group === only.id)
+            : keepouts.length > 0
     if (!there) setView({ only: null })
   }, [loaded, setView])
+  // And of the parts picked out together, the ones it takes away are no longer.
+  React.useEffect(() => {
+    if (!loaded) return
+    const { several, selectSeveral } = useStore.getState()
+    const still = several.filter((id) =>
+      loaded.parts.some((part) => part.part.id === id)
+    )
+    if (still.length < several.length) selectSeveral(still)
+  }, [loaded])
 
   // what Claude gets when it asks which parts are on screen
   React.useEffect(() => {
@@ -288,13 +426,17 @@ function Model({ project }: { project: Project }) {
           colours={colours}
           view={view}
           selectedId={selection?.part.id ?? null}
+          several={several}
+          sweep={sweep}
           hoveredId={hoveredId}
           seeking={seeking && !loaded.standIn}
           plain={plain}
           // the first model made takes the cube's place, and is framed afresh
           homeKey={`${project.id}:${loaded.standIn ? "cube" : "model"}:${homeRequests}`}
           // the stand-in is nothing to ask about: it is not picked, and does not light up
-          onPick={loaded.standIn ? nothing : select}
+          onPick={loaded.standIn ? nothing : pick}
+          onSweep={loaded.standIn ? nothing : sweepTo}
+          onTake={loaded.standIn ? nothing : take}
           onHover={loaded.standIn ? nothing : hover}
           onSection={moveSection}
         />
@@ -332,9 +474,12 @@ function Model({ project }: { project: Project }) {
           )}
         />
       )}
-      {loaded && view.exploded && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-5 flex justify-center">
-          <ExplodeSlider />
+      {/* at the foot of the view, in the middle: what to do with the parts picked out
+          together, over how far apart the parts are pulled */}
+      {loaded && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-5 flex flex-col items-center gap-2.5">
+          <AddToChat loaded={loaded} projectId={project.id} />
+          {view.exploded && <ExplodeSlider />}
         </div>
       )}
       {loaded && middle && (

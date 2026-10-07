@@ -111,3 +111,18 @@ export function stretches(text: string): Stretch[] {
   if (at < text.length) out.push({ text: text.slice(at), kind: null })
   return out
 }
+
+/** Those of some parts that a message does not yet call on by name. */
+export function notCalledOn(text: string, ids: string[]): string[] {
+  // a name ends with a letter or a number: what follows it is the sentence's
+  const named = new Set(
+    text.split(/\s+/).map((word) => word.replace(/[^\w]+$/, ""))
+  )
+  return ids.filter((id) => !named.has(MARK.part + id))
+}
+
+/** A message with parts called on by name ahead of what it says: those it does not name. */
+export function callingOn(text: string, ids: string[]): string {
+  const names = notCalledOn(text, ids).map((id) => MARK.part + id)
+  return [...names, text].filter(Boolean).join(" ")
+}
