@@ -311,7 +311,8 @@ function ProjectCard({ project, now }: { project: Project; now: number }) {
           size="icon-xs"
           aria-label={`Remove ${project.name}`}
           title="Remove project"
-          className="pointer-events-auto absolute top-1.5 right-1.5 opacity-0 transition-opacity group-hover/card:opacity-100 focus-visible:opacity-100"
+          // under the pointer it is a red disc with the cross in white: it takes away
+          className="pointer-events-auto absolute top-1.5 right-1.5 opacity-0 transition-[opacity,color,background-color] group-hover/card:opacity-100 hover:bg-red-600 hover:text-white focus-visible:opacity-100 dark:hover:bg-red-600"
           onClick={() => void removeProject(project.id)}
         >
           <XIcon />
