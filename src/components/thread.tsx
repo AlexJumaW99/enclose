@@ -26,6 +26,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { stretches } from "@/lib/mentions"
 import { inBlocks, type Block } from "@/lib/steps"
 import {
   fitThread,
@@ -62,7 +63,23 @@ function UserMessage({ item }: { item: Of<"user"> }) {
           {note.text}
         </div>
       ))}
-      {item.text && <div className={SAID}>{item.text}</div>}
+      {item.text && (
+        <div className={SAID}>
+          {/* the names in it that call on something are set off from the rest */}
+          {stretches(item.text).map((stretch, index) =>
+            stretch.kind ? (
+              <span
+                key={index}
+                className="rounded-md bg-foreground/10 px-1 py-0.5 font-medium whitespace-nowrap"
+              >
+                {stretch.text}
+              </span>
+            ) : (
+              stretch.text
+            )
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -441,7 +458,7 @@ export function Thread({ project }: { project: Project }) {
         <Composer
           placeholder={
             project.manifest
-              ? "Message Claude"
+              ? "Ask anything, @tag parts, $use skills or / for commands"
               : "A case for a Raspberry Pi Zero, with a lid that screws on…"
           }
           // opened to be written in: by its button, or by Cmd+B

@@ -1007,6 +1007,7 @@ export function Scene({
   view,
   selectedId,
   hoveredId,
+  seeking,
   notes,
   colours,
   homeKey,
@@ -1023,6 +1024,8 @@ export function Scene({
   colours: Record<string, string>
   selectedId: string | null
   hoveredId: string | null
+  /** a part is being looked for by name: the one lit up is shown through all the rest */
+  seeking: boolean
   /** changes when the camera should go back to its home view */
   homeKey: string
   onPick: (selection: Selection | null) => void
@@ -1038,7 +1041,14 @@ export function Scene({
   )
   const radius = loaded.box.getSize(new THREE.Vector3()).length() / 2
   const explode = view.exploded ? view.spread : 0
-  const looks = loaded.parts.map((part) => appearance(part, loaded, view))
+  const looks = loaded.parts.map((part): ReturnType<typeof appearance> => {
+    const seen = appearance(part, loaded, view)
+    // While a part is looked for, it alone is solid and all the rest is see-through,
+    // whatever the shading: it is found wherever it is, inside another part or behind.
+    return seeking
+      ? { ...seen, look: part.part.id === hoveredId ? "solid" : "glass" }
+      : seen
+  })
   const anyGlass = looks.some(({ shown, look }) => shown && look === "glass")
   // The parts a cut leaves a face on: the solid ones, drawn as such. Each has its place
   // among them, which is the order their cut faces are drawn in.
@@ -1107,8 +1117,13 @@ export function Scene({
               look={look}
               cover={anyGlass}
               cut={place(index)}
-              hovered={hoveredId === part.part.id}
-              selected={selectedId === part.part.id}
+              // the part that is looked for is the one thing picked out, while it is
+              hovered={!seeking && hoveredId === part.part.id}
+              selected={
+                seeking
+                  ? hoveredId === part.part.id
+                  : selectedId === part.part.id
+              }
               explode={explode}
               plane={plane}
               colors={colors}

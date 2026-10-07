@@ -12,6 +12,7 @@ import {
   EFFORTS,
   type Access,
   type ClaudeStatus,
+  type Commands,
   type Effort,
   type ModelChoice,
   type PartNote,
@@ -227,6 +228,8 @@ type State = {
   effort: Effort | null
   /** the models Claude Code offers, once it has said */
   models: ModelChoice[]
+  /** what Claude Code can be called on for in each project's folder, once it has said */
+  commands: Record<string, Commands>
   claude: ClaudeStatus | null
   view: View
   /** the cut each project was last left with: where cutting it open again starts from */
@@ -236,6 +239,11 @@ type State = {
   selection: Selection | null
   /** the part under the pointer, in the view or in the parts list */
   hoveredId: string | null
+  /**
+   * A part is being looked for by name, in a message. The view shows where it is: all
+   * of the model goes see-through but the part the list is on, which is `hoveredId`.
+   */
+  seeking: boolean
   /**
    * What is being written of the part picked out, in the view beside it: a new note
    * ("new"), or one already made that is being changed (its id). Null when nothing is.
@@ -280,6 +288,7 @@ type State = {
   goHome(): void
   select(selection: Selection | null): void
   hover(partId: string | null): void
+  seek(seeking: boolean): void
   /**
    * Start writing of the part picked out ("new"), go back to a note already made (its
    * id), or stop writing (null).
@@ -331,12 +340,14 @@ export const useStore = create<State>()((set, get) => ({
   model: saved(MODEL_KEY) || null,
   effort: EFFORTS.find((effort) => effort === saved(EFFORT_KEY)) ?? null,
   models: [],
+  commands: {},
   claude: null,
   view: homeView(),
   cuts: readCuts(saved(CUTS_KEY)),
   entered: [],
   selection: null,
   hoveredId: null,
+  seeking: false,
   writing: null,
   ...savedWaiting(),
   colours: savedColours(),
@@ -424,6 +435,10 @@ export const useStore = create<State>()((set, get) => ({
 
   hover(hoveredId) {
     if (get().hoveredId !== hoveredId) set({ hoveredId })
+  },
+
+  seek(seeking) {
+    if (get().seeking !== seeking) set({ seeking })
   },
 
   write(note) {
@@ -579,6 +594,29 @@ export async function askModels() {
   if (useStore.getState().models.length > 0) return
   const models = await window.cad.claude.models()
   if (models.length > 0) useStore.setState({ models })
+}
+
+/** How long what Claude Code said it has in a folder is taken as still so, in ms. */
+const COMMANDS_FRESH_MS = 60_000
+/** When each project's commands were last asked for. */
+const commandsAsked = new Map<string, number>()
+
+/**
+ * Ask Claude Code what commands and skills it has in a project's folder, unless it was
+ * asked a moment ago. What it said before stays until it has said again.
+ */
+export async function askCommands(projectId: string) {
+  const now = Date.now()
+  if (now - (commandsAsked.get(projectId) ?? -Infinity) < COMMANDS_FRESH_MS)
+    return
+  commandsAsked.set(projectId, now)
+  const found = await window.cad.claude.commands(projectId)
+  if (found.commands.length + found.skills.length > 0)
+    useStore.setState((state) => ({
+      commands: { ...state.commands, [projectId]: found },
+    }))
+  // it would not say: it is asked again the next time
+  else commandsAsked.delete(projectId)
 }
 
 /** Put an item into a thread, replacing the one with the same id if it is already there. */

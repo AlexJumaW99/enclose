@@ -11,6 +11,7 @@ import {
   MODEL_SCHEME,
   type ClaudeStatus,
   type Manner,
+  type Commands,
   type ModelChoice,
   type ModelSource,
   type PartNote,
@@ -20,7 +21,7 @@ import {
   type ViewportRequest,
   type ViewportResponse,
 } from "../shared/api"
-import { findClaude, followRename, listModels } from "./claude"
+import { findClaude, followRename, listCommands, listModels } from "./claude"
 import { standInName } from "./names"
 import { folderName, Projects, resolveInside } from "./projects"
 import { SettingsStore } from "./settings"
@@ -364,6 +365,21 @@ function wire() {
       return found
     })
     return models
+  })
+  // What it can be called on for is asked afresh each time: it changes with the folder,
+  // and with what the user installs. One asking at a time for a project.
+  const commands = new Map<string, Promise<Commands>>()
+  ipcMain.handle(CHANNEL.claudeCommands, (_, id: string): Promise<Commands> => {
+    const project = projects.get(String(id))
+    if (!project) return Promise.resolve({ commands: [], skills: [] })
+    let asking = commands.get(project.id)
+    if (!asking) {
+      asking = claudeFound
+        .then((found) => listCommands(found, project.path))
+        .finally(() => commands.delete(project.id))
+      commands.set(project.id, asking)
+    }
+    return asking
   })
 
   ipcMain.handle(CHANNEL.settingsGet, (): Settings => settings.get())

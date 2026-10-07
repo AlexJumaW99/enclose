@@ -16,6 +16,7 @@ import {
 
 import type { Access, Effort } from "@shared/api"
 import { ClaudeIcon } from "@/components/icons"
+import { MentionMenu, type Choice } from "@/components/mention-menu"
 import { Badge } from "@/components/ui/badge"
 import {
   DropdownMenu,
@@ -44,7 +45,9 @@ import {
   chosenModel,
   EFFORT_WORDS,
 } from "@/lib/manner"
+import { matching, putIn, tokenAt } from "@/lib/mentions"
 import {
+  askCommands,
   askModels,
   useActiveProject,
   useStack,
@@ -52,12 +55,23 @@ import {
   type Note,
 } from "@/lib/store"
 import { useNow } from "@/lib/time"
+import { bridge } from "./viewport/bridge"
 
 /** What the choices under a message go without, one after another, as room runs out. */
 const GIVEN_UP = ["arrows", "access", "effort", "model"]
 
-/** One of the choices: small print, with its pictures to match, and never squeezed. */
-const CHOICE = "shrink-0 text-[11px] [&>svg]:size-3!"
+/**
+ * The choices sit a little lower than the round button beside them, which is taller: as
+ * far from the bottom of the box, near enough, as they are from its side.
+ */
+const LOW = "translate-y-1"
+
+/**
+ * One of the choices: small print, never squeezed. Its pictures are small to match, and
+ * drawn with a heavier line for it, to be of a weight with the words; its arrow is a
+ * little bigger than they are, being less of a shape.
+ */
+const CHOICE = `shrink-0 ${LOW} text-[11px] [&>svg]:size-3! [&>svg]:stroke-3 [&>svg[data-icon]]:size-3.5! [&>svg[data-icon]]:stroke-[2.5]`
 
 /** The arrow of a choice that can do without one. */
 const ARROW = "opacity-60 group-data-[short~=arrows]/bar:hidden"
@@ -95,7 +109,7 @@ const ACCESS_TITLE = "What Claude may do without asking"
 
 /** A thin line between two of the choices under the message. */
 function Divider() {
-  return <span aria-hidden className="h-3.5 w-px shrink-0 bg-border" />
+  return <span aria-hidden className={`h-3.5 w-px shrink-0 bg-border ${LOW}`} />
 }
 
 /** The model that will answer, by whose it is and its name. It opens onto the others. */
@@ -333,6 +347,17 @@ function Notes({ notes }: { notes: Note[] }) {
 
 /** Stable when a project has nothing said of its parts. */
 const NO_NOTES: Note[] = []
+const NO_CHOICES: Choice[] = []
+
+/** The parts of the model on screen, as what @ can name: each by its id, shown by its label. */
+function partChoices(): Choice[] {
+  const parts = (bridge.parts?.() ?? []) as { id: string; label: string }[]
+  return parts.map((part) => ({
+    name: part.id,
+    also: part.label,
+    detail: `@${part.id}`,
+  }))
+}
 
 /** Where a message to Claude is written, with what has been said of parts to go with it. */
 export function Composer({
@@ -355,6 +380,83 @@ export function Composer({
   // a line high until it is being written in: then it has room for what is written
   const [within, setWithin] = React.useState(false)
   const roomy = within || text !== ""
+
+  // A name being written - a part's after @, a skill's after $, a command's after / -
+  // brings up what it could be, over the box. Esc puts the list away for that name.
+  const box = React.useRef<HTMLTextAreaElement>(null)
+  const [caret, setCaret] = React.useState(0)
+  const [shut, setShut] = React.useState<string | null>(null)
+  const token = within ? tokenAt(text, caret) : null
+  const naming = token ? `${token.kind}:${token.from}` : null
+  // a name that was put away is done with once the caret has left it, or it is gone
+  if (shut !== null && shut !== naming) setShut(null)
+  const calling = token !== null && naming !== shut ? token : null
+  const kind = calling?.kind ?? null
+  const projectId = project?.id ?? null
+  const has = useStore((state) =>
+    projectId ? state.commands[projectId] : undefined
+  )
+  // what Claude Code has is asked for when the box opens on a project, and again when
+  // one of its names is begun, should it have changed since
+  const ofClaude = kind === "skill" || kind === "command"
+  React.useEffect(() => {
+    if (projectId) void askCommands(projectId)
+  }, [projectId, ofClaude])
+  // the parts are what is on screen when the name is begun
+  const parts = React.useMemo(
+    () => (kind === "part" ? partChoices() : NO_CHOICES),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [kind, naming, project?.revision]
+  )
+  const all: Choice[] =
+    kind === "part"
+      ? parts
+      : kind === "skill"
+        ? (has?.skills ?? NO_CHOICES)
+        : kind === "command"
+          ? (has?.commands ?? NO_CHOICES)
+          : NO_CHOICES
+  const query = calling?.query ?? ""
+  const offered = React.useMemo(() => matching(all, query), [all, query])
+  // the keys start at the top of the list each time what is written changes
+  const [chosen, setChosen] = React.useState({ of: "", index: 0 })
+  const written = `${naming}:${query}`
+  const active =
+    chosen.of === written ? Math.min(chosen.index, offered.length - 1) : 0
+  const move = (index: number) => setChosen({ of: written, index })
+
+  // the caret goes after a name that was put in, once the box holds it
+  const caretTo = React.useRef<number | null>(null)
+  React.useLayoutEffect(() => {
+    if (caretTo.current === null) return
+    box.current?.setSelectionRange(caretTo.current, caretTo.current)
+    caretTo.current = null
+  }, [text])
+  const pick = (choice: Choice) => {
+    if (!calling) return
+    const put = putIn(text, calling, choice.name)
+    caretTo.current = put.caret
+    setText(put.text)
+    setCaret(put.caret)
+  }
+  const follow = (at: HTMLTextAreaElement) => setCaret(at.selectionStart)
+
+  // The part the keys are on lights up in the view, as it does under the pointer; and
+  // for as long as a part is being named, the view shows it through all the others.
+  const hover = useStore((state) => state.hover)
+  const seek = useStore((state) => state.seek)
+  const seeking = kind === "part"
+  const lit = seeking ? (offered[active]?.name ?? null) : null
+  React.useEffect(() => {
+    if (!seeking) return
+    seek(true)
+    return () => seek(false)
+  }, [seeking, seek])
+  React.useEffect(() => {
+    if (lit === null) return
+    hover(lit)
+    return () => hover(null)
+  }, [lit, hover])
   const choices = useFit(
     useStore((state) =>
       [state.models.length, state.model, state.effort, state.access].join()
@@ -387,11 +489,48 @@ export function Composer({
         if (!stays) setWithin(false)
       }}
     >
+      {calling && (
+        <MentionMenu
+          kind={calling.kind}
+          choices={offered}
+          any={all.length > 0}
+          asking={ofClaude && has === undefined}
+          active={active}
+          onActive={move}
+          onPick={pick}
+        />
+      )}
       {notes.length > 0 && <Notes notes={notes} />}
       <InputGroupTextarea
         value={text}
-        onChange={(event) => setText(event.target.value)}
+        ref={box}
+        onChange={(event) => {
+          setText(event.target.value)
+          follow(event.target)
+        }}
+        onSelect={(event) => follow(event.currentTarget)}
         onKeyDown={(event) => {
+          if (calling && !event.nativeEvent.isComposing) {
+            if (event.key === "Escape") {
+              event.preventDefault()
+              setShut(naming)
+              return
+            }
+            const step =
+              event.key === "ArrowDown" ? 1 : event.key === "ArrowUp" ? -1 : 0
+            if (step !== 0 && offered.length > 0) {
+              event.preventDefault()
+              move((active + step + offered.length) % offered.length)
+              return
+            }
+            const takes =
+              (event.key === "Enter" && !event.shiftKey) || event.key === "Tab"
+            if (takes && offered.length > 0) {
+              event.preventDefault()
+              pick(offered[active])
+              return
+            }
+          }
           if (
             event.key === "Enter" &&
             !event.shiftKey &&

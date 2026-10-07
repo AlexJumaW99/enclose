@@ -1,6 +1,7 @@
 import * as React from "react"
 import { cn } from "cn"
 import {
+  BookOpenIcon,
   BotIcon,
   ChevronDownIcon,
   EyeIcon,
@@ -40,6 +41,7 @@ const ICONS: Record<string, LucideIcon> = {
   "Web search": GlobeIcon,
   "Find tool": WrenchIcon,
   Subagent: BotIcon,
+  Skill: BookOpenIcon,
   Look: EyeIcon,
   Check: MousePointerClickIcon,
   List: ListIcon,

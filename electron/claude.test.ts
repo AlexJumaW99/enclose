@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { modelChoices } from "./claude"
+import { commandChoices, modelChoices } from "./claude"
 
 describe("modelChoices", () => {
   it("offers the models as Claude Code lists them", () => {
@@ -73,5 +73,59 @@ describe("modelChoices", () => {
 
   it("offers nothing when Claude Code lists nothing", () => {
     expect(modelChoices([])).toEqual([])
+  })
+})
+
+describe("commandChoices", () => {
+  const row = (name: string, more: object = {}) => ({
+    name,
+    description: `What ${name} does`,
+    argumentHint: "",
+    ...more,
+  })
+  const all = [
+    row("kicad-pcb"),
+    row("hello", { argumentHint: "<part>" }),
+    row("vercel:deploy", { description: "(vercel) Deploy the\n  project" }),
+    row("vercel:deploy"),
+    row("code-review", { builtin: true }),
+    row("model", { builtin: true }),
+    row("context", { builtin: true }),
+    row("compact", { builtin: true }),
+  ]
+
+  it("offers the commands that mean something here, then the user's", () => {
+    const { commands } = commandChoices(all, [])
+    expect(commands.map((command) => command.name)).toEqual([
+      "compact",
+      "context",
+      "kicad-pcb",
+      "hello",
+      "vercel:deploy",
+    ])
+  })
+
+  it("says what each does in a line, without saying twice whose it is", () => {
+    const { commands } = commandChoices(all, [])
+    expect(commands.find((c) => c.name === "vercel:deploy")?.detail).toBe(
+      "Deploy the project"
+    )
+    expect(commands.find((c) => c.name === "hello")?.hint).toBe("<part>")
+  })
+
+  it("offers the skills that are not Claude Code's own", () => {
+    const { skills } = commandChoices(all, [
+      row("kicad-pcb"),
+      row("dataviz", { builtin: true }),
+    ])
+    expect(skills.map((skill) => skill.name)).toEqual(["kicad-pcb"])
+  })
+
+  it("leaves a user's command alone that is named as one of Claude Code's", () => {
+    const { commands } = commandChoices([row("context"), row("usage")], [])
+    expect(commands.map((command) => command.name)).toEqual([
+      "context",
+      "usage",
+    ])
   })
 })

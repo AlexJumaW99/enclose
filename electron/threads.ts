@@ -115,6 +115,8 @@ function describeTool(name: string, input: unknown, root: string) {
     case "Agent":
     case "Task":
       return { name: "Subagent", detail: field(input, "description") }
+    case "Skill":
+      return { name: "Skill", detail: field(input, "skill") }
     case "mcp__viewport__screenshot":
       return { name: "Look", detail: "at the viewport" }
     case "mcp__viewport__selection":
@@ -183,7 +185,9 @@ function guide(
         ]
       : []),
     "- Keep to the model and the project. Say nothing about tools, connectors or settings of the user's that are no part of this app (an MCP server that wants signing in to, say) unless they ask.",
-    "- A message may begin with a <comments> block: things the user has said of parts of the model, one <comment> for each. Each names the part and gives the point on it they clicked, the way the surface faces there and which face it is, in the model's own coordinates (mm, Z up), and holds what they said. Take each as a change wanted at that place. The rest of the message, if there is any, is what they said of the model as a whole.",
+    "- A message may hold a <comments> block: things the user has said of parts of the model, one <comment> for each. Each names the part and gives the point on it they clicked, the way the surface faces there and which face it is, in the model's own coordinates (mm, Z up), and holds what they said. Take each as a change wanted at that place. The rest of the message, if there is any, is what they said of the model as a whole.",
+    "- A word in a message that begins with @ names a part of the model by its id, as the manifest and mcp__viewport__parts have it: @lid is the part whose id is lid.",
+    "- A word in a message that begins with $ names one of your skills, which the user wants used for what they are asking: $pcb is the skill called pcb. Load it with the Skill tool before you start on the work, and follow it.",
     "- You can see what they see. mcp__viewport__screenshot returns the current view as an image, mcp__viewport__parts lists the parts with their groups and sizes, mcp__viewport__selection returns the current selection.",
     "- The model is made of parts. Each separate component is one part: a thing that is made, bought or fitted on its own, such as a lid, a board or a screw. Whatever the user asks you to add as a thing of its own is a part of its own. The app lists the parts under groups, and the user can pick one part or one group to look at alone.",
     "- Grouping the parts is your job, not the user's. Whenever you add, split, merge or remove parts, put each one in the group a person would look for it in, by what it belongs to or what it does (the enclosure, the electronics, the fasteners), and add a group when none fits. Keep group and part labels short and plain. Do this without being asked and without asking. Regroup only when the user asks for a different arrangement, or when the model has changed so much that the old one no longer makes sense; if the user arranges the groups themselves, keep to their arrangement.",
@@ -219,12 +223,15 @@ function guide(
   return lines.join("\n")
 }
 
-/** The message as Claude gets it: what was said of parts of the model, then the message. */
-function withNotes(text: string, notes: PartNote[]): string {
+/**
+ * The message as Claude gets it: what was said of parts of the model, then the message.
+ * A message that is a command leads with it, or Claude Code would not know it for one.
+ */
+export function withNotes(text: string, notes: PartNote[]): string {
   if (notes.length === 0) return text
   const at = (v: number[] | null) =>
     v ? v.map((n) => n.toFixed(2)).join(", ") : "unknown"
-  return [
+  const comments = [
     "<comments>",
     ...notes.flatMap(({ part, text: said }) => [
       `<comment part="${part.label}" id="${part.id}" point="${at(part.point)}" normal="${at(part.normal)}"${part.face === null ? "" : ` face="${part.face}"`}>`,
@@ -232,12 +239,18 @@ function withNotes(text: string, notes: PartNote[]): string {
       "</comment>",
     ]),
     "</comments>",
-    "",
-    text,
   ]
+  return (
+    text.startsWith("/") ? [text, "", ...comments] : [...comments, "", text]
+  )
     .join("\n")
     .trim()
 }
+
+/** What a command printed, as words to show: without the colours a terminal is sent. */
+const printed = (text: string) =>
+  // eslint-disable-next-line no-control-regex
+  text.replace(/\u001b\[[0-9;]*[A-Za-z]/g, "").trim()
 
 /** What a user's message says, for the places that show it in a line. */
 function wordsOf(item: Extract<ThreadItem, { kind: "user" | "assistant" }>) {
@@ -643,6 +656,33 @@ export class Threads {
     const handle = (message: SDKMessage) => {
       if (message.type === "system" && message.subtype === "init") {
         session(message.session_id)
+        return
+      }
+      // What a command of Claude Code's own had to say: how full the conversation is,
+      // what has been used. It is no answer of Claude's, but it reads as one.
+      if (
+        message.type === "system" &&
+        message.subtype === "local_command_output"
+      ) {
+        const text = printed(message.content)
+        if (text)
+          this.put(projectId, conversation, {
+            kind: "assistant",
+            id: `said-${message.uuid}`,
+            at: Date.now(),
+            text,
+            streaming: false,
+          })
+        this.deps.onSummary()
+        return
+      }
+      if (message.type === "system" && message.subtype === "compact_boundary") {
+        this.notice(
+          projectId,
+          conversation,
+          "info",
+          "What was said before this has been summed up, to make room."
+        )
         return
       }
       if (message.type === "stream_event") {

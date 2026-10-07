@@ -54,6 +54,8 @@ const api: CadApi = {
   claude: {
     status: () => ipcRenderer.invoke(CHANNEL.claudeStatus),
     models: () => ipcRenderer.invoke(CHANNEL.claudeModels),
+    commands: (projectId) =>
+      ipcRenderer.invoke(CHANNEL.claudeCommands, projectId),
   },
   settings: {
     get: () => ipcRenderer.invoke(CHANNEL.settingsGet),

@@ -9,10 +9,19 @@ import { promisify } from "node:util"
 import {
   query,
   type ModelInfo,
+  type Query,
   type SDKUserMessage,
+  type SettingSource,
+  type SlashCommand,
 } from "@anthropic-ai/claude-agent-sdk"
 
-import { EFFORTS, type ClaudeStatus, type ModelChoice } from "../shared/api"
+import {
+  EFFORTS,
+  type ClaudeStatus,
+  type Command,
+  type Commands,
+  type ModelChoice,
+} from "../shared/api"
 
 const run = promisify(execFile)
 
@@ -162,16 +171,19 @@ export function modelChoices(rows: ModelInfo[]): ModelChoice[] {
   return choices
 }
 
-/** How long Claude Code is given to say what models it has. */
-const MODELS_TIMEOUT_MS = 20_000
+/** How long Claude Code is given to say what it has. */
+const ASKING_TIMEOUT_MS = 20_000
 
 /**
- * The models the installed Claude Code offers the account it is signed in to. It is
- * asked through a session that is given nothing to answer, and ended once it has said.
- * None, if it is not installed or would not say.
+ * Ask the installed Claude Code something about itself, through a session that is given
+ * nothing to answer and is ended once it has said. Null if it would not say.
  */
-export async function listModels(claude: ClaudeStatus): Promise<ModelChoice[]> {
-  if (!claude.path) return []
+async function asked<T>(
+  claude: ClaudeStatus,
+  where: { cwd: string; settingSources: SettingSource[] },
+  ask: (session: Query) => Promise<T>
+): Promise<T | null> {
+  if (!claude.path) return null
   const abort = new AbortController()
   const gaveUp = new Promise<never>((_, reject) =>
     abort.signal.addEventListener("abort", () => reject(new Error("ended")), {
@@ -185,23 +197,103 @@ export async function listModels(claude: ClaudeStatus): Promise<ModelChoice[]> {
         gaveUp.catch(() => ({ done: true as const, value: undefined })),
     }),
   }
-  const timer = setTimeout(() => abort.abort(), MODELS_TIMEOUT_MS)
+  const timer = setTimeout(() => abort.abort(), ASKING_TIMEOUT_MS)
   try {
     const session = query({
       prompt: nothing,
       options: {
-        cwd: os.tmpdir(),
+        ...where,
         pathToClaudeCodeExecutable: claude.path,
         env: claudeEnv(),
         abortController: abort,
-        settingSources: ["user"],
       },
     })
-    return modelChoices(await Promise.race([session.supportedModels(), gaveUp]))
+    return await Promise.race([ask(session), gaveUp])
   } catch {
-    return []
+    return null
   } finally {
     clearTimeout(timer)
     abort.abort()
   }
+}
+
+/**
+ * The models the installed Claude Code offers the account it is signed in to. None, if
+ * it is not installed or would not say.
+ */
+export async function listModels(claude: ClaudeStatus): Promise<ModelChoice[]> {
+  const rows = await asked(
+    claude,
+    { cwd: os.tmpdir(), settingSources: ["user"] },
+    (session) => session.supportedModels()
+  )
+  return rows ? modelChoices(rows) : []
+}
+
+/**
+ * Claude Code's own commands that mean something in this app. The rest of them are
+ * about its terminal, or set what the app sets itself: the model, how hard it thinks.
+ */
+const OWN_COMMANDS = ["compact", "context", "usage"]
+
+/** A command or a skill as Claude Code lists it, as the app offers it. */
+function commandChoice(row: SlashCommand): Command {
+  // one that a plugin brings says whose it is twice: in its name, and before what it does
+  const whose = /^([^:]+):/.exec(row.name)?.[1]
+  const detail = row.description.replace(/\s+/g, " ").trim()
+  return {
+    name: row.name,
+    detail:
+      whose && detail.startsWith(`(${whose}) `)
+        ? detail.slice(whose.length + 3)
+        : detail,
+    hint: row.argumentHint ?? "",
+  }
+}
+
+/**
+ * What Claude Code says it can be called on for, as the app offers it. Its commands:
+ * those of its own that mean something here, then everything the user, the project or a
+ * plugin has added. Its skills: every one that is not built into it.
+ */
+export function commandChoices(
+  all: SlashCommand[],
+  skills: SlashCommand[]
+): Commands {
+  // a name can be listed twice, as a plugin's command and as its skill: once is enough
+  const once = (rows: SlashCommand[]) => {
+    const seen = new Set<string>()
+    return rows
+      .filter((row) => !seen.has(row.name) && seen.add(row.name))
+      .map(commandChoice)
+  }
+  return {
+    commands: once([
+      ...OWN_COMMANDS.flatMap(
+        (name) => all.find((row) => row.builtin && row.name === name) ?? []
+      ),
+      ...all.filter((row) => !row.builtin),
+    ]),
+    skills: once(skills.filter((row) => !row.builtin)),
+  }
+}
+
+/**
+ * The commands and skills the installed Claude Code has in a folder: its own, the
+ * user's, the folder's, and what plugins bring. None, if it would not say.
+ */
+export async function listCommands(
+  claude: ClaudeStatus,
+  cwd: string
+): Promise<Commands> {
+  const found = await asked(
+    claude,
+    { cwd, settingSources: ["user", "project", "local"] },
+    async (session) =>
+      commandChoices(
+        await session.supportedCommands(),
+        (await session.reloadSkills()).skills
+      )
+  )
+  return found ?? { commands: [], skills: [] }
 }

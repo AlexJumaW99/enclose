@@ -136,6 +136,22 @@ export type ModelChoice = {
   efforts: Effort[]
 }
 
+/** Something of Claude Code's that a message can call on by name: a command, or a skill. */
+export type Command = {
+  name: string
+  detail: string
+  /** what it takes after its name, as Claude Code words it: "<file>". Empty for nothing. */
+  hint: string
+}
+
+/** What the Claude Code on this machine can be called on for, in a project's folder. */
+export type Commands = {
+  /** asked for with / at the start of a message: its own, the user's, a plugin's */
+  commands: Command[]
+  /** asked for with $ anywhere in one */
+  skills: Command[]
+}
+
 /** How a message is to be answered: by which model, thinking how hard, asking how much. */
 export type Manner = {
   /** null: the model Claude Code is set to run */
@@ -239,6 +255,8 @@ export type CadApi = {
     status(): Promise<ClaudeStatus>
     /** the models to choose from; none if Claude Code is missing or would not say */
     models(): Promise<ModelChoice[]>
+    /** the commands and skills it has in a project's folder; none, likewise */
+    commands(projectId: string): Promise<Commands>
   }
   settings: {
     get(): Promise<Settings>
@@ -271,6 +289,7 @@ export const CHANNEL = {
   threadItem: "thread:item",
   claudeStatus: "claude:status",
   claudeModels: "claude:models",
+  claudeCommands: "claude:commands",
   settingsGet: "settings:get",
   settingsChooseProjectsFolder: "settings:choose-projects-folder",
   settingsRevealProjectsFolder: "settings:reveal-projects-folder",
