@@ -28,8 +28,10 @@ export type ThemeColors = {
   foreground: THREE.Color
   muted: THREE.Color
   destructive: THREE.Color
-  /** what a picked part is tinted with */
-  selection: THREE.Color
+  /** what the surfaces of a picked part turn */
+  picked: THREE.Color
+  /** the plane a model is cut open along */
+  section: THREE.Color
   dark: boolean
 }
 
@@ -40,7 +42,8 @@ function read(): ThemeColors {
     foreground: token("--foreground"),
     muted: token("--muted-foreground"),
     destructive: token("--destructive"),
-    selection: token("--selection"),
+    picked: token("--selection-fill"),
+    section: token("--section"),
     dark: document.documentElement.classList.contains("dark"),
   }
 }

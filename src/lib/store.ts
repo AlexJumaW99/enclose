@@ -245,6 +245,11 @@ type State = {
    */
   seeking: boolean
   /**
+   * The part picked out is shown in its own colour and not the selection's: a colour is
+   * being chosen for it, or has just been, and is to be seen.
+   */
+  plain: boolean
+  /**
    * What is being written of the part picked out, in the view beside it: a new note
    * ("new"), or one already made that is being changed (its id). Null when nothing is.
    */
@@ -289,6 +294,7 @@ type State = {
   select(selection: Selection | null): void
   hover(partId: string | null): void
   seek(seeking: boolean): void
+  showPlain(plain: boolean): void
   /**
    * Start writing of the part picked out ("new"), go back to a note already made (its
    * id), or stop writing (null).
@@ -348,6 +354,7 @@ export const useStore = create<State>()((set, get) => ({
   selection: null,
   hoveredId: null,
   seeking: false,
+  plain: false,
   writing: null,
   ...savedWaiting(),
   colours: savedColours(),
@@ -439,6 +446,10 @@ export const useStore = create<State>()((set, get) => ({
 
   seek(seeking) {
     if (get().seeking !== seeking) set({ seeking })
+  },
+
+  showPlain(plain) {
+    if (get().plain !== plain) set({ plain })
   },
 
   write(note) {

@@ -68,6 +68,16 @@ EVERY.enableAll()
 /** How see-through glass is: untouched, pointed at, and picked. */
 const GLASS_OPACITY = { plain: 0.2, hovered: 0.28, selected: 0.4 }
 /**
+ * How wide the lines of a part are, in pixels, when it is picked out; and, drawn by its
+ * lines alone, when the pointer is on it. The rest are 1.
+ */
+const PICKED_LINE = 2
+const HOVERED_LINE = 1.5
+/** How much of its own light a part gives off, picked out and under the pointer. */
+const GLOW = { picked: 0.3, hovered: 0.07 }
+/** How fast a part takes the selection's colour and gives it up again. */
+const TINT_RATE = 16
+/**
  * How much a layer of glass of some opacity counts for when the layers are added up.
  * Counted this way, the sum says exactly how much the layers let through between them.
  */
@@ -273,6 +283,7 @@ const PartModel = React.memo(function PartModel({
   cut,
   hovered,
   selected,
+  plain,
   explode,
   plane,
   colors,
@@ -291,6 +302,8 @@ const PartModel = React.memo(function PartModel({
   cut: number | null
   hovered: boolean
   selected: boolean
+  /** picked out, but to be seen in its own colour: one is being chosen for it */
+  plain: boolean
   /** how far along its way out the part is: 0 assembled, 1 the model's own distance */
   explode: number
   plane: THREE.Plane
@@ -393,9 +406,30 @@ const PartModel = React.memo(function PartModel({
   )
 
   // every part eases the explode at the same rate, so they stay in step
+  // A part that is picked out turns the selection's colour, and turns back, by degrees.
+  const filled = selected && !plain
+  const tint = React.useRef(filled ? 1 : 0)
+  const surfaces = React.useRef<(THREE.MeshStandardMaterial | null)[]>([])
+  const paint = (material: THREE.MeshStandardMaterial, index: number) =>
+    material.color.copy(skinColors[index]).lerp(colors.picked, tint.current)
+
   const current = React.useRef(explode)
-  React.useEffect(() => invalidate(), [explode, invalidate])
+  React.useEffect(() => invalidate(), [explode, filled, invalidate])
   useFrame((_, delta) => {
+    const to = filled ? 1 : 0
+    if (tint.current !== to) {
+      const next = THREE.MathUtils.damp(
+        tint.current,
+        to,
+        TINT_RATE,
+        Math.min(delta, 0.05)
+      )
+      tint.current = Math.abs(next - to) < 0.01 ? to : next
+      surfaces.current.forEach(
+        (material, index) => material && paint(material, index)
+      )
+      invalidate()
+    }
     if (!group.current) return
     const next = THREE.MathUtils.damp(
       current.current,
@@ -413,11 +447,14 @@ const PartModel = React.memo(function PartModel({
   })
 
   // With no surfaces seen there is nothing light for a dark line to show against, so a
-  // part drawn by its lines has them in the text colour instead.
-  const lit = selected || (lined && hovered)
+  // part drawn by its lines has them in the text colour instead. Picked out, a part
+  // has heavier lines, drawn in full: dark ones wherever its surfaces are seen, which
+  // they are in wireframe too, once it has turned the selection's colour.
+  const bodied = !lined || (look === "wire" && filled)
   const line = {
-    color: lit ? colors.selection : lined ? colors.foreground : EDGE,
+    color: bodied ? EDGE : colors.foreground,
     opacity: selected ? 1 : glass ? 0.28 : look === "outline" ? 0.6 : 0.85,
+    linewidth: selected ? PICKED_LINE : lined && hovered ? HOVERED_LINE : 1,
   }
   const opacity = selected
     ? GLASS_OPACITY.selected
@@ -441,9 +478,15 @@ const PartModel = React.memo(function PartModel({
                 in more than a material can change once it is in use. */}
             <meshStandardMaterial
               key={look}
+              // its colour is set here, and each frame that it is changing
+              ref={(material) => {
+                surfaces.current[index] = material
+                if (material) paint(material, index)
+              }}
               visible={look !== "outline"}
-              colorWrite={look !== "wire"}
-              color={skinColors[index]}
+              colorWrite={look !== "wire" || filled}
+              // the selection's colour is seen as it is: the view's lens would grey it
+              toneMapped={!filled}
               {...finish(loaded)}
               side={THREE.DoubleSide}
               clippingPlanes={planes}
@@ -452,11 +495,15 @@ const PartModel = React.memo(function PartModel({
               opacity={
                 glass
                   ? weight(opacity) *
-                    (1 + COLOUR_COUNTS * chroma(skinColors[index]))
+                    (1 +
+                      COLOUR_COUNTS *
+                        chroma(filled ? colors.picked : skinColors[index]))
                   : 1
               }
-              emissive={colors.selection}
-              emissiveIntensity={selected ? 0.16 : hovered ? 0.07 : 0}
+              emissive={WHITE}
+              emissiveIntensity={
+                filled ? GLOW.picked : hovered && !selected ? GLOW.hovered : 0
+              }
             />
           </mesh>
           {cut !== null &&
@@ -487,8 +534,9 @@ const PartModel = React.memo(function PartModel({
       >
         <primitive object={lines.material} attach="material" {...line} />
       </primitive>
-      {/* a solid part shows where it curves by how the light falls on it */}
-      {turns && look !== "solid" && (
+      {/* A solid part shows where it curves by how the light falls on it: unless it is
+          picked out, when it is all of a colour. */}
+      {turns && (look !== "solid" || filled) && (
         <primitive
           object={turns}
           renderOrder={glass ? ORDER.glassEdges : ORDER.edges}
@@ -628,7 +676,6 @@ function CutFace({
   color,
   hovered,
   selected,
-  colors,
 }: {
   /** its place among the parts whose cut faces are filled in */
   index: number
@@ -637,7 +684,6 @@ function CutFace({
   color: THREE.Color
   hovered: boolean
   selected: boolean
-  colors: ThemeColors
 }) {
   const made = React.useMemo(() => {
     // neighbours are told apart by which way their lines lean, and how close they are
@@ -702,8 +748,10 @@ function CutFace({
           object={made.face}
           attach="material"
           color={color}
-          emissive={colors.selection}
-          emissiveIntensity={selected ? 0.16 : hovered ? 0.07 : 0}
+          emissive={WHITE}
+          emissiveIntensity={
+            selected ? GLOW.picked : hovered ? GLOW.hovered : 0
+          }
         />
       </mesh>
       {layer(STEP.own, made.own)}
@@ -730,7 +778,6 @@ function CutFaces({
   section,
   reach,
   faces,
-  colors,
 }: {
   section: Section
   reach: number
@@ -740,7 +787,6 @@ function CutFaces({
     hovered: boolean
     selected: boolean
   }[]
-  colors: ThemeColors
 }) {
   const matrix = React.useMemo(
     () =>
@@ -781,7 +827,6 @@ function CutFaces({
       color={face.color}
       hovered={face.hovered}
       selected={face.selected}
-      colors={colors}
     />
   ))
 }
@@ -1008,6 +1053,7 @@ export function Scene({
   selectedId,
   hoveredId,
   seeking,
+  plain,
   notes,
   colours,
   homeKey,
@@ -1026,6 +1072,8 @@ export function Scene({
   hoveredId: string | null
   /** a part is being looked for by name: the one lit up is shown through all the rest */
   seeking: boolean
+  /** the part picked out is to be seen in its own colour: one is being chosen for it */
+  plain: boolean
   /** changes when the camera should go back to its home view */
   homeKey: string
   onPick: (selection: Selection | null) => void
@@ -1124,6 +1172,7 @@ export function Scene({
                   ? hoveredId === part.part.id
                   : selectedId === part.part.id
               }
+              plain={plain && !seeking && selectedId === part.part.id}
               explode={explode}
               plane={plane}
               colors={colors}
@@ -1161,21 +1210,24 @@ export function Scene({
           <CutFaces
             section={view.section}
             reach={radius}
-            colors={colors}
             faces={loaded.parts.flatMap((part, index) =>
               cuts[index]
                 ? [
                     {
                       key: part.part.id,
-                      // a little lighter than the part: what a cut shows is not its outside
-                      color: skinColour(
-                        part,
-                        part.skins[0],
-                        colors.dark,
-                        colours[part.part.id]
-                      ).lerp(WHITE, 0.14),
+                      // a little lighter than the part: what a cut shows is not its
+                      // outside. Picked out, it is the selection's colour as the part is.
+                      color:
+                        selectedId === part.part.id && !plain
+                          ? colors.picked
+                          : skinColour(
+                              part,
+                              part.skins[0],
+                              colors.dark,
+                              colours[part.part.id]
+                            ).lerp(WHITE, 0.14),
                       hovered: hoveredId === part.part.id,
-                      selected: selectedId === part.part.id,
+                      selected: selectedId === part.part.id && !plain,
                     },
                   ]
                 : []

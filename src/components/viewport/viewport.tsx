@@ -110,6 +110,7 @@ function Model({ project }: { project: Project }) {
   const select = useStore((s) => s.select)
   const hoveredId = useStore((s) => s.hoveredId)
   const seeking = useStore((s) => s.seeking)
+  const plain = useStore((s) => s.plain)
   const hover = useStore((s) => s.hover)
   const homeRequests = useStore((s) => s.homeRequests)
   const partsOpen = useStore((s) => s.partsOpen)
@@ -278,6 +279,7 @@ function Model({ project }: { project: Project }) {
           selectedId={selection?.part.id ?? null}
           hoveredId={hoveredId}
           seeking={seeking && !loaded.standIn}
+          plain={plain}
           // the first model made takes the cube's place, and is framed afresh
           homeKey={`${project.id}:${loaded.standIn ? "cube" : "model"}:${homeRequests}`}
           // the stand-in is nothing to ask about: it is not picked, and does not light up

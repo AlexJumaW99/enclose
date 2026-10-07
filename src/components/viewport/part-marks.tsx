@@ -207,6 +207,8 @@ function Does({
 
 /** How far out from the middle the colours stand when a part is given one, px. */
 const RING_OUT = 84
+/** How long a part stays in the colour it was just given before the selection's is back, ms. */
+const SEEN_FOR_MS = 1400
 /** How far apart the middles of two of the buttons are, side by side, px. */
 const STEP = 42
 
@@ -224,7 +226,8 @@ function Colours({
   partId: string
   /** the colour the part is drawn in, "#rrggbb" */
   shown: string
-  onDone: () => void
+  /** the ring is done with: a colour was given or taken back, or nothing was */
+  onDone: (gave: boolean) => void
 }) {
   const chosen = useStore((state) =>
     state.activeId ? (state.colours[state.activeId]?.[partId] ?? null) : null
@@ -236,7 +239,7 @@ function Colours({
       // and it is not taken for leaving anything else, by whoever else listens for it
       event.preventDefault()
       event.stopImmediatePropagation()
-      onDone()
+      onDone(false)
     }
     window.addEventListener("keydown", key, true)
     return () => window.removeEventListener("keydown", key, true)
@@ -249,7 +252,7 @@ function Colours({
         variant="ghost"
         size="icon"
         title="Leave it as it is"
-        onClick={onDone}
+        onClick={() => onDone(false)}
         className={cn(ROUND, "absolute top-0 left-0 -translate-1/2")}
       >
         <span
@@ -272,7 +275,7 @@ function Colours({
             aria-pressed={chosen === name}
             onClick={() => {
               setColour(partId, chosen === name ? null : name)
-              onDone()
+              onDone(true)
             }}
             style={{
               left: Math.sin(turn) * RING_OUT,
@@ -376,7 +379,28 @@ export function PartMarks({
   // a colour is being chosen, here: clicking anywhere else on the part is done with that
   const [choosingAt, setChoosingAt] = React.useState<THREE.Vector3 | null>(null)
   const choosing = !written && choosingAt === at
-  const chosen = React.useCallback(() => setChoosingAt(null), [])
+  // While a colour is chosen for the part it is seen in its own, not the selection's;
+  // and for a moment after one has been given, so that it is seen to have taken.
+  const showPlain = useStore((state) => state.showPlain)
+  const gave = React.useRef(false)
+  const chosen = React.useCallback((given: boolean) => {
+    gave.current = given
+    setChoosingAt(null)
+  }, [])
+  React.useEffect(() => {
+    if (choosing) {
+      gave.current = false
+      showPlain(true)
+      return
+    }
+    if (!gave.current) {
+      showPlain(false)
+      return
+    }
+    const timer = setTimeout(() => showPlain(false), SEEN_FOR_MS)
+    return () => clearTimeout(timer)
+  }, [choosing, showPlain])
+  React.useEffect(() => () => showPlain(false), [showPlain])
 
   // where that place is on the screen, kept far enough in from the edges of the view
   // for what is shown there to fit
@@ -426,7 +450,7 @@ export function PartMarks({
             className="relative flex -translate-1/2 gap-1.5"
           >
             {/* its name, beside them and of a piece with them; a long one is cut short */}
-            <span className="pointer-events-none absolute top-1/2 right-full mr-1.5 flex h-9 max-w-44 -translate-y-1/2 items-center rounded-full bg-foreground px-3.5 text-xs font-medium text-background shadow-sm">
+            <span className="pointer-events-none absolute top-1/2 right-full mr-1.5 flex h-9 max-w-44 -translate-y-1/2 items-center rounded-full bg-foreground px-3.5 text-xs font-medium text-background shadow-sm ring-1 ring-background/25">
               <span className="truncate">{part.label}</span>
             </span>
             <Does label="Change color" onClick={() => setChoosingAt(at)}>

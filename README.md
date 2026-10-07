@@ -168,8 +168,10 @@ card says so.
 On top of what Claude Code can already do, the app gives Claude three tools: a screenshot
 of the view as you see it, the list of parts with their groups and sizes, and your current
 selection.
-Click a part and it is picked out: three buttons appear where you clicked, with the
-part's name beside them, and stay on that spot of the part as it is turned. One gives it
+Click a part and it is picked out: it turns white, with a heavier line round it,
+and three buttons appear where you clicked, with the part's name beside them,
+and stay on that spot of the part as it is turned. While you choose a colour for it, and
+for a moment after, the part is seen in its own colour instead. One gives it
 another of the app's colours, which is how the app draws it from then on (Claude is told,
 when it asks what the parts are). One downloads the part as STEP, where the model hands
 that out. And one opens a box to say what should change at the place you clicked.

@@ -638,13 +638,19 @@ function direct(stage: {
       }
       if (mode === "lens") {
         // A narrowed lens sits far back. Draw only the slice of depth the model is in,
-        // or surfaces close together would start to show through one another.
+        // or surfaces close together would start to show through one another. The
+        // slice is measured from where the camera is drawn from this frame, which is
+        // not yet where the controls have just been told it goes: on the way into a
+        // flat view that is far enough behind it to slice the front off the model.
         const r = reach()
+        const away = lens.position.distanceTo(
+          controls.getTarget(new THREE.Vector3(), false)
+        )
         const near =
           narrowing > 1.01
-            ? Math.max((r * REACH.nearest) / 4, controls.distance - 3 * r)
+            ? Math.max((r * REACH.nearest) / 4, away - 3 * r)
             : (r * REACH.nearest) / 4
-        const far = Math.max(r * REACH.furthest * 2, controls.distance + 3 * r)
+        const far = Math.max(r * REACH.furthest * 2, away + 3 * r)
         if (lens.near !== near || lens.far !== far) {
           lens.near = near
           lens.far = far

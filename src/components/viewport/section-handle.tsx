@@ -172,7 +172,7 @@ function Push({ section, frame, colors, onChange }: Piece) {
           [0, 0, 0],
           [0, 0, shaft],
         ]}
-        color={over ? colors.selection : colors.foreground}
+        color={over ? colors.section : colors.foreground}
         lineWidth={LINE}
         raycast={NOT_PICKED}
         {...OVER}
@@ -284,7 +284,7 @@ function Tilt({
   }, [tilt])
   React.useEffect(() => () => drawn.grip.dispose(), [drawn])
 
-  const color = over ? colors.selection : colors.foreground
+  const color = over ? colors.section : colors.foreground
   return (
     <>
       <Line
@@ -366,13 +366,13 @@ export function SectionHandle({
       <mesh renderOrder={4} raycast={NOT_PICKED}>
         <planeGeometry args={[reach * 0.85, reach * 0.85]} />
         <meshBasicMaterial
-          color={colors.selection}
+          color={colors.section}
           transparent
           opacity={0.05}
           side={THREE.DoubleSide}
           depthWrite={false}
         />
-        <Edges color={colors.selection} lineWidth={1} />
+        <Edges color={colors.section} lineWidth={1} />
       </mesh>
       <group ref={sized}>
         <Push {...piece} />
