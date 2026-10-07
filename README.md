@@ -132,13 +132,13 @@ Down the right-hand edge:
 - **Explode** (E) pulls the parts apart by the distances the manifest gives (or straight
   out from the middle, if it gives none), and a slider along the bottom pulls them
   further.
-- **Parts** lists what the model is made of: each part with a small picture of it, under
-  the groups the model puts them in. Pick a part or a group and the view shows it on its
-  own; pick it again and the rest comes back. Esc, or a press anywhere else, puts the
+- **Parts** (P) lists what the model is made of: each part with a small picture of it,
+  under the groups the model puts them in. Pick a part or a group and the view shows it
+  on its own; pick it again and the rest comes back. Esc, or a press anywhere else, puts the
   list away and leaves what you picked showing, and the button stays lit while it is.
 
 Esc puts the parts list away if it is up. After that it gets back out of the section,
-the explode and whatever was picked in the list, one press each, starting with whichever
+the explode and whatever is showing on its own, one press each, starting with whichever
 you went into last.
 
 Nobody arranges the groups by hand. They come from the manifest, which the project's
@@ -168,11 +168,15 @@ card says so.
 On top of what Claude Code can already do, the app gives Claude three tools: a screenshot
 of the view as you see it, the list of parts with their groups and sizes, and your current
 selection.
-Click a part and it is picked out: its name shows off one corner of it, and off the
-other three buttons. One gives it another of the app's colours, which is how the app draws
-it from then on (Claude is told, when it asks what the parts are). One downloads the part
-as STEP, where the model hands that out. And one opens a box to say what should change
-at the place you clicked. Enter keeps what you wrote for the next message: it shows as a
+Click a part and it is picked out: three buttons appear where you clicked, with the
+part's name beside them, and stay on that spot of the part as it is turned. One gives it
+another of the app's colours, which is how the app draws it from then on (Claude is told,
+when it asks what the parts are). One downloads the part as STEP, where the model hands
+that out. And one opens a box to say what should change at the place you clicked.
+With a part picked out, I shows it on its own and brings the camera to it, from the side
+the camera is on: the part in the middle of the view, filling it. The flat views and the
+opening view frame the part while it is alone. I again, or Esc, brings the rest back and
+puts the camera where it was. Enter keeps what you wrote for the next message: it shows as a
 chip on the message box and as a mark on the part, and you can go on to say things of
 other parts, which gather there. Click a chip or a mark to change what you said. Cmd+Enter
 sends at once, with everything gathered and whatever is in the message box. Each thing

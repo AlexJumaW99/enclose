@@ -226,6 +226,7 @@ export function Tools({
               that is showing: pressing it brings the list back to pick again */}
           <Switch
             label="Parts"
+            shortcut="P"
             opens="parts"
             on={partsOpen || view.only !== null}
             onChange={() => setPartsOpen(!partsOpen)}

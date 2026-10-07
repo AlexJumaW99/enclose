@@ -320,6 +320,8 @@ const KEYS: { title: string; rows: [string, string[]][] }[] = [
       ["Section", ["S"]],
       ["Cut across an axis, while sectioned", ["X", "Y", "Z"]],
       ["Explode", ["E"]],
+      ["Show the part picked out on its own, close to", ["I"]],
+      ["Parts", ["P"]],
       ["Put away the list, then leave the last thing gone into", ["Esc"]],
     ],
   },

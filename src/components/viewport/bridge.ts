@@ -19,6 +19,11 @@ export const bridge: {
   eye: (() => Vec3) | null
   /** whether the view is a flat one, with no perspective */
   flat: (() => boolean) | null
+  /**
+   * bring the camera to what fills this box of the model, a part of it; or, with no box,
+   * take it back to where it was before
+   */
+  focus: ((box: THREE.Box3 | null) => void) | null
   /** true while a handle in the view is being dragged: not the moment to pick a part */
   handling: boolean
 } = {
@@ -28,6 +33,7 @@ export const bridge: {
   orbit: null,
   eye: null,
   flat: null,
+  focus: null,
   handling: false,
 }
 

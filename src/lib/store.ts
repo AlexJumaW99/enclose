@@ -49,10 +49,16 @@ export type View = {
 }
 
 /**
- * What is picked out in the parts list, to be shown on its own: one part, a group of
- * them, or the keep-outs, which are not parts but are listed with them.
+ * What is picked out of the model, to be shown on its own: one part, a group of them, or
+ * the keep-outs, which are not parts but are listed with them. A part picked out in the
+ * view, with I, is gone up to as well: the camera is brought to it, and taken back when
+ * the rest is shown again.
  */
-export type Only = { kind: "part" | "group" | "keepouts"; id: string }
+export type Only = {
+  kind: "part" | "group" | "keepouts"
+  id: string
+  near?: boolean
+}
 
 /** Exploding starts at the model's own distances and can be pushed this much further. */
 export const SPREAD = { min: 1, max: 4 }

@@ -131,10 +131,12 @@ function Model({ project }: { project: Project }) {
   )
 
   // Cmd+1 is the view the model opened with; Cmd+2 to 7 are the six flat ones. S cuts
-  // the model open and E pulls it apart, both again to undo. While it is cut open, X and
-  // Y choose the axis the cut goes across (and Z, which the shading menu passes on). Esc
-  // puts the parts list away, and then gets out of the section, the explode or what was
-  // picked in the list, whichever was gone into last.
+  // the model open and E pulls it apart, both again to undo. I shows the part that is
+  // picked out on its own, close to, and again brings the rest back. P brings up the
+  // list of parts, and puts it away. While the model is cut open, X and Y choose the axis
+  // the cut goes across (and Z, which the shading menu passes on). Esc puts the parts
+  // list away, and then gets out of the section, the explode or what was shown on its
+  // own, whichever was gone into last.
   React.useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.altKey || event.shiftKey) return
@@ -159,14 +161,24 @@ function Model({ project }: { project: Project }) {
       }
       // a letter on its own: not one held down, and not one being typed somewhere
       if (!loaded || !middle || event.repeat || spokenFor(event.target)) return
-      const { view, setView, cutOpen } = useStore.getState()
+      const { view, setView, cutOpen, selection } = useStore.getState()
       const letter = event.key.toLowerCase()
       if (letter === "s") {
         if (view.section) setView({ section: null })
         else cutOpen(() => sectionFacing(loaded.box))
       } else if (letter === "e")
         setView({ exploded: !view.exploded, spread: SPREAD.min })
-      else if (view.section && (letter === "x" || letter === "y"))
+      else if (letter === "i") {
+        const id = selection?.part.id
+        const near = view.only?.near ? view.only.id : null
+        if (id && id !== near)
+          setView({ only: { kind: "part", id, near: true } })
+        else if (near) setView({ only: null })
+        else return
+      } else if (letter === "p") {
+        const { partsOpen, setPartsOpen } = useStore.getState()
+        setPartsOpen(!partsOpen)
+      } else if (view.section && (letter === "x" || letter === "y"))
         setView({ section: sectionAcross(letter, middle) })
       else return
       event.preventDefault()
@@ -174,6 +186,22 @@ function Model({ project }: { project: Project }) {
     window.addEventListener("keydown", key)
     return () => window.removeEventListener("keydown", key)
   }, [goHome, loaded, middle])
+
+  // The camera goes to the part that I shows on its own, and follows it if it is pulled
+  // out from the rest; and goes back when that part is no longer the one shown.
+  const near = view.only?.near ? view.only.id : null
+  const explode = view.exploded ? view.spread : 0
+  React.useEffect(() => {
+    const part = loaded?.parts.find((part) => part.part.id === near)
+    bridge.focus?.(
+      part
+        ? part.box
+            .clone()
+            .applyMatrix4(part.home)
+            .translate(part.away.clone().multiplyScalar(explode))
+        : null
+    )
+  }, [loaded, near, explode])
 
   // Z is the shading menu's key. While the model is cut open a tap of it still chooses
   // the cut across Z, and the menu comes up when the key is held instead.

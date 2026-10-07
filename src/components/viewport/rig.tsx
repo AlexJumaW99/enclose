@@ -129,9 +129,22 @@ function direct(stage: {
   let rollTo = 0
   /** the turn last given to the camera, to know when it has to be given again */
   let rolled = 0
+  /** the part the camera was brought to, as the box it fills in the model's frame */
+  let subject: THREE.Box3 | null = null
+  /**
+   * What the camera was looking at before it was brought to a part, and at what scale;
+   * and the way it faced, if that was the view the model opened with.
+   */
+  let before: {
+    target: THREE.Vector3
+    scale: number
+    home: { theta: number; phi: number } | null
+  } | null = null
 
   const reach = () => stage.box().getSize(new THREE.Vector3()).length() / 2
-  const middle = () => toWorld(stage.box().getCenter(new THREE.Vector3()))
+  /** What the set views frame: the part the camera was brought to, or else all of it. */
+  const framed = () => subject ?? stage.box()
+  const middle = () => toWorld(framed().getCenter(new THREE.Vector3()))
   /** Which way the camera is from what it looks at. */
   const facing = () =>
     new THREE.Vector3().setFromSphericalCoords(
@@ -155,6 +168,76 @@ function direct(stage: {
     mode === "flat"
       ? flat.zoom
       : (stage.size().height * narrowing) / (2 * controls.distance * HALF_FOV)
+  /** Where the camera will be from what it looks at, once it has come to rest. */
+  const heading = () => controls.getSpherical(new THREE.Spherical(), true)
+  /** And the scale that will be shown at then. */
+  const scaleThen = () => {
+    if (tie?.kind === "closing") return tie.fit
+    if (mode === "flat") return goal
+    return (stage.size().height * narrowing) / (2 * heading().radius * HALF_FOV)
+  }
+  /** Go to showing what the camera looks at at a scale, with the lens or without. */
+  const scaleTo = (scale: number) => {
+    // a flight to a flat view ends at the scale it was given: it ends at this one now
+    if (tie?.kind === "closing") tie.fit = scale
+    if (mode === "flat") {
+      goal = THREE.MathUtils.clamp(scale, controls.minZoom, controls.maxZoom)
+      void controls.zoomTo(goal, true)
+    } else {
+      void controls.dollyTo(distanceAt(scale) * narrowing, true)
+    }
+  }
+
+  /**
+   * What it takes to have all of a box in the view from a side, its middle in the middle
+   * of the view: how far back the whole lens has to stand, and the scale that does it
+   * with no lens. Every corner of the box is in the view, whatever its shape: a cube
+   * needs more room than a slab does.
+   */
+  const fitting = (
+    box: THREE.Box3,
+    turn: number,
+    polar: number,
+    ratio: number,
+    margin: number
+  ) => {
+    const target = toWorld(box.getCenter(new THREE.Vector3()))
+    const toward = new THREE.Vector3().setFromSphericalCoords(1, polar, turn)
+    // from the turn, not from `toward`: straight above and below it is still a direction
+    const right = new THREE.Vector3(Math.cos(turn), 0, -Math.sin(turn))
+    const up = toward.clone().cross(right)
+    const corner = new THREE.Vector3()
+    let distance = 0
+    let across = 0
+    let upward = 0
+    for (let i = 0; i < 8; i++) {
+      corner
+        .copy(
+          toWorld(
+            new THREE.Vector3(
+              i & 1 ? box.max.x : box.min.x,
+              i & 2 ? box.max.y : box.min.y,
+              i & 4 ? box.max.z : box.min.z
+            )
+          )
+        )
+        .sub(target)
+      // how near the camera the corner is, and how far off the middle of the view
+      const near = corner.dot(toward)
+      const aside = Math.abs(corner.dot(right)) * margin
+      const above = Math.abs(corner.dot(up)) * margin
+      distance = Math.max(
+        distance,
+        near + aside / (HALF_FOV * ratio),
+        near + above / HALF_FOV
+      )
+      across = Math.max(across, aside)
+      upward = Math.max(upward, above)
+    }
+    const { height } = stage.size()
+    const scale = Math.min((height * ratio) / across, height / upward) / 2
+    return { target, distance, scale }
+  }
 
   /** How far the user may zoom, either way. */
   const limits = () => {
@@ -178,7 +261,7 @@ function direct(stage: {
     if (next === narrowing) return
     const by = next / narrowing
     // where the camera is, and where a zoom still under way is taking it
-    const settling = controls.getSpherical(new THREE.Spherical(), true).radius
+    const settling = heading().radius
     narrowing = next
     limits()
     void controls.dollyTo(controls.distance * by, false)
@@ -258,34 +341,16 @@ function direct(stage: {
     /** The view a model opens with, framing all of it. */
     home(animate: boolean, ratio: number) {
       ++sent
-      const target = middle()
       const toward = toWorld(HOME_DIRECTION)
-      // Stand back just far enough that every corner of the model's box is in the view,
-      // whatever its shape: a cube needs more room than a slab does.
-      const right = new THREE.Vector3(0, 1, 0).cross(toward).normalize()
-      const up = toward.clone().cross(right)
-      const box = stage.box()
-      const corner = new THREE.Vector3()
-      let distance = 0
-      for (let i = 0; i < 8; i++) {
-        corner
-          .copy(
-            toWorld(
-              new THREE.Vector3(
-                i & 1 ? box.max.x : box.min.x,
-                i & 2 ? box.max.y : box.min.y,
-                i & 4 ? box.max.z : box.min.z
-              )
-            )
-          )
-          .sub(target)
-        // how near the camera the corner is, and how far off the middle of the view
-        const near = corner.dot(toward)
-        const across =
-          (Math.abs(corner.dot(right)) * HOME_MARGIN) / (HALF_FOV * ratio)
-        const upward = (Math.abs(corner.dot(up)) * HOME_MARGIN) / HALF_FOV
-        distance = Math.max(distance, near + across, near + upward)
-      }
+      const polar = Math.acos(toward.y)
+      // stand back just far enough that all of what is framed is in the view
+      const { target, distance } = fitting(
+        framed(),
+        Math.atan2(toward.x, toward.z),
+        polar,
+        ratio,
+        HOME_MARGIN
+      )
       narrow()
       // the lens opens over the first of the turn home, and is whole by the end of it
       const turn = facing().angleTo(toward)
@@ -306,7 +371,7 @@ function direct(stage: {
       // never more than half a turn from home
       void controls.rotateTo(
         nearestTurn(controls.azimuthAngle, Math.atan2(toward.x, toward.z)),
-        Math.acos(toward.y),
+        polar,
         animate
       )
       void controls.moveTo(target.x, target.y, target.z, animate)
@@ -325,7 +390,7 @@ function direct(stage: {
       const { azimuth, polar } = viewFrom(axis, sign)
       const { width, height } = stage.size()
       // what of the model shows from there, and the scale at which it fits the view
-      const extent = stage.box().getSize(new THREE.Vector3())
+      const extent = framed().getSize(new THREE.Vector3())
       const [across, up] =
         axis === "x"
           ? [extent.y, extent.z]
@@ -360,6 +425,55 @@ function direct(stage: {
       } else {
         void controls.dollyTo(distanceAt(fit) * narrowing, true)
       }
+    },
+
+    /**
+     * Bring the camera to one part of the model, from the side it is on already: the part
+     * goes to the middle of the view and fills it, and the set views frame it from then
+     * on. With no part given, the camera goes back to what it was looking at before it
+     * was brought to one, as near as it was then, still from the side it is on now.
+     */
+    focus(box: THREE.Box3 | null) {
+      if (box ? subject?.equals(box) : !subject) return
+      controls.smoothTime = SMOOTH.turn
+      const { theta, phi } = heading()
+      if (!box) {
+        subject = null
+        if (!before) return
+        const { target, scale, home } = before
+        before = null
+        // and that is the view the model opened with again, if it has not been turned
+        atHome =
+          home !== null &&
+          mode === "lens" &&
+          tie === null &&
+          Math.abs(theta - home.theta) < THERE &&
+          Math.abs(phi - home.phi) < THERE
+        void controls.moveTo(target.x, target.y, target.z, true)
+        scaleTo(scale)
+        stage.redraw()
+        return
+      }
+      // going from one part to another, it is still the first that it goes back from
+      before ??= {
+        target: controls.getTarget(new THREE.Vector3(), true),
+        scale: scaleThen(),
+        home: atHome ? { theta, phi } : null,
+      }
+      subject = box.clone()
+      atHome = false
+      const { width, height } = stage.size()
+      const { target, distance, scale } = fitting(
+        box,
+        theta,
+        phi,
+        width / height,
+        MARGIN
+      )
+      void controls.moveTo(target.x, target.y, target.z, true)
+      if (mode === "flat" || tie?.kind === "closing") scaleTo(scale)
+      else void controls.dollyTo(distance * narrowing, true)
+      stage.redraw()
     },
 
     /**
@@ -598,6 +712,7 @@ export function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
     bridge.orbit = (dx, dy) => made.orbit(dx * TURN.axes, dy * TURN.axes)
     bridge.eye = () => made.eye()
     bridge.flat = () => made.isFlat()
+    bridge.focus = (box) => made.focus(box)
     // lets a script see what the camera is doing when the app is checked without a person
     if (import.meta.env.DEV) Object.assign(window, { __camera: made.probe })
     return () => {
@@ -605,6 +720,7 @@ export function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
       impl.rotate = rotate
       director.current = null
       bridge.lookFrom = bridge.orbit = bridge.eye = bridge.flat = null
+      bridge.focus = null
     }
   }, [lens, flat, get, set, invalidate])
 
