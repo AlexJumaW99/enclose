@@ -9,6 +9,7 @@
     "dev": "node scripts/dev.mjs",
     "build": "tsc -b && node scripts/build.mjs",
     "start": "node scripts/start.mjs",
+    "icons": "node scripts/icons.mjs",
     "typecheck": "tsc -b",
     "lint": "eslint .",
     "test": "vitest run",

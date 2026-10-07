@@ -136,6 +136,12 @@ Down the right-hand edge:
   under the groups the model puts them in. Pick a part or a group and the view shows it
   on its own; pick it again and the rest comes back. Esc, or a press anywhere else, puts the
   list away and leaves what you picked showing, and the button stays lit while it is.
+- **Grid** (Shift+G, as in Figma) rules the ground into squares and draws the world's
+  three axes through its origin, in the colours they have in the corner of the view.
+  Both go on as far as can be seen, however far out the view is taken. The squares are a
+  power of ten millimetres across, whichever suits how near the view is, with every
+  tenth line heavier: zoom out and they give way to squares ten times the size. It stays
+  on, or off, from one model to the next.
 
 Esc puts the parts list away if it is up. After that it gets back out of the section,
 the explode and whatever is showing on its own, one press each, starting with whichever
@@ -210,12 +216,18 @@ and a list of every shortcut.
 
 ```
 electron/    the app's own process: window, project list, the line to Claude
+icons/       the app's icon, in the sizes each system asks for
 kit/         the exporter a project copies in to write its model (Python)
 shared/      types and the manifest format, used by both sides
 src/         the window: project cards, 3D view and its tools, conversation
-scripts/     dev loop and production build
+scripts/     dev loop, production build, and the icon's sizes
 spikes/      experiments kept for their measurements
 ```
+
+The icon is drawn once, as [`icons/icon.png`](icons/icon.png): 1024 pixels across, on
+Apple's grid, with the margin a Mac wants round the tile. `npm run icons` makes the rest
+from it: `icon.icns` for macOS, and for Windows and Linux, where an icon fills its
+square, `icon.ico` and `icon-512.png` with the margin cut away.
 
 ```
 npm run typecheck

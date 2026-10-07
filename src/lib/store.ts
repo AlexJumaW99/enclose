@@ -47,6 +47,8 @@ export type View = {
   section: Section | null
   /** what the view is cut down to; null shows everything */
   only: Only | null
+  /** whether the ground is ruled into squares, and the world's axes drawn across it */
+  grid: boolean
 }
 
 /**
@@ -86,6 +88,7 @@ const ACCESS_KEY = "enclose:access"
 const MODEL_KEY = "enclose:model"
 const EFFORT_KEY = "enclose:effort"
 const MODE_KEY = "enclose:mode"
+const GRID_KEY = "enclose:grid"
 const THREAD_WIDTH_KEY = "enclose:thread-width"
 const CUTS_KEY = "enclose:cuts"
 const FINISHED_KEY = "enclose:finished"
@@ -172,13 +175,17 @@ const savedFinished = (): string[] => {
     return []
   }
 }
-/** How a model is looked at when it opens: whole, assembled, in the mode last used. */
+/**
+ * How a model is looked at when it opens: whole, assembled, in the mode last used, and
+ * on the grid if that was last left on.
+ */
 const homeView = (): View => ({
   mode: savedMode(),
   exploded: false,
   spread: SPREAD.min,
   section: null,
   only: null,
+  grid: saved(GRID_KEY) === "on",
 })
 
 /** What the view can be put into, and got back out of with Esc. */
@@ -415,6 +422,8 @@ export const useStore = create<State>()((set, get) => ({
 
   setView(patch) {
     if (patch.mode) localStorage.setItem(MODE_KEY, patch.mode)
+    if (patch.grid !== undefined)
+      localStorage.setItem(GRID_KEY, patch.grid ? "on" : "off")
     // a cut is kept as it is left, for the next time its project is cut open
     const { activeId, cuts } = get()
     const kept =

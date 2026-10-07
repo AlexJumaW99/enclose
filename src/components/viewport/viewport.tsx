@@ -138,11 +138,22 @@ function Model({ project }: { project: Project }) {
   // list of parts, and puts it away. While the model is cut open, X and Y choose the axis
   // the cut goes across (and Z, which the shading menu passes on). Esc puts the parts
   // list away, and then gets out of the section, the explode or what was shown on its
-  // own, whichever was gone into last.
+  // own, whichever was gone into last. Shift+G rules the ground and draws the world's
+  // axes, as it brings up the grid in Figma, and again takes them away.
   React.useEffect(() => {
     const key = (event: KeyboardEvent) => {
-      if (event.altKey || event.shiftKey) return
+      if (event.altKey) return
       if (useStore.getState().settingsOpen) return
+      if (event.shiftKey) {
+        // the one key here that Shift goes with: and not a capital G being typed
+        const alone = !event.metaKey && !event.ctrlKey && !event.repeat
+        if (!loaded || !alone || event.key.toLowerCase() !== "g") return
+        if (spokenFor(event.target)) return
+        const { view, setView } = useStore.getState()
+        setView({ grid: !view.grid })
+        event.preventDefault()
+        return
+      }
       if (event.metaKey || event.ctrlKey) {
         const digit = /^Digit([1-7])$/.exec(event.code)?.[1]
         if (!digit) return

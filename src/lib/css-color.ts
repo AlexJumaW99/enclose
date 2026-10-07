@@ -32,6 +32,8 @@ export type ThemeColors = {
   picked: THREE.Color
   /** the plane a model is cut open along */
   section: THREE.Color
+  /** the model's three axes */
+  axes: { x: THREE.Color; y: THREE.Color; z: THREE.Color }
   dark: boolean
 }
 
@@ -44,6 +46,7 @@ function read(): ThemeColors {
     destructive: token("--destructive"),
     picked: token("--selection-fill"),
     section: token("--section"),
+    axes: { x: token("--axis-x"), y: token("--axis-y"), z: token("--axis-z") },
     dark: document.documentElement.classList.contains("dark"),
   }
 }

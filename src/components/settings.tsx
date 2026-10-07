@@ -303,6 +303,7 @@ function Navigation() {
 }
 
 const CMD = MAC ? "⌘" : "Ctrl"
+const SHIFT = MAC ? "⇧" : "Shift"
 const KEYS: { title: string; rows: [string, string[]][] }[] = [
   {
     title: "Views",
@@ -322,6 +323,7 @@ const KEYS: { title: string; rows: [string, string[]][] }[] = [
       ["Explode", ["E"]],
       ["Show the part picked out on its own, close to", ["I"]],
       ["Parts", ["P"]],
+      ["Grid: the ground and the world's axes", [SHIFT, "G"]],
       ["Put away the list, then leave the last thing gone into", ["Esc"]],
     ],
   },

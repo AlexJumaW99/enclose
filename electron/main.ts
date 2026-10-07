@@ -29,6 +29,8 @@ import { Threads } from "./threads"
 
 const HERE = import.meta.dirname
 const DEV_URL = process.env.VITE_DEV_SERVER_URL
+// the app's icon, in the sizes each system asks for (scripts/icons.mjs makes them)
+const ICONS = path.join(HERE, "../icons")
 
 // For checking the app without clicking through it:
 //   ENCLOSE_USER_DATA=<dir>  keep state, and new projects, somewhere other than the real ones
@@ -121,6 +123,11 @@ function createWindow(openProject: string | null) {
     backgroundColor: "#171717",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     trafficLightPosition: { x: 18, y: 18 },
+    // what a taskbar shows for the window; a Mac shows the app's own icon, in its Dock
+    icon: path.join(
+      ICONS,
+      process.platform === "win32" ? "icon.ico" : "icon-512.png"
+    ),
     webPreferences: {
       preload: path.join(HERE, "preload.cjs"),
       contextIsolation: true,
@@ -423,6 +430,10 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   void app.whenReady().then(() => {
+    // Run from a checkout, the app in the Dock is Electron's own, and so is its icon.
+    // An app made into a package has the icon in it, and macOS draws that one.
+    if (!app.isPackaged) app.dock?.setIcon(path.join(ICONS, "icon.png"))
+
     const data = app.getPath("userData")
     settings = new SettingsStore(path.join(data, "settings.json"), {
       // Documents is where a Mac keeps what its user makes; a run that keeps its state

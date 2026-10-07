@@ -3,6 +3,7 @@ import { cn } from "cn"
 import {
   FlipHorizontal2Icon,
   BoxesIcon,
+  Grid3x3Icon,
   MessageSquareIcon,
   RotateCcwIcon,
   UnfoldVerticalIcon,
@@ -108,7 +109,8 @@ function Switch({
             data-opens={opens}
             aria-keyshortcuts={shortcut
               ?.replace("⌘", "Meta+")
-              .replace("Ctrl ", "Control+")}
+              .replace("Ctrl ", "Control+")
+              .replace(/⇧|Shift /, "Shift+")}
             className={cn(
               ROUND,
               "aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary/85 aria-pressed:hover:text-primary-foreground"
@@ -232,6 +234,15 @@ export function Tools({
             onChange={() => setPartsOpen(!partsOpen)}
           >
             <BoxesIcon />
+          </Switch>
+          {/* not the model but what it stands in: the ground, and the world's axes */}
+          <Switch
+            label="Grid"
+            shortcut={MAC ? "⇧G" : "Shift G"}
+            on={view.grid}
+            onChange={(grid) => setView({ grid })}
+          >
+            <Grid3x3Icon />
           </Switch>
         </Stack>
       )}

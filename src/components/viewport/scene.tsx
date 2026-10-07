@@ -13,6 +13,7 @@ import type { Keepout } from "@/lib/model"
 import type { Turn } from "@/lib/orient"
 import type { Note, Section, Selection, View } from "@/lib/store"
 import { bridge } from "./bridge"
+import { Ground } from "./ground"
 import type { LoadedModel, LoadedPart } from "./load"
 import { EDGE, finish, skinColour } from "./paint"
 import { NoteMark, PartMarks } from "./part-marks"
@@ -35,6 +36,7 @@ const GLASS_FROM = 0.25
 const ORDER = {
   solid: 0,
   cut: 0.5,
+  ground: 0.9,
   edges: 1,
   glass: 2,
   glassEdges: 3,
@@ -1155,6 +1157,7 @@ export function Scene({
       <Camera />
       <Redraw on={view} />
       <group ref={root} rotation={MODEL_TO_WORLD}>
+        {view.grid && <Ground colors={colors} order={ORDER.ground} />}
         {loaded.parts.map((part, index) => {
           const { shown, look } = looks[index]
           if (!shown) return null
