@@ -25,7 +25,7 @@ its own.
 {
   "title": "Enclosure",                 // optional
   "groups": [                            // how the parts list is grouped, in this order
-    { "id": "enclosure", "label": "Enclosure", "shell": true },   // the outside: see-through in glass mode
+    { "id": "enclosure", "label": "Enclosure", "shell": true },   // the outside: see-through in glass mode, and taken apart part by part when exploded
     { "id": "inside", "label": "Electronics" },
     { "id": "screws", "label": "Screws" }
   ],
@@ -38,7 +38,7 @@ its own.
       "edges": "top.edges.bin",          // optional: float32 x1 y1 z1 x2 y2 z2 per edge segment, mm
       "color": "blue",                   // optional: one of ${PALETTE_NAMES.join(", ")}; any other colour is drawn as the nearest of them. Omit it to keep the colours in the file, or to be given one by the group
       "matrix": null,                    // optional: 16 numbers, row-major, placing the part
-      "explode": [0, 0, 46],             // optional: where it goes when exploded, mm (worked out when no part says)
+      "explode": [0, 0, 46],             // optional: where it goes when exploded, mm (worked out when no part says: the parts of a group that touch go together)
       "glass": true,                     // optional: force see-through (or not) in glass mode
       "finish": "metal"                  // optional: drawn as bare metal (screws, pins)
     }

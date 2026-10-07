@@ -10,6 +10,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js"
 import { MeshBVH } from "three-mesh-bvh"
 
 import type { Model, Part } from "@/lib/model"
+import { piecesOf, waysOut } from "./apart"
 import { contoursOf, type Contours } from "./contours"
 import { shellOf } from "./shell"
 
@@ -38,7 +39,7 @@ export type LoadedPart = {
   box: THREE.Box3
   /** where the part sits in the model */
   home: THREE.Matrix4
-  /** where it moves to when the model is exploded, mm */
+  /** where it moves to when the model is exploded, mm: with the rest of its piece */
   away: THREE.Vector3
   faces: number
 }
@@ -256,6 +257,37 @@ function creases(skins: Skin[]): Float32Array {
  * Load every part. `revision` is stamped on each request, so a rebuilt model is never
  * served from a stale copy.
  */
+/**
+ * Where the surfaces of a part are, in the model, taken all together: the middle of
+ * them, each triangle counting for its size, and how much of them there is.
+ */
+function surfaceOf(part: LoadedPart): { centre: THREE.Vector3; area: number } {
+  const centre = new THREE.Vector3()
+  let area = 0
+  const [a, b, c] = [
+    new THREE.Vector3(),
+    new THREE.Vector3(),
+    new THREE.Vector3(),
+  ]
+  const [ab, ac] = [new THREE.Vector3(), new THREE.Vector3()]
+  for (const { geometry } of part.skins) {
+    const at = geometry.attributes.position
+    const index = geometry.index
+    const corners = index ? index.count : at.count
+    for (let i = 0; i + 2 < corners; i += 3) {
+      a.fromBufferAttribute(at, index ? index.getX(i) : i)
+      b.fromBufferAttribute(at, index ? index.getX(i + 1) : i + 1)
+      c.fromBufferAttribute(at, index ? index.getX(i + 2) : i + 2)
+      const size = ab.subVectors(b, a).cross(ac.subVectors(c, a)).length() / 2
+      centre.addScaledVector(a.add(b).add(c), size / 3)
+      area += size
+    }
+  }
+  if (area > 0) centre.divideScalar(area)
+  else part.box.getCenter(centre)
+  return { centre: centre.applyMatrix4(part.home), area }
+}
+
 export async function loadModel(
   model: Model,
   baseUrl: string,
@@ -284,12 +316,50 @@ export async function loadModel(
   const box = new THREE.Box3()
   for (const part of parts) box.union(part.box.clone().applyMatrix4(part.home))
 
-  // A model that does not say how it comes apart is pulled straight out from its middle.
+  // A model that does not say how it comes apart is pulled out from its middle: not part
+  // by part, but piece by piece, where the parts of a group that are one object go
+  // together, and each piece clear of the rest (see apart.ts). A part goes as its piece.
   if (parts.every((part) => part.away.lengthSq() === 0)) {
     const middle = box.getCenter(new THREE.Vector3())
-    for (const part of parts) {
-      part.box.getCenter(part.away).applyMatrix4(part.home).sub(middle)
-    }
+    const boxes = parts.map((part) => part.box.clone().applyMatrix4(part.home))
+    const pieces = piecesOf(
+      parts.map((part, index) => ({
+        group: part.part.group,
+        box: boxes[index],
+      })),
+      model.groups,
+      box.getSize(new THREE.Vector3()).length()
+    )
+    // a piece is all of its parts: the box round them, and where their surfaces are,
+    // each counting for as much as there is of it
+    const wholes = new Map<
+      number,
+      { box: THREE.Box3; centre: THREE.Vector3; area: number }
+    >()
+    pieces.forEach((piece, index) => {
+      const { centre, area } = surfaceOf(parts[index])
+      const whole = wholes.get(piece)
+      if (whole) {
+        whole.box.union(boxes[index])
+        whole.centre.addScaledVector(centre, area)
+        whole.area += area
+      } else
+        wholes.set(piece, {
+          box: boxes[index].clone(),
+          centre: centre.multiplyScalar(area),
+          area,
+        })
+    })
+    for (const whole of wholes.values())
+      if (whole.area > 0) whole.centre.divideScalar(whole.area)
+      else whole.box.getCenter(whole.centre)
+    const ways = waysOut(
+      [...wholes.values()],
+      middle,
+      box.getSize(new THREE.Vector3()).length()
+    )
+    const way = new Map([...wholes.keys()].map((piece, n) => [piece, ways[n]]))
+    parts.forEach((part, index) => part.away.copy(way.get(pieces[index])!))
   }
   return { model, parts, box }
 }

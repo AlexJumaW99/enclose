@@ -96,11 +96,16 @@ export async function picturesOf(
 ): Promise<Seen> {
   const { root, draw, done } = easel()
   const pictures: Picture[] = []
+  // Pulled apart for Claude, every part goes its own way out from the middle, whatever
+  // the view keeps together: it is to see each of them, to say which belong together.
+  const middle = loaded.box.getCenter(new THREE.Vector3())
+  const out = new THREE.Vector3()
   /** Every part put where it stands, or as far out from there as the model is pulled apart. */
   const stand = (parts: LoadedPart[], apart: number) => {
     const stood = parts.map((part) => {
       const made = standing(part, false, colours[part.part.id])
-      made.holder.position.addScaledVector(part.away, apart)
+      part.box.getCenter(out).applyMatrix4(part.home).sub(middle)
+      made.holder.position.addScaledVector(out, apart)
       root.add(made.holder)
       return made
     })

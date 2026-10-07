@@ -95,6 +95,12 @@ The build needs a Python with build123d. Where there is none the project is stil
 with the files in it, and says so: ask Claude to set it up and it makes a virtual
 environment in the folder, as it does for a project started from nothing.
 
+**Pulled apart**, a model that gives its parts no `explode` of their own comes apart by
+its groups, not part by part: the parts of a group that touch one another go as one
+piece, so a circuit board keeps its components and a switch its pins. The outside (a
+group marked `shell`) still comes apart part by part, as do parts in no group and a model
+that is all one group.
+
 **The view** draws each part as one mesh per colour, however many faces the CAD export
 wrote, which is what keeps large assemblies smooth (the benchmark behind that is in
 [`spikes/draw-calls`](spikes/draw-calls)).

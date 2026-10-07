@@ -380,7 +380,9 @@ class Model:
     def group(self, label: str, *, shell: bool = False, id: str | None = None) -> str:
         """A group the parts list shows, in the order groups are made. Returns its id,
         to give to `part`. `shell` marks the outside of the thing: what goes see-through
-        in glass mode so that what it encloses shows."""
+        in glass mode so that what it encloses shows, and what comes apart part by part
+        when the model is pulled apart. In any other group, the parts that touch one
+        another stay together then, as one object: a board with its components."""
         group = {"id": id or _slug(label), "label": label}
         if shell:
             group["shell"] = True

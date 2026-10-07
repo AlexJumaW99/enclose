@@ -157,7 +157,7 @@ function Waiting({
   return (
     <div
       className={cn(
-        "pointer-events-none absolute inset-0 flex animate-in flex-col items-center justify-center fill-mode-both fade-in",
+        "pointer-events-none absolute inset-0 flex animate-in flex-col items-center justify-center fill-mode-both select-none fade-in",
         late ? "delay-300 duration-300" : "duration-200"
       )}
     >
@@ -211,7 +211,7 @@ function LookingOver({ project }: { project: Project }) {
   return (
     // the button is as far from the end it is at as from the top and the bottom, and
     // the words have a good deal more room than that at theirs
-    <div className="glass pointer-events-auto flex animate-in items-center gap-3 rounded-full bg-background/60 py-2.5 pr-2.5 pl-6 text-sm shadow-md ring-1 ring-foreground/10 duration-200 fade-in slide-in-from-bottom-2">
+    <div className="glass pointer-events-auto flex animate-in items-center gap-3 rounded-full bg-background/60 py-2.5 pr-2.5 pl-6 text-sm shadow-md ring-1 ring-foreground/10 duration-200 select-none fade-in slide-in-from-bottom-2">
       {/* room for two figures and what they count in, so that the words beside it stay
           where they are as it goes up, in the figures everything else is set in */}
       <span className="min-w-[3ch] text-foreground/45">{duration(taken)}</span>
