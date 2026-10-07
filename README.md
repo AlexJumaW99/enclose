@@ -69,10 +69,10 @@ wrote, which is what keeps large assemblies smooth (the benchmark behind that is
 [`spikes/draw-calls`](spikes/draw-calls)).
 
 Parts are drawn in the app's own colours: ten light ones round the whole circle of colour
-(red, orange, yellow, lime, green, cyan, blue, indigo, violet, pink) and a grey. A model
-can name one for a part; any other colour it gives, or its files carry, is drawn as the
-nearest of them, except greys, white and black, which are drawn as they are, and bare
-metal. A part given no colour takes the one that falls to its group. Nothing in the
+(red, orange, yellow, lime, green, cyan, blue, indigo, violet, pink), and white, a light
+grey and a grey. A model can name one for a part; any other colour it gives, or its files
+carry, is drawn as the nearest of them, except greys, white and black, which are drawn as
+they are, and bare metal. A part given no colour takes the one that falls to its group. Nothing in the
 project's files is changed by this: it is only how the app draws them.
 
 Moving around on a trackpad: move two fingers across it to orbit, pinch to zoom in on
@@ -168,8 +168,15 @@ card says so.
 On top of what Claude Code can already do, the app gives Claude three tools: a screenshot
 of the view as you see it, the list of parts with their groups and sizes, and your current
 selection.
-A message sent from a clicked part carries the part and the point you clicked, in the
-model's coordinates.
+Click a part and it is picked out: its name shows off one corner of it, and off the
+other three buttons. One gives it another of the app's colours, which is how the app draws
+it from then on (Claude is told, when it asks what the parts are). One downloads the part
+as STEP, where the model hands that out. And one opens a box to say what should change
+at the place you clicked. Enter keeps what you wrote for the next message: it shows as a
+chip on the message box and as a mark on the part, and you can go on to say things of
+other parts, which gather there. Click a chip or a mark to change what you said. Cmd+Enter
+sends at once, with everything gathered and whatever is in the message box. Each thing
+said goes to Claude with its part and the point clicked, in the model's coordinates.
 
 Under the message box are three choices: which of Claude Code's models answers, how hard
 it thinks, and what it may do without asking. The models are the ones your Claude Code

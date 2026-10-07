@@ -7,6 +7,9 @@ describe("drawnIn", () => {
   it("draws a colour named in the palette as that colour", () => {
     expect(drawnIn("blue", 0)).toBe(PALETTE.blue)
     expect(drawnIn(" Grey ", 3)).toBe(PALETTE.grey)
+    expect(drawnIn("white", 0)).toBe(PALETTE.white)
+    // spelt either way
+    expect(drawnIn("lightgray", 0)).toBe(PALETTE.lightgrey)
   })
 
   it("draws any other colour as the nearest of the palette's", () => {
@@ -33,7 +36,8 @@ describe("drawnIn", () => {
   it("gives what has no colour the palette's colours in turn, never the grey", () => {
     const given = Array.from({ length: 10 }, (_, turn) => drawnIn(null, turn))
     expect(new Set(given).size).toBe(10)
-    expect(given).not.toContain(PALETTE.grey)
+    for (const plain of [PALETTE.grey, PALETTE.lightgrey, PALETTE.white])
+      expect(given).not.toContain(plain)
     expect(drawnIn(null, 10)).toBe(given[0])
   })
 

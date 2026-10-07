@@ -39,6 +39,8 @@ import { useNow } from "@/lib/time"
 type Of<Kind extends ThreadItem["kind"]> = Extract<ThreadItem, { kind: Kind }>
 
 function UserMessage({ item }: { item: Of<"user"> }) {
+  const SAID =
+    "max-w-[85%] rounded-2xl bg-muted px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap"
   return (
     <div className="flex flex-col items-end gap-1.5">
       {item.part && (
@@ -47,9 +49,20 @@ function UserMessage({ item }: { item: Of<"user"> }) {
           {item.part.label}
         </Badge>
       )}
-      <div className="max-w-[85%] rounded-2xl bg-muted px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap">
-        {item.text}
-      </div>
+      {/* what was said of parts, each under the name of its part */}
+      {item.notes?.map((note, index) => (
+        <div
+          key={index}
+          className={cn(SAID, "flex flex-col items-start gap-1")}
+        >
+          <Badge variant="outline">
+            <BoxIcon data-icon="inline-start" />
+            {note.part.label}
+          </Badge>
+          {note.text}
+        </div>
+      ))}
+      {item.text && <div className={SAID}>{item.text}</div>}
     </div>
   )
 }
@@ -293,8 +306,6 @@ export function Thread({ project }: { project: Project }) {
   const load = useStore((state) => state.load)
   const openConversation = useStore((state) => state.openConversation)
   const claude = useStore((state) => state.claude)
-  const selection = useStore((state) => state.selection)
-  const select = useStore((state) => state.select)
   const setThreadOpen = useStore((state) => state.setThreadOpen)
   const width = useStore((state) => state.threadWidth)
   const end = React.useRef<HTMLDivElement>(null)
@@ -428,8 +439,6 @@ export function Thread({ project }: { project: Project }) {
 
       <div className="flex flex-col gap-2 p-3.5 pt-0">
         <Composer
-          part={selection?.part ?? null}
-          onClearPart={() => select(null)}
           placeholder={
             project.manifest
               ? "Message Claude"

@@ -3,7 +3,6 @@ import { cn } from "cn"
 import { FolderPlusIcon, TriangleAlertIcon } from "lucide-react"
 
 import type { Project } from "@shared/api"
-import { PartPrompt } from "@/components/part-prompt"
 import { PartsPanel } from "@/components/parts-panel"
 import { Tools } from "@/components/tools"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -20,7 +19,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { readModel } from "@/lib/model"
 import { spokenFor } from "@/lib/keys"
 import { VIEWS } from "@/lib/orient"
-import { SPREAD, useStore } from "@/lib/store"
+import { SPREAD, useStore, type Note } from "@/lib/store"
 import { AxisGizmo } from "./axis-gizmo"
 import { bridge } from "./bridge"
 import { ExplodeSlider } from "./explode-slider"
@@ -29,6 +28,10 @@ import { appearance, Scene } from "./scene"
 import { ShadingPie } from "./shading-pie"
 import { useThumbnails } from "./thumbnails"
 import { sectionAcross, sectionFacing, SectionPlanes } from "./section-planes"
+
+/** Stable when a project has nothing said of its parts, or no colours given. */
+const NO_NOTES: Note[] = []
+const NO_COLOURS: Record<string, string> = {}
 
 type Loading =
   | { status: "loading"; done: number; total: number }
@@ -109,7 +112,9 @@ function Model({ project }: { project: Project }) {
   const hover = useStore((s) => s.hover)
   const homeRequests = useStore((s) => s.homeRequests)
   const partsOpen = useStore((s) => s.partsOpen)
-  const thumbs = useThumbnails(loaded, partsOpen)
+  const notes = useStore((s) => s.notes[project.id] ?? NO_NOTES)
+  const colours = useStore((s) => s.colours[project.id] ?? NO_COLOURS)
+  const thumbs = useThumbnails(loaded, partsOpen, colours)
   const goHome = useStore((s) => s.goHome)
   const setThreadOpen = useStore((s) => s.setThreadOpen)
 
@@ -144,11 +149,11 @@ function Model({ project }: { project: Project }) {
         return
       }
       if (event.key === "Escape") {
-        // not when the key is already closing something of its own: a menu, or the
-        // prompt beside a part
-        const { prompting, leave } = useStore.getState()
+        // not when the key is already closing something of its own: a menu, or what
+        // is being written of a part
+        const { writing, leave } = useStore.getState()
         const taken =
-          event.defaultPrevented || prompting || spokenFor(event.target)
+          event.defaultPrevented || writing !== null || spokenFor(event.target)
         if (!taken && leave()) event.preventDefault()
         return
       }
@@ -211,13 +216,17 @@ function Model({ project }: { project: Project }) {
           min: box.min.toArray().map(round),
           max: box.max.toArray().map(round),
           faces: part.faces,
+          // the colour the user gave it in the app, or the model's own; null if neither
+          color:
+            useStore.getState().colours[project.id]?.[part.part.id] ??
+            part.part.color,
           shown: appearance(part, loaded, useStore.getState().view).shown,
         }
       })
     return () => {
       bridge.parts = null
     }
-  }, [loaded])
+  }, [loaded, project.id])
 
   // the section's handle was dragged in the view: the cut moves, the side shown stays
   const moveSection = React.useCallback(
@@ -233,6 +242,9 @@ function Model({ project }: { project: Project }) {
       {loaded && (
         <Scene
           loaded={loaded}
+          projectId={project.id}
+          notes={notes}
+          colours={colours}
           view={view}
           selectedId={selection?.part.id ?? null}
           hoveredId={hoveredId}
@@ -288,7 +300,6 @@ function Model({ project }: { project: Project }) {
           <AxisGizmo />
         </div>
       )}
-      {loaded && <PartPrompt model={loaded.model} projectId={project.id} />}
       <ShadingPie enabled={loaded !== null} tap={cutAcrossZ} />
     </>
   )

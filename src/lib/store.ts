@@ -6,6 +6,7 @@ import { finishedNow, stackOf, type Stack } from "@/lib/conversations"
 import { cutsOf, readCuts } from "@/lib/cuts"
 import { mannerOf, savedAccess } from "@/lib/manner"
 import { usePreferences } from "@/lib/preferences"
+import { PALETTE, type PaletteName } from "@shared/palette"
 
 import {
   EFFORTS,
@@ -13,6 +14,7 @@ import {
   type ClaudeStatus,
   type Effort,
   type ModelChoice,
+  type PartNote,
   type PartRef,
   type Project,
   type ThreadItem,
@@ -80,6 +82,8 @@ const MODE_KEY = "enclose:mode"
 const THREAD_WIDTH_KEY = "enclose:thread-width"
 const CUTS_KEY = "enclose:cuts"
 const FINISHED_KEY = "enclose:finished"
+const COLOURS_KEY = "enclose:colours"
+const WAITING_KEY = "enclose:waiting"
 
 /** What was saved under a key, or under the name the app had before it was Enclose. */
 const saved = (key: string) =>
@@ -95,6 +99,61 @@ const savedMode = (): DisplayMode => {
 const savedThreadWidth = (): number => {
   const width = Number(saved(THREAD_WIDTH_KEY))
   return width >= THREAD_WIDTH.min ? width : THREAD_WIDTH.initial
+}
+const savedColours = (): Record<string, Record<string, PaletteName>> => {
+  try {
+    const kept: unknown = JSON.parse(saved(COLOURS_KEY) ?? "{}")
+    if (!kept || typeof kept !== "object") return {}
+    return Object.fromEntries(
+      Object.entries(kept).map(([project, parts]) => [
+        project,
+        Object.fromEntries(
+          Object.entries((parts ?? {}) as Record<string, unknown>).filter(
+            (entry): entry is [string, PaletteName] =>
+              typeof entry[1] === "string" && entry[1] in PALETTE
+          )
+        ),
+      ])
+    )
+  } catch {
+    return {}
+  }
+}
+/**
+ * What was waiting to be sent when the window was last up: what was said of parts, and
+ * what was written in the message boxes. Whatever of it does not read as that is dropped.
+ */
+function savedWaiting(): Pick<State, "notes" | "drafts"> {
+  const nothing = { notes: {}, drafts: {} }
+  try {
+    const kept = JSON.parse(saved(WAITING_KEY) ?? "null") as {
+      notes?: unknown
+      drafts?: unknown
+    } | null
+    if (!kept || typeof kept !== "object") return nothing
+    const notes = Object.fromEntries(
+      Object.entries((kept.notes ?? {}) as Record<string, unknown>).map(
+        ([project, said]) => [
+          project,
+          (Array.isArray(said) ? said : []).filter(
+            (note: Partial<Note> | null): note is Note =>
+              typeof note?.id === "string" &&
+              typeof note.text === "string" &&
+              typeof note.part?.id === "string" &&
+              typeof note.part.label === "string"
+          ),
+        ]
+      )
+    )
+    const drafts = Object.fromEntries(
+      Object.entries((kept.drafts ?? {}) as Record<string, unknown>).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string"
+      )
+    )
+    return { notes, drafts }
+  } catch {
+    return nothing
+  }
 }
 const savedFinished = (): string[] => {
   try {
@@ -171,8 +230,23 @@ type State = {
   selection: Selection | null
   /** the part under the pointer, in the view or in the parts list */
   hoveredId: string | null
-  /** whether the prompt beside the selection is showing */
-  prompting: boolean
+  /**
+   * What is being written of the part picked out, in the view beside it: a new note
+   * ("new"), or one already made that is being changed (its id). Null when nothing is.
+   */
+  writing: string | null
+  /**
+   * What has been said of parts of each project's model and not yet sent: it goes with
+   * the next message, and until then shows on the message box and on the parts.
+   */
+  notes: Record<string, Note[]>
+  /** what is written in each project's message box so far */
+  drafts: Record<string, string>
+  /**
+   * The colour the user has given a part, by project and part: one of the app's own, by
+   * name. It is how the app draws the part, whatever the model says of its colour.
+   */
+  colours: Record<string, Record<string, PaletteName>>
   /** bumps to ask the viewport to return to its home view */
   homeRequests: number
 
@@ -200,7 +274,20 @@ type State = {
   goHome(): void
   select(selection: Selection | null): void
   hover(partId: string | null): void
-  closePrompt(): void
+  /**
+   * Start writing of the part picked out ("new"), go back to a note already made (its
+   * id), or stop writing (null).
+   */
+  write(note: string | null): void
+  /**
+   * Keep what was written: as a new note of the part picked out, or as what the note
+   * being changed now says. Gives back the note's id, or null if there was nothing to keep.
+   */
+  keepNote(text: string): string | null
+  dropNote(id: string): void
+  setDraft(text: string): void
+  /** Give a part of the open project a colour of the app's, or (null) the model's own back. */
+  setColour(partId: string, colour: PaletteName | null): void
   setThreadOpen(open: boolean): void
   setThreadWidth(width: number): void
   setPartsOpen(open: boolean): void
@@ -213,8 +300,12 @@ type State = {
   setAccess(access: Access): void
   setModel(model: string | null): void
   setEffort(effort: Effort | null): void
-  send(text: string, part: PartRef | null): void
+  /** Send what is in the open project's message box, with what has been said of its parts. */
+  send(): void
 }
+
+/** Something said of a part, waiting to be sent: the part and point, and the words. */
+export type Note = PartNote & { id: string }
 
 /** The conversations whose items have been asked for, so that none is asked for twice. */
 const fetched = new Set<string>()
@@ -240,7 +331,9 @@ export const useStore = create<State>()((set, get) => ({
   entered: [],
   selection: null,
   hoveredId: null,
-  prompting: false,
+  writing: null,
+  ...savedWaiting(),
+  colours: savedColours(),
   homeRequests: 0,
 
   activate(id) {
@@ -250,7 +343,7 @@ export const useStore = create<State>()((set, get) => ({
       activeId: id,
       selection: null,
       hoveredId: null,
-      prompting: false,
+      writing: null,
       view: homeView(),
       entered: enteredNow(homeView(), state.entered),
     }))
@@ -319,15 +412,76 @@ export const useStore = create<State>()((set, get) => ({
   },
 
   select(selection) {
-    set({ selection, prompting: Boolean(selection?.at) })
+    // picking another part, or none, is done with what was being written of the last
+    set({ selection, writing: null })
   },
 
   hover(hoveredId) {
     if (get().hoveredId !== hoveredId) set({ hoveredId })
   },
 
-  closePrompt() {
-    set({ prompting: false })
+  write(note) {
+    const { activeId, notes, selection } = get()
+    if (note === null || note === "new") {
+      set({ writing: selection ? note : null })
+      return
+    }
+    // back to one already made: its part is picked out again, where it was clicked
+    const made = (activeId ? notes[activeId] : undefined)?.find(
+      (one) => one.id === note
+    )
+    if (made) set({ selection: { part: made.part, at: null }, writing: note })
+  },
+
+  keepNote(text) {
+    const { activeId, notes, selection, writing } = get()
+    const said = text.trim()
+    if (!activeId || !selection || writing === null) return null
+    const before = notes[activeId] ?? []
+    const id =
+      writing === "new" ? `note-${Date.now()}-${before.length}` : writing
+    const next =
+      writing === "new"
+        ? said
+          ? [...before, { id, part: selection.part, text: said }]
+          : before
+        : // one left with nothing in it is taken back
+          before.flatMap((note) =>
+            note.id !== id ? [note] : said ? [{ ...note, text: said }] : []
+          )
+    set({ notes: { ...notes, [activeId]: next }, writing: null })
+    return said ? id : null
+  },
+
+  dropNote(id) {
+    const { activeId, notes, writing } = get()
+    if (!activeId) return
+    set({
+      notes: {
+        ...notes,
+        [activeId]: (notes[activeId] ?? []).filter((note) => note.id !== id),
+      },
+      writing: writing === id ? null : writing,
+    })
+  },
+
+  setDraft(text) {
+    const { activeId, drafts } = get()
+    if (activeId) set({ drafts: { ...drafts, [activeId]: text } })
+  },
+
+  setColour(partId, colour) {
+    const { activeId, colours } = get()
+    if (!activeId) return
+    const others = Object.fromEntries(
+      Object.entries(colours[activeId] ?? {}).filter(([id]) => id !== partId)
+    )
+    const next = {
+      ...colours,
+      [activeId]: colour ? { ...others, [partId]: colour } : others,
+    }
+    localStorage.setItem(COLOURS_KEY, JSON.stringify(next))
+    set({ colours: next })
   },
 
   setThreadOpen(threadOpen) {
@@ -377,11 +531,13 @@ export const useStore = create<State>()((set, get) => ({
     set({ effort })
   },
 
-  send(text, part) {
+  send() {
     const { activeId, access, model, effort, models, projects, picked } = get()
     const project = projects.find((p) => p.id === activeId)
-    const message = text.trim()
-    if (!project || !message) return
+    if (!project) return
+    const message = (get().drafts[project.id] ?? "").trim()
+    const notes = get().notes[project.id] ?? []
+    if (!message && notes.length === 0) return
     // into the conversation the panel is showing; if that is a new one, this begins it
     const { open } = stackOf(
       project.conversations,
@@ -389,13 +545,18 @@ export const useStore = create<State>()((set, get) => ({
       usePreferences.getState().settleDays,
       Date.now()
     )
-    set({ threadOpen: true, prompting: false })
+    set((state) => ({
+      threadOpen: true,
+      writing: null,
+      drafts: { ...state.drafts, [project.id]: "" },
+      notes: { ...state.notes, [project.id]: [] },
+    }))
     void window.cad.thread
       .send(
         project.id,
         open?.id ?? null,
         message,
-        part,
+        notes.map(({ part, text }) => ({ part, text })),
         mannerOf(models, model, effort, access)
       )
       .then((id) => {
@@ -434,7 +595,7 @@ function reconcile(projects: Project[]) {
   const wanted = /^#project=(.+)$/.exec(location.hash)?.[1] ?? saved(ACTIVE_KEY)
   const next = projects.find((p) => p.id === wanted) ?? projects[0]
   if (next) activate(next.id)
-  else useStore.setState({ activeId: null, selection: null, prompting: false })
+  else useStore.setState({ activeId: null, selection: null, writing: null })
 }
 
 /** The conversation in front of the user: the one the panel shows, while it is up. */
@@ -475,6 +636,15 @@ function tally(before?: Project[]) {
 export function connect() {
   const { cad } = window
   cad.projects.onChange(reconcile)
+  // what is waiting to be sent is kept as it changes, so that the window can be loaded
+  // again without losing it
+  useStore.subscribe((state, was) => {
+    if (state.notes !== was.notes || state.drafts !== was.drafts)
+      localStorage.setItem(
+        WAITING_KEY,
+        JSON.stringify({ notes: state.notes, drafts: state.drafts })
+      )
+  })
   // turning to a conversation, or bringing the panel up, is looking at what is in it
   useStore.subscribe((state, was) => {
     if (

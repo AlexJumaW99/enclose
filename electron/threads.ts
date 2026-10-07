@@ -18,7 +18,7 @@ import type {
   ClaudeStatus,
   ConversationSummary,
   Manner,
-  PartRef,
+  PartNote,
   PermissionAnswer,
   ThreadItem,
   ViewportRequest,
@@ -183,7 +183,7 @@ function guide(
         ]
       : []),
     "- Keep to the model and the project. Say nothing about tools, connectors or settings of the user's that are no part of this app (an MCP server that wants signing in to, say) unless they ask.",
-    "- A message may begin with a <selection> block: the part the user clicked and the point they clicked on it, in the model's own coordinates (mm, Z up).",
+    "- A message may begin with a <comments> block: things the user has said of parts of the model, one <comment> for each. Each names the part and gives the point on it they clicked, the way the surface faces there and which face it is, in the model's own coordinates (mm, Z up), and holds what they said. Take each as a change wanted at that place. The rest of the message, if there is any, is what they said of the model as a whole.",
     "- You can see what they see. mcp__viewport__screenshot returns the current view as an image, mcp__viewport__parts lists the parts with their groups and sizes, mcp__viewport__selection returns the current selection.",
     "- The model is made of parts. Each separate component is one part: a thing that is made, bought or fitted on its own, such as a lid, a board or a screw. Whatever the user asks you to add as a thing of its own is a part of its own. The app lists the parts under groups, and the user can pick one part or one group to look at alone.",
     "- Grouping the parts is your job, not the user's. Whenever you add, split, merge or remove parts, put each one in the group a person would look for it in, by what it belongs to or what it does (the enclosure, the electronics, the fasteners), and add a group when none fits. Keep group and part labels short and plain. Do this without being asked and without asking. Regroup only when the user asks for a different arrangement, or when the model has changed so much that the old one no longer makes sense; if the user arranges the groups themselves, keep to their arrangement.",
@@ -219,22 +219,31 @@ function guide(
   return lines.join("\n")
 }
 
-function withSelection(text: string, part: PartRef | null): string {
-  if (!part) return text
+/** The message as Claude gets it: what was said of parts of the model, then the message. */
+function withNotes(text: string, notes: PartNote[]): string {
+  if (notes.length === 0) return text
   const at = (v: number[] | null) =>
     v ? v.map((n) => n.toFixed(2)).join(", ") : "unknown"
   return [
-    "<selection>",
-    `part: ${part.label} (id "${part.id}")`,
-    `point clicked (x, y, z mm): ${at(part.point)}`,
-    `surface normal there: ${at(part.normal)}`,
-    part.face === null ? null : `face index: ${part.face}`,
-    "</selection>",
+    "<comments>",
+    ...notes.flatMap(({ part, text: said }) => [
+      `<comment part="${part.label}" id="${part.id}" point="${at(part.point)}" normal="${at(part.normal)}"${part.face === null ? "" : ` face="${part.face}"`}>`,
+      said,
+      "</comment>",
+    ]),
+    "</comments>",
     "",
     text,
   ]
-    .filter((line) => line !== null)
     .join("\n")
+    .trim()
+}
+
+/** What a user's message says, for the places that show it in a line. */
+function wordsOf(item: Extract<ThreadItem, { kind: "user" | "assistant" }>) {
+  if (item.kind === "assistant" || item.text) return item.text
+  // nothing but what was said of parts
+  return (item.notes ?? []).map((note) => note.text).join(" · ")
 }
 
 /**
@@ -357,14 +366,14 @@ export class Threads {
         this.sumUp(projectId, conversation)
         return {
           id: conversation.id,
-          title: conversation.name ?? (first ? firstLine(first.text) : ""),
+          title: conversation.name ?? (first ? firstLine(wordsOf(first)) : ""),
           status: !running
             ? "idle"
             : running.pending.size > 0
               ? "asking"
               : "working",
           since: running?.since ?? null,
-          lastMessage: last ? plain(last.text) : null,
+          lastMessage: last ? plain(wordsOf(last)) : null,
           gist:
             last && conversation.gist?.of === last.id
               ? conversation.gist.text
@@ -389,7 +398,7 @@ export class Threads {
       this.asked.has(message.id) ||
       // one still being written is not yet what it will be
       (message.kind === "assistant" && message.streaming) ||
-      plain(message.text).length <= GIST_FROM
+      plain(wordsOf(message)).length <= GIST_FROM
     )
       return
     this.asked.add(message.id)
@@ -400,7 +409,7 @@ export class Threads {
         this.asked.delete(message.id)
         return
       }
-      const text = await gistOf(claude, message.kind, message.text)
+      const text = await gistOf(claude, message.kind, wordsOf(message))
       // nothing came back, or the project has been taken off the list meanwhile
       if (
         !text ||
@@ -453,7 +462,7 @@ export class Threads {
     projectId: string,
     conversationId: string | null,
     text: string,
-    part: PartRef | null,
+    notes: PartNote[],
     manner: Manner
   ): string | null {
     const project = this.deps.projects.get(projectId)
@@ -475,7 +484,8 @@ export class Threads {
       id: `user-${now}`,
       at: now,
       text,
-      part,
+      part: null,
+      ...(notes.length > 0 ? { notes } : {}),
     })
 
     let finish = () => {}
@@ -489,7 +499,7 @@ export class Threads {
     }
     book.run = run
     this.deps.onSummary()
-    void this.turn(projectId, project, book, run, finished, text, part, manner)
+    void this.turn(projectId, project, book, run, finished, text, notes, manner)
     return conversation.id
   }
 
@@ -501,7 +511,7 @@ export class Threads {
     run: Run,
     finished: Promise<void>,
     text: string,
-    part: PartRef | null,
+    notes: PartNote[],
     manner: Manner
   ) {
     const { conversation, abort, finish } = run
@@ -513,7 +523,7 @@ export class Threads {
     }
     // Keep the input open until the turn is over: approvals and viewport tools are
     // answered over the same channel the message went in on.
-    const prompt = withSelection(text, part)
+    const prompt = withNotes(text, notes)
     async function* input(): AsyncGenerator<SDKUserMessage> {
       yield {
         type: "user",

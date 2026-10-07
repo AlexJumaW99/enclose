@@ -13,15 +13,19 @@ export const EDGE = "#0e1012"
 
 /**
  * The colour of one of a part's skins. It is one of the app's own colours (see
- * shared/palette.ts): the one the model names, or the nearest to the colour the model or
- * its file gives, or, if neither gives any, the one that falls to the part's group.
- * Metal is the exception: it is the colour of its metal.
+ * shared/palette.ts): the one the user gave the part, or the one the model names, or the
+ * nearest to the colour the model or its file gives, or, if none gives any, the one that
+ * falls to the part's group. Metal is the exception, unless the user gave it a colour:
+ * it is the colour of its metal.
  */
 export function skinColour(
   { part, turn }: LoadedPart,
   skin: Skin,
-  dark: boolean
+  dark: boolean,
+  /** the colour the user has given the part, if they have given it one */
+  chosen: string | null = null
 ): THREE.Color {
+  if (chosen) return new THREE.Color(drawnIn(chosen, turn))
   const ofFile =
     part.paint === "bare" && skin.color ? `#${skin.color.getHexString()}` : null
   if (part.metal) {

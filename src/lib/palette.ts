@@ -1,11 +1,6 @@
 // Which of the app's colours a part is drawn in, given what its model says of its colour.
 import { PALETTE, type PaletteName } from "@shared/palette"
 
-/** The colours that are colours: every one of the palette but its grey. */
-const HUES = (Object.keys(PALETTE) as PaletteName[]).filter(
-  (name) => name !== "grey"
-)
-
 /**
  * The colours given in turn to things that come with none of their own, such as the
  * groups of a model that leaves colour out: each as unlike the one before as can be.
@@ -48,10 +43,11 @@ function hueOf([r, g, b]: [number, number, number]): number | null {
   return (sixth * 60 + 360) % 360
 }
 
-const HUE_AT = HUES.map((name) => ({
-  name,
-  at: hueOf(parts(PALETTE[name])!)!,
-}))
+/** The colours that are colours, and where each is round the circle: not its greys or its white. */
+const HUE_AT = (Object.keys(PALETTE) as PaletteName[]).flatMap((name) => {
+  const at = hueOf(parts(PALETTE[name])!)
+  return at === null ? [] : [{ name, at }]
+})
 
 /**
  * The colour a thing is drawn in. `given` is what its model says: one of the palette's
@@ -62,7 +58,8 @@ const HUE_AT = HUES.map((name) => ({
  */
 export function drawnIn(given: string | null, turn: number): string {
   if (given === null) return PALETTE[IN_TURN[turn % IN_TURN.length]]
-  const named = given.trim().toLowerCase()
+  // "gray" is the same word
+  const named = given.trim().toLowerCase().replace("gray", "grey")
   if (named in PALETTE) return PALETTE[named as PaletteName]
   const colour = parts(given)
   // not a colour this can read: left to whatever draws it

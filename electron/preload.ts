@@ -35,13 +35,13 @@ const api: CadApi = {
   thread: {
     items: (projectId, conversationId) =>
       ipcRenderer.invoke(CHANNEL.threadItems, projectId, conversationId),
-    send: (projectId, conversationId, text, part, manner) =>
+    send: (projectId, conversationId, text, notes, manner) =>
       ipcRenderer.invoke(
         CHANNEL.threadSend,
         projectId,
         conversationId,
         text,
-        part,
+        notes,
         manner
       ),
     stop: (projectId) => ipcRenderer.invoke(CHANNEL.threadStop, projectId),

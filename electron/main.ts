@@ -13,7 +13,7 @@ import {
   type Manner,
   type ModelChoice,
   type ModelSource,
-  type PartRef,
+  type PartNote,
   type PermissionAnswer,
   type Project,
   type Settings,
@@ -321,7 +321,7 @@ function wire() {
       id: string,
       conversationId: string | null,
       text: string,
-      part: PartRef | null,
+      notes: PartNote[] | null,
       manner: Partial<Manner> | null
     ) =>
       // answers at once, with the conversation it went into: the turn runs for as long
@@ -330,7 +330,7 @@ function wire() {
         String(id),
         conversationId === null ? null : String(conversationId),
         String(text),
-        part,
+        Array.isArray(notes) ? notes.filter((note) => note?.part?.id) : [],
         {
           model: typeof manner?.model === "string" ? manner.model : null,
           effort: EFFORTS.find((effort) => effort === manner?.effort) ?? null,

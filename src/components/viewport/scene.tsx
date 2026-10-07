@@ -11,10 +11,11 @@ import type { PartRef, Vec3 } from "@shared/api"
 import { useThemeColors, type ThemeColors } from "@/lib/css-color"
 import type { Keepout } from "@/lib/model"
 import type { Turn } from "@/lib/orient"
-import type { Section, Selection, View } from "@/lib/store"
+import type { Note, Section, Selection, View } from "@/lib/store"
 import { bridge } from "./bridge"
 import type { LoadedModel, LoadedPart } from "./load"
 import { EDGE, finish, skinColour } from "./paint"
+import { NoteMark, PartMarks } from "./part-marks"
 import { FOV, MODEL_TO_WORLD, REACH, Rig, toWorld } from "./rig"
 import { SectionHandle } from "./section-handle"
 
@@ -275,9 +276,15 @@ const PartModel = React.memo(function PartModel({
   explode,
   plane,
   colors,
+  colour,
+  children,
 }: {
   loaded: LoadedPart
   look: Look
+  /** the colour the user has given it, if they have */
+  colour: string | null
+  /** what is shown with the part, and goes where it goes */
+  children?: React.ReactNode
   /** there is glass about, which this part hides whatever of it is behind */
   cover: boolean
   /** its place among the parts whose cut faces are filled in, if it is one of them */
@@ -305,8 +312,9 @@ const PartModel = React.memo(function PartModel({
 
   const planes = React.useMemo(() => [plane], [plane])
   const skinColors = React.useMemo(
-    () => loaded.skins.map((skin) => skinColour(loaded, skin, colors.dark)),
-    [loaded, colors.dark]
+    () =>
+      loaded.skins.map((skin) => skinColour(loaded, skin, colors.dark, colour)),
+    [loaded, colors.dark, colour]
   )
 
   const lines = React.useMemo(() => {
@@ -488,6 +496,7 @@ const PartModel = React.memo(function PartModel({
           <primitive object={turns.material} attach="material" {...line} />
         </primitive>
       )}
+      {children}
     </group>
   )
 })
@@ -994,16 +1003,24 @@ function Camera() {
 
 export function Scene({
   loaded,
+  projectId,
   view,
   selectedId,
   hoveredId,
+  notes,
+  colours,
   homeKey,
   onPick,
   onHover,
   onSection,
 }: {
   loaded: LoadedModel
+  projectId: string
   view: View
+  /** what has been said of parts and not yet sent */
+  notes: Note[]
+  /** the colours the user has given parts, by part */
+  colours: Record<string, string>
   selectedId: string | null
   hoveredId: string | null
   /** changes when the camera should go back to its home view */
@@ -1095,7 +1112,23 @@ export function Scene({
               explode={explode}
               plane={plane}
               colors={colors}
-            />
+              colour={colours[part.part.id] ?? null}
+            >
+              {selectedId === part.part.id && (
+                <PartMarks
+                  loaded={part}
+                  model={loaded.model}
+                  projectId={projectId}
+                  shown={`#${skinColour(part, part.skins[0], colors.dark, colours[part.part.id]).getHexString()}`}
+                />
+              )}
+              {notes.map(
+                (note) =>
+                  note.part.id === part.part.id && (
+                    <NoteMark key={note.id} loaded={part} note={note} />
+                  )
+              )}
+            </PartModel>
           )
         })}
         {/* keep-outs mark where things sit assembled; pulled apart they'd mislead */}
@@ -1120,10 +1153,12 @@ export function Scene({
                     {
                       key: part.part.id,
                       // a little lighter than the part: what a cut shows is not its outside
-                      color: skinColour(part, part.skins[0], colors.dark).lerp(
-                        WHITE,
-                        0.14
-                      ),
+                      color: skinColour(
+                        part,
+                        part.skins[0],
+                        colors.dark,
+                        colours[part.part.id]
+                      ).lerp(WHITE, 0.14),
                       hovered: hoveredId === part.part.id,
                       selected: selectedId === part.part.id,
                     },

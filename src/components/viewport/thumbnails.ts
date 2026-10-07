@@ -70,6 +70,7 @@ function largestPiece(gl: WebGLRenderingContext | WebGL2RenderingContext) {
 async function draw(
   loaded: LoadedModel,
   dark: boolean,
+  colours: Record<string, string>,
   each: (partId: string, url: string) => void,
   stopped: () => boolean
 ) {
@@ -106,7 +107,7 @@ async function draw(
       const made: { dispose(): void }[] = []
       for (const skin of part.skins) {
         const material = new THREE.MeshStandardMaterial({
-          color: skinColour(part, skin, dark),
+          color: skinColour(part, skin, dark, colours[part.part.id]),
           ...finish(part),
           side: THREE.DoubleSide,
           polygonOffset: true,
@@ -194,12 +195,15 @@ async function draw(
  */
 export function useThumbnails(
   loaded: LoadedModel | null,
-  wanted: boolean
+  wanted: boolean,
+  /** the colours the user has given parts, by part: the pictures are in them too */
+  colours: Record<string, string>
 ): Record<string, string> {
   const { dark } = useThemeColors()
   const [drawn, setDrawn] = React.useState<{
     of: LoadedModel
     dark: boolean
+    colours: Record<string, string>
     urls: Record<string, string>
   } | null>(null)
   // once started for a model they are finished, wanted or not
@@ -213,13 +217,17 @@ export function useThumbnails(
     void draw(
       loaded,
       dark,
+      colours,
       (partId, url) => {
         if (stopped) return
         setDrawn((before) => ({
           of: loaded,
           dark,
+          colours,
           urls:
-            before?.of === loaded && before.dark === dark
+            before?.of === loaded &&
+            before.dark === dark &&
+            before.colours === colours
               ? { ...before.urls, [partId]: url }
               : { [partId]: url },
         }))
@@ -229,7 +237,8 @@ export function useThumbnails(
     return () => {
       stopped = true
     }
-  }, [go, loaded, dark])
+  }, [go, loaded, dark, colours])
 
+  // while they are drawn again in a colour newly given, the ones there are stay up
   return drawn?.of === loaded && drawn.dark === dark ? drawn.urls : {}
 }

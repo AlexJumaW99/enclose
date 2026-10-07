@@ -1,7 +1,8 @@
-// The colours parts are drawn in: the whole round of colour, each of them light, and one
-// grey. They are few and of a kind, so that whatever is on screen goes together, in the
-// dark theme and the light. A model names them; any other colour it gives is drawn as
-// the nearest of them (see src/lib/palette.ts).
+// The colours parts are drawn in: the whole round of colour, each of them light, and
+// three with no colour to them: white, a light grey and a grey. They are few and of a
+// kind, so that whatever is on screen goes together, in the dark theme and the light. A
+// model names them; any other colour it gives is drawn as the nearest of them (see
+// src/lib/palette.ts).
 
 export const PALETTE = {
   red: "#f19c9a",
@@ -14,6 +15,8 @@ export const PALETTE = {
   indigo: "#a398f8",
   violet: "#d69af9",
   pink: "#f19cc9",
+  white: "#fafafa",
+  lightgrey: "#d4d4d4",
   grey: "#4b4b4b",
 } as const
 

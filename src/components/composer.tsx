@@ -14,7 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
-import type { Access, Effort, PartRef } from "@shared/api"
+import type { Access, Effort } from "@shared/api"
 import { ClaudeIcon } from "@/components/icons"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -44,7 +44,13 @@ import {
   chosenModel,
   EFFORT_WORDS,
 } from "@/lib/manner"
-import { askModels, useActiveProject, useStack, useStore } from "@/lib/store"
+import {
+  askModels,
+  useActiveProject,
+  useStack,
+  useStore,
+  type Note,
+} from "@/lib/store"
 import { useNow } from "@/lib/time"
 
 /** What the choices under a message go without, one after another, as room runs out. */
@@ -277,23 +283,75 @@ function AccessMenu() {
   )
 }
 
-/** Where a message to Claude is written: in the thread, or beside a part that was clicked. */
+/**
+ * What has been said of parts and is waiting to go with the next message: a chip for
+ * each, in a row that scrolls sideways when there are more than fit. A chip says which
+ * part and how what was said of it begins; pressed, it opens that again beside the part.
+ */
+function Notes({ notes }: { notes: Note[] }) {
+  const write = useStore((state) => state.write)
+  const dropNote = useStore((state) => state.dropNote)
+  const writing = useStore((state) => state.writing)
+  return (
+    <InputGroupAddon align="block-start" className="pb-0">
+      <div className="flex min-w-0 [scrollbar-width:none] gap-1.5 overflow-x-auto">
+        {notes.map((note) => (
+          <Badge
+            key={note.id}
+            data-note={note.id}
+            variant="secondary"
+            className={cn(
+              "h-6 max-w-52 shrink-0 gap-1 pr-1",
+              writing === note.id && "ring-1 ring-foreground/30"
+            )}
+          >
+            <button
+              type="button"
+              title="Change what was said"
+              onClick={() => write(note.id)}
+              className="flex min-w-0 cursor-pointer items-center gap-1.5 outline-none"
+            >
+              <span className="shrink-0">{note.part.label}</span>
+              <span className="truncate font-normal text-muted-foreground">
+                {note.text}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => dropNote(note.id)}
+              aria-label={`Take back what was said of ${note.part.label}`}
+              className="shrink-0 cursor-pointer rounded-full p-0.5 text-muted-foreground outline-none hover:text-foreground"
+            >
+              <XIcon className="size-3" />
+            </button>
+          </Badge>
+        ))}
+      </div>
+    </InputGroupAddon>
+  )
+}
+
+/** Stable when a project has nothing said of its parts. */
+const NO_NOTES: Note[] = []
+
+/** Where a message to Claude is written, with what has been said of parts to go with it. */
 export function Composer({
-  part,
-  onClearPart,
   placeholder,
   autoFocus,
 }: {
-  /** the part this message is about, sent along with it */
-  part: PartRef | null
-  onClearPart?: () => void
   placeholder: string
   autoFocus?: boolean
 }) {
   const project = useActiveProject()
   const { open } = useStack(project, useNow(60_000))
   const send = useStore((state) => state.send)
-  const [text, setText] = React.useState("")
+  const text = useStore((state) =>
+    project ? (state.drafts[project.id] ?? "") : ""
+  )
+  const setText = useStore((state) => state.setDraft)
+  const notes = useStore((state) =>
+    project ? (state.notes[project.id] ?? NO_NOTES) : NO_NOTES
+  )
   // a line high until it is being written in: then it has room for what is written
   const [within, setWithin] = React.useState(false)
   const roomy = within || text !== ""
@@ -308,10 +366,9 @@ export function Composer({
   const busy = !project || (running !== undefined && running.id === open?.id)
   const elsewhere = running !== undefined && !busy
 
+  const something = text.trim() !== "" || notes.length > 0
   const submit = () => {
-    if (busy || elsewhere || !text.trim()) return
-    send(text, part)
-    setText("")
+    if (!busy && !elsewhere && something) send()
   }
 
   return (
@@ -330,20 +387,7 @@ export function Composer({
         if (!stays) setWithin(false)
       }}
     >
-      {part && onClearPart && (
-        <InputGroupAddon align="block-start" className="pb-0">
-          <Badge variant="secondary" className="max-w-full gap-1">
-            <span className="truncate">{part.label}</span>
-            <button
-              type="button"
-              onClick={onClearPart}
-              aria-label={`Leave out ${part.label}`}
-            >
-              <XIcon className="size-3" />
-            </button>
-          </Badge>
-        </InputGroupAddon>
-      )}
+      {notes.length > 0 && <Notes notes={notes} />}
       <InputGroupTextarea
         value={text}
         onChange={(event) => setText(event.target.value)}
@@ -398,7 +442,7 @@ export function Composer({
             variant="default"
             size="icon-xs"
             className="ml-auto shrink-0"
-            disabled={!text.trim() || elsewhere}
+            disabled={!something || elsewhere}
             onClick={submit}
           >
             <ArrowUpIcon />

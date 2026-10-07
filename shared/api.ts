@@ -54,8 +54,20 @@ export type PartRef = {
   face: number | null
 }
 
+/** Something said of a part: a change wanted at the point of it that was clicked. */
+export type PartNote = { part: PartRef; text: string }
+
 export type ThreadItem =
-  | { kind: "user"; id: string; at: number; text: string; part: PartRef | null }
+  | {
+      kind: "user"
+      id: string
+      at: number
+      text: string
+      /** the part a message was about, when a message could be about only one */
+      part: PartRef | null
+      /** what was said of parts of the model, sent along with the message */
+      notes?: PartNote[]
+    }
   | {
       kind: "assistant"
       id: string
@@ -199,7 +211,7 @@ export type CadApi = {
       projectId: string,
       conversationId: string | null,
       text: string,
-      part: PartRef | null,
+      notes: PartNote[],
       manner: Manner
     ): Promise<string | null>
     /** stop whatever Claude is doing in the project */
