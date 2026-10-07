@@ -19,6 +19,7 @@ import {
   type PartNote,
   type PartRef,
   type Project,
+  type Seen,
   type ThreadItem,
   type Vec3,
 } from "@shared/api"
@@ -317,10 +318,13 @@ type State = {
   openConversation(projectId: string, conversationId: string | null): void
   /** Fetch what has been said in a conversation, the first time it is looked at. */
   load(projectId: string, conversationId: string): void
-  /** Pick a folder to add; true if one was added. */
-  addProject(): Promise<boolean>
-  /** Add folders dropped on the window, and open the last of them. */
-  addFolders(dirs: string[]): Promise<void>
+  /**
+   * Pick CAD files or a folder to open (or the one kind, where the picker cannot offer
+   * both); true if a project came of it.
+   */
+  addProject(kind?: "file" | "folder"): Promise<boolean>
+  /** Open what was dropped on the window, and turn to the project that came of it. */
+  openPaths(paths: string[]): Promise<void>
   /** Make a new project's folder where new projects go, and open it. */
   createProject(): Promise<void>
   removeProject(id: string): Promise<void>
@@ -372,6 +376,11 @@ type State = {
   setEffort(effort: Effort | null): void
   /** Send what is in the open project's message box, with what has been said of its parts. */
   send(): void
+  /**
+   * Have Claude look over a project's model, of files just opened, from what the view
+   * shows of it: answered the way a message would be, as far as that is chosen.
+   */
+  lookOver(projectId: string, seen: Seen): Promise<void>
 }
 
 /** Something said of a part, waiting to be sent: the part and point, and the words. */
@@ -446,19 +455,16 @@ export const useStore = create<State>()((set, get) => ({
     })
   },
 
-  async addProject() {
-    const project = await window.cad.projects.add()
+  async addProject(kind) {
+    const project = await window.cad.projects.add(kind)
     if (project) get().activate(project.id)
     return project !== null
   },
 
-  async addFolders(dirs) {
-    let last: string | null = null
-    for (const dir of dirs) {
-      const project = await window.cad.projects.addFolder(dir)
-      if (project) last = project.id
-    }
-    if (last) get().activate(last)
+  async openPaths(paths) {
+    if (paths.length === 0) return
+    const project = await window.cad.projects.open(paths)
+    if (project) get().activate(project.id)
   },
 
   async createProject() {
@@ -715,6 +721,17 @@ export const useStore = create<State>()((set, get) => ({
         if (id)
           set((state) => ({ picked: { ...state.picked, [project.id]: id } }))
       })
+  },
+
+  async lookOver(projectId, seen) {
+    const { access, model, effort, models } = get()
+    const id = await window.cad.thread.lookOver(
+      projectId,
+      seen,
+      mannerOf(models, model, effort, access)
+    )
+    // what comes of it is what the conversation panel shows, when it is brought up
+    if (id) set((state) => ({ picked: { ...state.picked, [projectId]: id } }))
   },
 }))
 

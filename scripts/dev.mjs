@@ -9,6 +9,9 @@ import { context } from "esbuild"
 import { createServer } from "vite"
 
 import { main, preload } from "./electron-build.mjs"
+import { nameElectron } from "./electron-name.mjs"
+
+nameElectron()
 
 const server = await createServer()
 await server.listen()

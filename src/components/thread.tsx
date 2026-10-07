@@ -42,6 +42,13 @@ type Of<Kind extends ThreadItem["kind"]> = Extract<ThreadItem, { kind: Kind }>
 function UserMessage({ item }: { item: Of<"user"> }) {
   const SAID =
     "max-w-[85%] rounded-2xl bg-muted px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap"
+  // asked by the app itself, and so not shown as something the user said
+  if (item.lookOver)
+    return (
+      <div className="text-center text-xs text-muted-foreground">
+        Enclose asked Claude to look over the files you opened
+      </div>
+    )
   return (
     <div className="flex flex-col items-end gap-1.5">
       {item.part && (
@@ -433,13 +440,22 @@ export function Thread({ project }: { project: Project }) {
         <div className="flex-1" />
       ) : (
         <Empty className="flex-1">
-          {project.manifest ? (
+          {/* files being made a model of are as good as one: it is seconds away */}
+          {project.manifest || project.bringingIn?.state === "working" ? (
             <EmptyHeader>
               <EmptyTitle>Ask Claude about this model</EmptyTitle>
               <EmptyDescription>
                 Describe a change, or click a part in the view and say what it
                 should become. Claude edits the project and rebuilds; the view
                 updates by itself.
+              </EmptyDescription>
+            </EmptyHeader>
+          ) : project.bringingIn ? (
+            <EmptyHeader>
+              <EmptyTitle>No model of the files yet</EmptyTitle>
+              <EmptyDescription>
+                They are in the project, where Claude can get at them. Ask it to
+                set the project up, and it goes on from there.
               </EmptyDescription>
             </EmptyHeader>
           ) : (
@@ -459,7 +475,9 @@ export function Thread({ project }: { project: Project }) {
           placeholder={
             project.manifest
               ? "Ask anything, @tag parts, $use skills or / for commands"
-              : "A case for a Raspberry Pi Zero, with a lid that screws on…"
+              : project.bringingIn?.state === "failed"
+                ? "Set this project up, so the files show…"
+                : "A case for a Raspberry Pi Zero, with a lid that screws on…"
           }
           // opened to be written in: by its button, or by Cmd+B
           autoFocus

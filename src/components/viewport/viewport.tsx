@@ -1,8 +1,17 @@
 import * as React from "react"
 import { cn } from "cn"
-import { FolderPlusIcon, PlusIcon, TriangleAlertIcon } from "lucide-react"
+import {
+  FolderPlusIcon,
+  PlusIcon,
+  SquareIcon,
+  TriangleAlertIcon,
+} from "lucide-react"
 
 import type { Project } from "@shared/api"
+import { Mark } from "@/components/mark"
+import { RESTING_WIDTH } from "@/lib/mark"
+import { atWork } from "@/lib/steps"
+import { duration, useNow } from "@/lib/time"
 import { PartsPanel } from "@/components/parts-panel"
 import { Tools } from "@/components/tools"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -15,10 +24,10 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
-import { Spinner } from "@/components/ui/spinner"
 import { readModel } from "@/lib/model"
 import { spokenFor } from "@/lib/keys"
-import { notCalledOn } from "@/lib/mentions"
+import { MAC } from "@/lib/platform"
+import { notCalledOn, partsOf } from "@/lib/mentions"
 import { VIEWS } from "@/lib/orient"
 import {
   SPREAD,
@@ -32,6 +41,7 @@ import { AxisGizmo } from "./axis-gizmo"
 import { bridge } from "./bridge"
 import { ExplodeSlider } from "./explode-slider"
 import { disposeModel, loadModel, standInModel, type LoadedModel } from "./load"
+import { picturesOf } from "./pictures"
 import { appearance, Scene } from "./scene"
 import { ShadingPie } from "./shading-pie"
 import { useThumbnails } from "./thumbnails"
@@ -100,6 +110,137 @@ function AddToChat({
   )
 }
 
+/**
+ * The parts Claude is at work on, by id: the ones the message it is answering is about.
+ * None while it is not at work in the project.
+ */
+function useChanging(project: Project): string[] {
+  const running = project.conversations.find((c) => c.status !== "idle")?.id
+  const load = useStore((s) => s.load)
+  // what was asked is there to be read, whether or not that conversation is looked at
+  React.useEffect(() => {
+    if (running) load(project.id, running)
+  }, [project.id, running, load])
+  // the same message for as long as the turn lasts, whatever else is said in it
+  const asked = useStore((s) =>
+    running
+      ? s.items[running]?.findLast((item) => item.kind === "user")
+      : undefined
+  )
+  return React.useMemo(
+    () => (asked?.kind === "user" ? partsOf(asked) : NO_PARTS),
+    [asked]
+  )
+}
+
+/** How big the square the mark turns in is while something is waited for, px. */
+const MARK_SIZE = 96
+
+/**
+ * What is waited for, in the middle of the view while it has nothing else to show: the
+ * mark, turning; what is being done, and under that how far along it is; and a bar of
+ * the same, as wide as the mark is at rest. `progress` runs from 0 to 1, or is null
+ * while there is no telling.
+ */
+function Waiting({
+  title,
+  detail,
+  progress,
+  late,
+}: {
+  title: string
+  detail: string
+  progress: number | null
+  /** not shown at once: what is waited for may be here before anyone could read this */
+  late: boolean
+}) {
+  return (
+    <div
+      className={cn(
+        "pointer-events-none absolute inset-0 flex animate-in flex-col items-center justify-center fill-mode-both fade-in",
+        late ? "delay-300 duration-300" : "duration-200"
+      )}
+    >
+      <Mark moving size={MARK_SIZE} />
+      {/* The mark, the words and the bar each have room to themselves, and as much of
+          it one way as the other by what is seen of them: the mark comes out to the
+          edge of its square as it turns, and a line of words has a little over and
+          under its letters. */}
+      <div className="mt-7 flex max-w-md flex-col items-center text-center text-xl/[1.3]">
+        <div className="max-w-full truncate font-bold">{title}</div>
+        <div className="text-foreground/45">{detail}</div>
+      </div>
+      <div
+        role="progressbar"
+        aria-label={title}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={
+          progress === null ? undefined : Math.round(progress * 100)
+        }
+        className="mt-8 h-0.5 overflow-hidden rounded-full bg-foreground/20"
+        style={{ width: Math.round(MARK_SIZE * RESTING_WIDTH) }}
+      >
+        {progress === null ? (
+          <div className="h-full w-1/3 animate-[passing_1.3s_ease-in-out_infinite] rounded-full bg-foreground" />
+        ) : (
+          <div
+            className="h-full rounded-full bg-foreground transition-[width] duration-200 ease-out"
+            style={{ width: `${Math.max(2, progress * 100)}%` }}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * At the foot of the view while Claude looks over the model of files just opened: how
+ * long it has been at it, what it is at just now, as the conversation would say it, and
+ * a way to have it leave off.
+ */
+function LookingOver({ project }: { project: Project }) {
+  const turn = project.conversations.find((c) => c.status !== "idle")
+  const items = useStore((s) => (turn ? s.items[turn.id] : undefined))
+  // Counted from when this came up, which is a moment before Claude is set to it; or
+  // from when it was, if this is come back to with the turn already under way.
+  const [shown] = React.useState(() => Date.now())
+  const now = useNow(1000)
+  const taken = now - Math.min(shown, turn?.since ?? Infinity)
+  const doing = (items && atWork(items)) ?? "Understanding the model"
+  return (
+    // the button is as far from the end it is at as from the top and the bottom, and
+    // the words have a good deal more room than that at theirs
+    <div className="glass pointer-events-auto flex animate-in items-center gap-3 rounded-full bg-background/60 py-2.5 pr-2.5 pl-6 text-sm shadow-md ring-1 ring-foreground/10 duration-200 fade-in slide-in-from-bottom-2">
+      {/* room for two figures and what they count in, so that the words beside it stay
+          where they are as it goes up, in the figures everything else is set in */}
+      <span className="min-w-[3ch] text-foreground/45">{duration(taken)}</span>
+      {/* a light passes along it, as one does across the parts; and it is as wide as
+          this whatever it says, so that the whole does not change size as it changes */}
+      <span
+        className="mr-2 w-52 shimmer truncate font-medium text-muted-foreground shimmer-color-foreground"
+        title={doing}
+      >
+        {doing}
+      </span>
+      <Button
+        size="icon-sm"
+        className="shrink-0 bg-destructive text-white hover:bg-destructive/80"
+        onClick={() => void window.cad.thread.stop(project.id)}
+      >
+        <SquareIcon className="size-3 fill-current" />
+        <span className="sr-only">Stop</span>
+      </Button>
+    </div>
+  )
+}
+
+/**
+ * How much of bringing files in is making the model of them: the rest is the model being
+ * loaded into the view, which is the quicker of the two.
+ */
+const MAKING = 0.8
+
 type Loading =
   | { status: "loading"; done: number; total: number }
   | { status: "error"; message: string }
@@ -112,6 +253,9 @@ type Loading =
  */
 function useLoadedModel(project: Project) {
   const blank = project.manifest === null
+  // Files opened into it that are not a model yet. There is nothing of the project's to
+  // show meanwhile, and a cube would be taken for what was opened.
+  const coming = blank && project.bringingIn !== null
   const [loaded, setLoaded] = React.useState<LoadedModel | null>(null)
   const [state, setState] = React.useState<Loading>({
     status: "loading",
@@ -127,7 +271,7 @@ function useLoadedModel(project: Project) {
       if (blank) {
         await Promise.resolve()
         if (cancelled) return
-        setLoaded(standInModel())
+        setLoaded(coming ? null : standInModel())
         setState({ status: "ready" })
         return
       }
@@ -156,7 +300,7 @@ function useLoadedModel(project: Project) {
     return () => {
       cancelled = true
     }
-  }, [project.id, project.revision, blank])
+  }, [project.id, project.revision, blank, coming])
 
   // free the previous model's meshes once it is off screen
   React.useEffect(
@@ -184,16 +328,89 @@ function Model({ project }: { project: Project }) {
   const partsOpen = useStore((s) => s.partsOpen)
   const notes = useStore((s) => s.notes[project.id] ?? NO_NOTES)
   const colours = useStore((s) => s.colours[project.id] ?? NO_COLOURS)
+  const changing = useChanging(project)
+  const lookOver = useStore((s) => s.lookOver)
   const thumbs = useThumbnails(loaded, partsOpen, colours)
   const goHome = useStore((s) => s.goHome)
   const setThreadOpen = useStore((s) => s.setThreadOpen)
 
   // A project with nothing made in it opens with the conversation beside it: that is
-  // where the first thing to do is. Put away, it stays away.
+  // where the first thing to do is. Put away, it stays away. (Files being made a model
+  // of are not nothing: there is a model on its way, and nothing to say until it is here.)
   const blank = project.manifest === null
+  const bringingIn = blank ? project.bringingIn : null
+  const reading = bringingIn?.state === "working"
   React.useEffect(() => {
-    if (blank) setThreadOpen(true)
-  }, [blank, setThreadOpen])
+    if (blank && !reading) setThreadOpen(true)
+  }, [blank, reading, setThreadOpen])
+  // files were brought in while this was up: loading their model is the end of that
+  const [brought, setBrought] = React.useState(false)
+  if (reading && !brought) setBrought(true)
+
+  // Files just opened are looked over by Claude as soon as their model is here to be
+  // seen: it is shown pictures of the model, drawn for it, and names and groups the
+  // parts. Until it is through, a light goes across every part, as across the ones it
+  // is at work on at any other time.
+  const real = loaded && !loaded.standIn ? loaded : null
+  const lookingOver = real !== null && project.lookOver !== null
+  const wanted = real !== null && project.lookOver === "wanted"
+  React.useEffect(() => {
+    if (!wanted || !real) return
+    let over = false
+    const given = useStore.getState().colours[project.id] ?? NO_COLOURS
+    void picturesOf(real, given).then((seen) => {
+      if (!over) void lookOver(project.id, seen)
+    })
+    return () => {
+      over = true
+    }
+  }, [wanted, real, project.id, lookOver])
+  const every = React.useMemo(
+    () => real?.parts.map((part) => part.part.id) ?? NO_PARTS,
+    [real]
+  )
+  // Meanwhile the view is Claude's: the camera goes round the model by itself, and
+  // nothing in the view answers the hand or the keys. When it is through, the camera
+  // goes back to where a model opens, as Cmd+1 would take it.
+  const looked = React.useRef(false)
+  React.useEffect(() => {
+    if (looked.current && !lookingOver) goHome()
+    looked.current = lookingOver
+  }, [lookingOver, goHome])
+
+  // Nothing to see yet: how far along it is, in the middle of the view, from the files
+  // being read to their model being loaded, as one thing. (A model built again comes in
+  // behind the one on screen, and takes its place when it is all there: nothing is said
+  // of that.)
+  const loading = state.status === "loading" ? state : { done: 0, total: 0 }
+  const waiting = loaded
+    ? null
+    : bringingIn?.state === "working"
+      ? {
+          title: `Importing ${project.name}`,
+          detail: bringingIn.total
+            ? `Preparing ${bringingIn.done} of ${bringingIn.total} parts`
+            : "Reading the files",
+          progress: bringingIn.total
+            ? (MAKING * bringingIn.done) / bringingIn.total
+            : null,
+          late: false,
+        }
+      : // a model there is, and none of it here yet: it is loading, or about to
+        !blank && state.status !== "error"
+        ? {
+            title: `${brought ? "Importing" : "Opening"} ${project.name}`,
+            detail:
+              loading.total > 0
+                ? `Loading ${loading.done} of ${loading.total} parts`
+                : "Loading the model",
+            progress:
+              (brought ? MAKING : 0) +
+              ((brought ? 1 - MAKING : 1) * loading.done) /
+                (loading.total || 1),
+            late: !brought,
+          }
+        : null
 
   const middle = React.useMemo(
     () => loaded?.box.getCenter(loaded.box.min.clone()).toArray() ?? null,
@@ -258,7 +475,7 @@ function Model({ project }: { project: Project }) {
   // the world's axes, as it brings up the grid in Figma, and again takes them away.
   React.useEffect(() => {
     const key = (event: KeyboardEvent) => {
-      if (event.altKey) return
+      if (event.altKey || lookingOver) return
       if (useStore.getState().settingsOpen) return
       if (event.shiftKey) {
         // the one key here that Shift goes with: and not a capital G being typed
@@ -322,7 +539,7 @@ function Model({ project }: { project: Project }) {
     }
     window.addEventListener("keydown", key)
     return () => window.removeEventListener("keydown", key)
-  }, [goHome, loaded, middle])
+  }, [goHome, loaded, middle, lookingOver])
 
   // The camera goes to what I shows on its own, one part or several together, and
   // follows it if it is pulled out from the rest; and goes back when that is no longer
@@ -427,6 +644,9 @@ function Model({ project }: { project: Project }) {
           view={view}
           selectedId={selection?.part.id ?? null}
           several={several}
+          // the stand-in is nothing Claude was asked to change
+          changing={loaded.standIn ? NO_PARTS : lookingOver ? every : changing}
+          reading={lookingOver}
           sweep={sweep}
           hoveredId={hoveredId}
           seeking={seeking && !loaded.standIn}
@@ -442,16 +662,7 @@ function Model({ project }: { project: Project }) {
         />
       )}
 
-      {state.status === "loading" && (
-        <div className="pointer-events-none absolute inset-x-0 top-4 flex justify-center">
-          <div className="flex items-center gap-2 rounded-full bg-background px-3 py-1.5 text-xs text-muted-foreground shadow-sm ring-1 ring-foreground/10">
-            <Spinner className="size-3" />
-            {state.total > 0
-              ? `Loading ${state.done} of ${state.total} parts`
-              : "Loading the model"}
-          </div>
-        </div>
-      )}
+      {waiting && <Waiting {...waiting} />}
       {state.status === "error" && (
         <div className="absolute inset-0 flex items-center justify-center p-6">
           <Alert variant="destructive" className="max-w-md">
@@ -461,9 +672,33 @@ function Model({ project }: { project: Project }) {
           </Alert>
         </div>
       )}
+      {bringingIn?.state === "failed" && (
+        <div className="absolute inset-0 flex items-center justify-center p-6">
+          {bringingIn.why === "python" ? (
+            <Alert className="max-w-md">
+              <TriangleAlertIcon />
+              <AlertTitle>Nothing to read the files with yet</AlertTitle>
+              <AlertDescription>
+                Enclose reads CAD files with Python and build123d, and did not
+                find both on this machine. The files are in the project: ask
+                Claude to set it up, and it will see to the rest.
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <Alert variant="destructive" className="max-w-md">
+              <TriangleAlertIcon />
+              <AlertTitle>The files could not be made a model of</AlertTitle>
+              <AlertDescription>
+                <p>{bringingIn.detail}</p>
+                <p>The files are in the project: ask Claude to look into it.</p>
+              </AlertDescription>
+            </Alert>
+          )}
+        </div>
+      )}
 
-      <Tools loaded={loaded} projectId={project.id} />
-      {loaded && partsOpen && (
+      <Tools loaded={loaded} projectId={project.id} locked={lookingOver} />
+      {loaded && partsOpen && !lookingOver && (
         <PartsPanel
           loaded={loaded}
           thumbs={thumbs}
@@ -478,17 +713,18 @@ function Model({ project }: { project: Project }) {
           together, over how far apart the parts are pulled */}
       {loaded && (
         <div className="pointer-events-none absolute inset-x-0 bottom-5 flex flex-col items-center gap-2.5">
+          {lookingOver && <LookingOver project={project} />}
           <AddToChat loaded={loaded} projectId={project.id} />
           {view.exploded && <ExplodeSlider />}
         </div>
       )}
-      {loaded && middle && (
+      {loaded && middle && !lookingOver && (
         <div className="pointer-events-none absolute right-3 bottom-3 flex items-center gap-1">
           <SectionPlanes middle={middle} />
           <AxisGizmo />
         </div>
       )}
-      <ShadingPie enabled={loaded !== null} tap={cutAcrossZ} />
+      <ShadingPie enabled={loaded !== null && !lookingOver} tap={cutAcrossZ} />
     </>
   )
 }
@@ -505,13 +741,28 @@ function Welcome() {
         <EmptyMedia variant="icon">
           <FolderPlusIcon />
         </EmptyMedia>
-        <EmptyTitle>Drop a folder here</EmptyTitle>
-        <EmptyDescription>Empty or not, it becomes a project.</EmptyDescription>
+        <EmptyTitle>Drop a file or folder here</EmptyTitle>
+        <EmptyDescription>
+          A STEP file, a folder of them, or a folder to start in: it becomes a
+          project.
+        </EmptyDescription>
       </EmptyHeader>
       <EmptyContent className="flex-row justify-center">
-        <Button variant="outline" onClick={() => void addProject()}>
-          Open folder
-        </Button>
+        {/* a Mac's picker takes files and folders alike; no other system's does */}
+        {MAC ? (
+          <Button variant="outline" onClick={() => void addProject()}>
+            Open file or folder
+          </Button>
+        ) : (
+          <>
+            <Button variant="outline" onClick={() => void addProject("file")}>
+              Open file
+            </Button>
+            <Button variant="outline" onClick={() => void addProject("folder")}>
+              Open folder
+            </Button>
+          </>
+        )}
         <Button onClick={() => void createProject()}>Create</Button>
       </EmptyContent>
     </Empty>

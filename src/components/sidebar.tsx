@@ -29,6 +29,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { MAC } from "@/lib/platform"
 import { useStack, useStore } from "@/lib/store"
 import { ago, useNow } from "@/lib/time"
 
@@ -131,7 +132,8 @@ function Said({
 /**
  * Everything written on a card. While there is news of the card's conversation all of
  * it, the name included, gives way at its far end to the card's saying so, half way up
- * the card: the name is on show elsewhere, and this is the news.
+ * the card: the name is on show elsewhere, and this is the news. It gives way to all but
+ * a trace of itself, which is still to be made out behind that.
  */
 function Written({
   conversation,
@@ -150,7 +152,7 @@ function Written({
         className={cn(
           "flex flex-col gap-0.5",
           news &&
-            "[mask-image:linear-gradient(to_right,black_calc(100%-6.75rem),transparent_calc(100%-4.375rem))]"
+            "[mask-image:linear-gradient(to_right,black_calc(100%-6.75rem),rgb(0_0_0/0.04)_calc(100%-4.375rem))]"
         )}
       >
         {children}
@@ -462,9 +464,21 @@ export function Sidebar() {
               <DropdownMenuItem onClick={() => void createProject()}>
                 New project
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void addProject()}>
-                Open folder…
-              </DropdownMenuItem>
+              {/* a Mac's picker takes files and folders alike; no other system's does */}
+              {MAC ? (
+                <DropdownMenuItem onClick={() => void addProject()}>
+                  Open file or folder…
+                </DropdownMenuItem>
+              ) : (
+                <>
+                  <DropdownMenuItem onClick={() => void addProject("file")}>
+                    Open file…
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => void addProject("folder")}>
+                    Open folder…
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>

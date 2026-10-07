@@ -19,8 +19,8 @@ const api: CadApi = {
   platform: process.platform,
   projects: {
     list: () => ipcRenderer.invoke(CHANNEL.projectsList),
-    add: () => ipcRenderer.invoke(CHANNEL.projectsAdd),
-    addFolder: (dir) => ipcRenderer.invoke(CHANNEL.projectsAddFolder, dir),
+    add: (kind) => ipcRenderer.invoke(CHANNEL.projectsAdd, kind),
+    open: (paths) => ipcRenderer.invoke(CHANNEL.projectsOpen, paths),
     create: () => ipcRenderer.invoke(CHANNEL.projectsCreate),
     pathOf: (file) => webUtils.getPathForFile(file),
     remove: (id) => ipcRenderer.invoke(CHANNEL.projectsRemove, id),
@@ -44,6 +44,8 @@ const api: CadApi = {
         notes,
         manner
       ),
+    lookOver: (projectId, seen, manner) =>
+      ipcRenderer.invoke(CHANNEL.threadLookOver, projectId, seen, manner),
     stop: (projectId) => ipcRenderer.invoke(CHANNEL.threadStop, projectId),
     rename: (projectId, conversationId, name) =>
       ipcRenderer.invoke(CHANNEL.threadRename, projectId, conversationId, name),
@@ -63,6 +65,7 @@ const api: CadApi = {
       ipcRenderer.invoke(CHANNEL.settingsChooseProjectsFolder),
     revealProjectsFolder: () =>
       ipcRenderer.invoke(CHANNEL.settingsRevealProjectsFolder),
+    setLookOver: (on) => ipcRenderer.invoke(CHANNEL.settingsSetLookOver, on),
   },
   viewport: {
     onRequest: (listener) => on(CHANNEL.viewportRequest, listener),

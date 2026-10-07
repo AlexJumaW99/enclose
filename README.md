@@ -18,7 +18,7 @@ You need Node 22 or newer and, for the conversation,
 ```
 npm install
 npm run dev                      # open the app
-npm run dev -- path/to/project   # ...with that folder added and open
+npm run dev -- path/to/project   # ...with that folder, or STEP file, opened as a project
 ```
 
 `npm run build && npm start` runs the production build instead of the dev loop.
@@ -26,7 +26,8 @@ npm run dev -- path/to/project   # ...with that folder added and open
 ## How it works
 
 **A project is a folder.** Drop one on the window, or use the + beside the project cards
-to open one or to start a new project. A new project is given a stand-in name to begin
+to open one or to start a new project. STEP files can be dropped and opened the same way:
+see *Starting from CAD files* below. A new project is given a stand-in name to begin
 with ("Quiet heron") and a folder to match, in `~/Documents/Enclose` unless the settings
 say elsewhere: `2026-10-05-2336-quiet-heron`, which is when it was made and then the name
 in lower case with dashes. Once something has been made in it, the project takes the name
@@ -63,6 +64,36 @@ the folder, writes a `model.py` that builds the parts with
 exporter writes the meshes, the edges, a STEP file of each part and the manifest, and the
 model takes the cube's place as soon as it has. A machine that has Python but not build123d gets a
 virtual environment in the folder first.
+
+**Starting from CAD files.** Open a STEP file (`.step`, `.stp`), several at once, or a
+folder that has some in it, and the app makes a project of them. It does not work in the
+folder they came from, which could be laid out any way at all: it copies the files into a
+new folder beside its other projects, named for the file or the folder, and sets that up
+the way its own projects are. The copies go in `source/`; a `model.py` reads every body in
+them as a part with `read_step`, from the same [`kit/enclose.py`](kit/enclose.py); and the
+build runs by itself, so the model is on screen a few seconds later. A file that is an
+assembly gives a part for each component, and a component that is several solids (how
+Shapr3D exports its bodies) gives a part for each, under the names the file has for them.
+From there it is a project like any other: ask Claude for a change and it edits `model.py`.
+What was opened is left as it was.
+
+While the files are read and the model is made, the middle of the view says how far along
+it is, under the mark turning over. Then Claude looks the model over, while a light goes
+across all of its parts: the app draws it pictures of the model (put together, from the
+other side, pulled apart, and each part by itself) and it says what it takes the thing to
+be, and names and groups the parts, keeping the names the files gave where they are good
+ones. That is a conversation of the project's, begun by the app, and it ends with what
+Claude made of the model and what it was unsure of. For this one turn Claude has none of
+Claude Code's own tools: it can name and group, which the app writes into `model.py` as a
+table and builds, and nothing else. It can be stopped, and the settings can turn it off
+(General, Opened files); without Claude Code on the machine it does not happen.
+
+A folder that already holds a model the app can show, or an `enclose.json`, is a project
+as it stands and is opened where it is. So is a folder with no CAD file in it.
+
+The build needs a Python with build123d. Where there is none the project is still made,
+with the files in it, and says so: ask Claude to set it up and it makes a virtual
+environment in the folder, as it does for a project started from nothing.
 
 **The view** draws each part as one mesh per colour, however many faces the CAD export
 wrote, which is what keeps large assemblies smooth (the benchmark behind that is in
@@ -253,8 +284,8 @@ npm test
 ## Not there yet
 
 - No installer. It runs from a checkout.
-- It cannot open a STEP file by itself: something has to turn the CAD into a manifest
-  first. Claude can write that build script when asked, but there is no ready-made one.
+- Of CAD files it opens only STEP. Meshes (STL, OBJ, 3MF) are not brought in: they could
+  be shown, but there is no solid in them for Claude to change.
 - Only tried on macOS.
 - No way to answer Claude's multiple-choice questions (it asks in plain text instead).
 - A section shows the cut as hollow shells; cut faces are not filled in.

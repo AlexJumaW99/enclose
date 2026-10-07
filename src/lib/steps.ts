@@ -41,3 +41,26 @@ export function inBlocks(items: ThreadItem[]): Block[] {
   }
   return blocks
 }
+
+/**
+ * What Claude is at in a turn that is under way, in a line: the step it is on, in the
+ * words the conversation has for it, or the last it took; that it is writing, once it is
+ * saying what came of them; or that it is waiting on the user. Nothing, while it has done
+ * none of these yet: it has only been asked.
+ */
+export function atWork(items: ThreadItem[]): string | null {
+  const last = items.at(-1)
+  if (!last) return null
+  if (last.kind === "permission")
+    return last.state === "pending"
+      ? "Waiting for your answer in the conversation"
+      : null
+  if (last.kind === "assistant") return "Writing what it found"
+  if (last.kind !== "tool") return null
+  // the one it is on, if it is on more than one; and failing that the last it took
+  const step =
+    items.findLast(
+      (item): item is Step => item.kind === "tool" && item.state === "running"
+    ) ?? last
+  return [step.name, step.detail].filter(Boolean).join(" ")
+}

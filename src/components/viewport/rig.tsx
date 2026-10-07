@@ -67,6 +67,11 @@ const GIVE = Math.PI / 6
 const THERE = 0.004
 /** The longest step of time, in seconds, that a single frame moves the camera by. */
 const STEP = 1 / 30
+/**
+ * The camera going round a model by itself: how fast, in radians a second (once round
+ * in some twenty of them), and the seconds it takes to get up to that.
+ */
+const CIRCLE = { rate: 0.3, ease: 1.2 }
 /** Seconds for a picture that is upside down to come most of the way upright again. */
 const RIGHTING = 0.1
 /** Room left around the model when a flat view is fitted to it. */
@@ -668,7 +673,16 @@ function direct(stage: {
 }
 
 /** The camera: orbit, pan, zoom, a home view that frames the whole model, and flat views. */
-export function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
+export function Rig({
+  box,
+  homeKey,
+  circling = false,
+}: {
+  box: THREE.Box3
+  homeKey: string
+  /** the camera goes slowly round the model by itself, for as long as this is so */
+  circling?: boolean
+}) {
   const controls = React.useRef<CameraControls>(null)
   const director = React.useRef<ReturnType<typeof direct> | null>(null)
   const get = useThree((state) => state.get)
@@ -883,7 +897,24 @@ export function Rig({ box, homeKey }: { box: THREE.Box3; homeKey: string }) {
     }
   }, [gl])
 
-  useFrame((_, delta) => director.current?.tick(Math.min(delta, STEP)))
+  // Going round by itself: a little further each frame, the way a drag would take it,
+  // and gently into it. Not for whoever has asked for less to move.
+  const round = React.useRef(0)
+  const still = React.useMemo(
+    () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    []
+  )
+  useFrame((_, delta) => {
+    const step = Math.min(delta, STEP)
+    if (circling && !still) {
+      round.current += step
+      const pace = Math.min(1, round.current / CIRCLE.ease)
+      director.current?.orbit(CIRCLE.rate * pace * pace * step, 0)
+      // nothing else asks for the next frame
+      invalidate()
+    } else round.current = 0
+    director.current?.tick(step)
+  })
 
   return (
     <CameraControls

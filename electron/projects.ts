@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
 
-import type { ConversationSummary, Project } from "../shared/api"
+import type { BringingIn, ConversationSummary, Project } from "../shared/api"
 import { CONFIG_NAMES, MANIFEST_NAMES } from "../shared/manifest-format"
 
 type Saved = {
@@ -15,6 +15,12 @@ type Saved = {
   made?: boolean
   /** `name` is a stand-in, until what is being made gives the project a name of its own */
   standIn?: boolean
+  /**
+   * Made of CAD files that Claude has yet to look over, to name and group what is in
+   * them: what the app wrote its model.py from, which is what it is written from again
+   * with those names in it.
+   */
+  lookOver?: Written
   addedAt: number
   /**
    * From when a project had one conversation: the Claude Code session that carried it on.
@@ -25,6 +31,9 @@ type Saved = {
   closed?: boolean
 }
 
+/** What a project's model.py was written from: the model's title, and the files it reads. */
+export type Written = { title: string; files: string[] }
+
 type Found = {
   /** absolute path of the manifest */
   manifest: string | null
@@ -32,7 +41,14 @@ type Found = {
   build: string | null
 }
 
-const SKIP = new Set(["node_modules", "venv", "__pycache__", "dist", "target"])
+/** Folders never looked into: what is installed or built there is none of the project's. */
+export const SKIP = new Set([
+  "node_modules",
+  "venv",
+  "__pycache__",
+  "dist",
+  "target",
+])
 
 /**
  * Delete a folder if there is nothing in it, which is the only way this app deletes one.
@@ -73,6 +89,20 @@ export function folderName(name: string, made: Date): string {
     .replace(/^-+|-+$/g, "")
   return `${when}-${slug || "untitled"}`
 }
+
+/**
+ * Make a folder by this name in another, and return where it is. Where the name is
+ * taken it is numbered, as happens when the same one comes up twice in a minute.
+ */
+export function makeFolder(parent: string, base: string): string {
+  for (let n = 1; ; n++) {
+    const dir = path.join(parent, n === 1 ? base : `${base}-${n}`)
+    if (fs.existsSync(dir)) continue
+    fs.mkdirSync(dir, { recursive: true })
+    return dir
+  }
+}
+
 const MAX_DEPTH = 6
 const MAX_FOLDERS = 4000
 const MAX_MANIFEST_BYTES = 5_000_000
@@ -195,6 +225,8 @@ export class Projects {
   private revisions = new Map<string, number>()
   private watchers = new Map<string, fs.FSWatcher>()
   private timers = new Map<string, NodeJS.Timeout>()
+  /** how far the making of a model from files opened into a project has got */
+  private bringing = new Map<string, BringingIn>()
 
   constructor(file: string, onChange: () => void) {
     this.file = file
@@ -274,10 +306,23 @@ export class Projects {
         name: p.name ?? path.basename(p.path),
         branch: readBranch(p.path),
         manifest: manifest && path.relative(p.path, manifest),
+        bringingIn: this.bringing.get(p.id) ?? null,
+        // there is nothing to look over until there is a model
+        lookOver: p.lookOver && manifest ? "wanted" : null,
         revision: this.revisions.get(p.id) ?? 0,
         conversations: conversations(p.id),
       }
     })
+  }
+
+  /** Whether a folder is one of the projects already. */
+  knows(dir: string): boolean {
+    try {
+      const real = fs.realpathSync(dir)
+      return this.saved.some((p) => p.path === real)
+    } catch {
+      return false
+    }
   }
 
   get(id: string): (Saved & Found) | null {
@@ -291,10 +336,20 @@ export class Projects {
 
   /**
    * Add a folder, or return the project it already is. `made` says the app has just made
-   * the folder itself, under what name the project goes, and whether that name is only a
-   * stand-in.
+   * the folder itself, under what name the project goes, whether that name is only a
+   * stand-in, and whether there are files in it a model is about to be made of: the
+   * project is then in the list as that from the first, never as one with nothing in it.
+   * `lookOver` says Claude is to look that model over, and what it was written from.
    */
-  add(dir: string, made?: { name: string; standIn?: boolean }): string {
+  add(
+    dir: string,
+    made?: {
+      name: string
+      standIn?: boolean
+      reading?: boolean
+      lookOver?: Written
+    }
+  ): string {
     const real = fs.realpathSync(dir)
     const existing = this.saved.find((p) => p.path === real)
     if (existing) return existing.id
@@ -307,11 +362,14 @@ export class Projects {
             name: made.name,
             made: true,
             ...(made.standIn ? { standIn: true } : {}),
+            ...(made.lookOver ? { lookOver: made.lookOver } : {}),
           }
         : {}),
       addedAt: Date.now(),
     }
     this.saved.push(project)
+    if (made?.reading)
+      this.bringing.set(project.id, { state: "working", done: 0, total: null })
     this.locate(project)
     this.save()
     this.onChange()
@@ -333,6 +391,7 @@ export class Projects {
     this.timers.delete(id)
     this.found.delete(id)
     this.revisions.delete(id)
+    this.bringing.delete(id)
     this.saved = this.saved.filter((p) => p !== project)
     // projects made before `made` was kept are known by having a name of their own
     if (project.made ?? project.name !== undefined) removeIfEmpty(project.path)
@@ -404,6 +463,37 @@ export class Projects {
       this.save()
     }
     return sessionId
+  }
+
+  /**
+   * A project's model is no longer waiting to be looked over: Claude is at it, or the
+   * user has started on the project themselves. Returns what its model.py was written
+   * from, if it was waiting.
+   */
+  lookedOver(id: string): Written | null {
+    const project = this.saved.find((p) => p.id === id)
+    const written = project?.lookOver ?? null
+    if (project && written) {
+      delete project.lookOver
+      this.save()
+      this.onChange()
+    }
+    return written
+  }
+
+  /**
+   * Say how far the making of a model from a project's files has got, or (null) that
+   * it is over with: there is a model now, and it is looked for.
+   */
+  report(id: string, state: BringingIn | null) {
+    const project = this.saved.find((p) => p.id === id)
+    if (!project) return
+    if (state) this.bringing.set(id, state)
+    else {
+      this.bringing.delete(id)
+      this.locate(project)
+    }
+    this.onChange()
   }
 
   /** Look again for the model: Claude may just have created or moved it. */

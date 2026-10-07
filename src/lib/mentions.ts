@@ -1,6 +1,8 @@
 // What a message can call on by name as it is written: a part of the model with @, a
 // skill of Claude Code's with $, and one of its commands with / at the very start.
 
+import type { ThreadItem } from "@shared/api"
+
 /** The three kinds of thing a message calls on, and the mark each is written with. */
 export type Calling = "part" | "skill" | "command"
 export const MARK: Record<Calling, string> = {
@@ -125,4 +127,20 @@ export function notCalledOn(text: string, ids: string[]): string[] {
 export function callingOn(text: string, ids: string[]): string {
   const names = notCalledOn(text, ids).map((id) => MARK.part + id)
   return [...names, text].filter(Boolean).join(" ")
+}
+
+/**
+ * The parts a message that was sent is about, by id: the ones something was said of, and
+ * the ones it calls on by name. Each of them once.
+ */
+export function partsOf(
+  message: Extract<ThreadItem, { kind: "user" }>
+): string[] {
+  const said = [message.part, ...(message.notes ?? []).map((note) => note.part)]
+  const called = stretches(message.text).flatMap((stretch) =>
+    stretch.kind === "part" ? [stretch.text.slice(MARK.part.length)] : []
+  )
+  return [
+    ...new Set([...said.flatMap((part) => (part ? [part.id] : [])), ...called]),
+  ]
 }

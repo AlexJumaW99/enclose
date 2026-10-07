@@ -27,6 +27,15 @@ export type ConversationSummary = {
   updatedAt: number
 }
 
+/**
+ * How far the app has got with CAD files it was given to open, which it has to make a
+ * model of before there is anything to show. python: nothing on this machine to read
+ * them with. build: they were read, or tried, and no model came of it.
+ */
+export type BringingIn =
+  | { state: "working"; done: number; total: number | null }
+  | { state: "failed"; why: "python" | "build"; detail: string }
+
 /** A folder on disk, and the conversations about it. */
 export type Project = {
   id: string
@@ -35,6 +44,15 @@ export type Project = {
   branch: string | null
   /** the model manifest found in the folder, relative to it; null if there is none yet */
   manifest: string | null
+  /** set while files opened into it are being made a model of, or could not be */
+  bringingIn: BringingIn | null
+  /**
+   * Files opened into a project come with whatever names and groups they had, which is
+   * often none worth having. So once there is a model of them Claude looks it over: says
+   * what the thing is, and names and groups its parts. wanted: it is yet to be asked to,
+   * which is done the next time the model is on screen. underway: it is at it.
+   */
+  lookOver: "wanted" | "underway" | null
   /** goes up each time the manifest is rewritten, so the window knows to reload */
   revision: number
   /**
@@ -67,6 +85,11 @@ export type ThreadItem =
       part: PartRef | null
       /** what was said of parts of the model, sent along with the message */
       notes?: PartNote[]
+      /**
+       * Not said by the user: asked by the app itself of files just opened, that Claude
+       * look their model over.
+       */
+      lookOver?: true
     }
   | {
       kind: "assistant"
@@ -163,6 +186,26 @@ export type Manner = {
 
 export type PermissionAnswer = "allow" | "always" | "deny"
 
+/** A picture of the model, and what it is a picture of. */
+export type Picture = { caption: string; data: string; mimeType: string }
+
+/**
+ * A model as it is put before Claude to be looked over: pictures of it, and its parts
+ * as the view has them, with the size of each (mm, along x, y and z) and where its
+ * middle is.
+ */
+export type Seen = {
+  pictures: Picture[]
+  parts: {
+    id: string
+    label: string
+    group: string
+    size: Vec3
+    middle: Vec3
+    color: string | null
+  }[]
+}
+
 export type ClaudeStatus = {
   /** the Claude Code this app will run: the one installed on this machine, if any */
   path: string | null
@@ -190,16 +233,22 @@ export type ViewportResponse =
 export type Settings = {
   /** where a new project's folder is made when the user does not give one */
   projectsFolder: string
+  /** whether Claude looks over the model of CAD files as they are opened */
+  lookOver: boolean
 }
 
 export type CadApi = {
   platform: string
   projects: {
     list(): Promise<Project[]>
-    /** opens the folder picker; resolves to the project, or null if cancelled */
-    add(): Promise<Project | null>
-    /** add a folder the user dropped on the window; null if it is not a folder */
-    addFolder(dir: string): Promise<Project | null>
+    /**
+     * Opens the picker, for CAD files and folders alike, or for the one kind where a
+     * system's picker cannot offer both. Resolves to the project that came of it (the
+     * last, if several did), or to null if none did.
+     */
+    add(kind?: "file" | "folder"): Promise<Project | null>
+    /** open what the user dropped on the window: folders, CAD files, or both */
+    open(paths: string[]): Promise<Project | null>
     /** make a folder where new projects go, under a stand-in name, and add it */
     create(): Promise<Project>
     /** where on disk something dropped on the window is */
@@ -228,6 +277,16 @@ export type CadApi = {
       conversationId: string | null,
       text: string,
       notes: PartNote[],
+      manner: Manner
+    ): Promise<string | null>
+    /**
+     * Have Claude look over the model of files just opened, from what the view shows of
+     * it: say what it is, and name and group its parts. Begins a conversation, and
+     * resolves to it; or to null if this is not a project that is waiting for that.
+     */
+    lookOver(
+      projectId: string,
+      seen: Seen,
       manner: Manner
     ): Promise<string | null>
     /** stop whatever Claude is doing in the project */
@@ -264,6 +323,8 @@ export type CadApi = {
     chooseProjectsFolder(): Promise<Settings>
     /** show the folder new projects go in, making it if it is not there yet */
     revealProjectsFolder(): Promise<void>
+    /** whether Claude is to look over files as they are opened; resolves likewise */
+    setLookOver(on: boolean): Promise<Settings>
   }
   viewport: {
     onRequest(listener: (request: ViewportRequest) => void): () => void
@@ -274,7 +335,7 @@ export type CadApi = {
 export const CHANNEL = {
   projectsList: "projects:list",
   projectsAdd: "projects:add",
-  projectsAddFolder: "projects:add-folder",
+  projectsOpen: "projects:open",
   projectsCreate: "projects:create",
   projectsRemove: "projects:remove",
   projectsReveal: "projects:reveal",
@@ -283,6 +344,7 @@ export const CHANNEL = {
   modelSaveCopy: "model:save-copy",
   threadItems: "thread:items",
   threadSend: "thread:send",
+  threadLookOver: "thread:look-over",
   threadStop: "thread:stop",
   threadRename: "thread:rename",
   threadAnswer: "thread:answer",
@@ -293,6 +355,7 @@ export const CHANNEL = {
   settingsGet: "settings:get",
   settingsChooseProjectsFolder: "settings:choose-projects-folder",
   settingsRevealProjectsFolder: "settings:reveal-projects-folder",
+  settingsSetLookOver: "settings:set-look-over",
   viewportRequest: "viewport:request",
   viewportResponse: "viewport:response",
 } as const

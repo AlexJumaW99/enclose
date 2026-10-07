@@ -22,11 +22,14 @@ export class SettingsStore {
 
   get(): Settings {
     const folder = this.saved.projectsFolder
+    const lookOver = this.saved.lookOver
     return {
       projectsFolder:
         typeof folder === "string" && folder
           ? folder
           : this.defaults.projectsFolder,
+      lookOver:
+        typeof lookOver === "boolean" ? lookOver : this.defaults.lookOver,
     }
   }
 

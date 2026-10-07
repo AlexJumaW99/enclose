@@ -4,6 +4,7 @@ import {
   callingOn,
   matching,
   notCalledOn,
+  partsOf,
   putIn,
   stretches,
   tokenAt,
@@ -162,5 +163,48 @@ describe("callingOn", () => {
     expect(callingOn("round @lid", ["lid", "cube"])).toBe("@cube round @lid")
     expect(callingOn("round @lid", ["lid"])).toBe("round @lid")
     expect(callingOn("as it is", [])).toBe("as it is")
+  })
+})
+
+describe("partsOf", () => {
+  const part = (id: string) => ({
+    id,
+    label: id,
+    point: null,
+    normal: null,
+    face: null,
+  })
+  const message = (text: string, said: string[] = []) => ({
+    kind: "user" as const,
+    id: "user-1",
+    at: 0,
+    text,
+    part: null,
+    notes: said.map((id) => ({ part: part(id), text: "thicker" })),
+  })
+
+  it("is the parts something was said of, and the ones called on by name", () => {
+    expect(
+      partsOf(message("@tube_1 @tube_2 make these longer", ["lid"]))
+    ).toEqual(["lid", "tube_1", "tube_2"])
+  })
+
+  it("has a part once, however often the message comes to it", () => {
+    expect(partsOf(message("@lid, and @lid again.", ["lid", "lid"]))).toEqual([
+      "lid",
+    ])
+  })
+
+  it("is none for a message about no part", () => {
+    expect(partsOf(message("make it all $kicad-pcb friendly"))).toEqual([])
+    expect(
+      partsOf({ kind: "user", id: "u", at: 0, text: "taller", part: null })
+    ).toEqual([])
+  })
+
+  it("takes in the part a message was about, when it could be about only one", () => {
+    expect(partsOf({ ...message("taller"), part: part("base") })).toEqual([
+      "base",
+    ])
   })
 })

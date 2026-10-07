@@ -43,9 +43,11 @@ const ORDER = {
   glass: 2,
   glassEdges: 3,
   keepouts: 4,
-  // over all of the model: where the parts picked out together are, and then their own
-  // lines, which the hint of them is not to dim
+  // over all of the model: where the parts picked out together are, and where the ones
+  // Claude is at work on are; and then their own lines, which the hint of them is not to
+  // dim
   hint: 5,
+  changing: 5.5,
   hinted: 6,
 }
 
@@ -71,6 +73,8 @@ const GLASS = only(1)
 const COVER = only(2)
 /** In the picture of where the parts picked out together are (see Hint). */
 const HINT = only(3)
+/** In the picture of where the parts Claude is at work on are (see Hint). */
+const CHANGING = only(4)
 /** Lights fall on whatever is being drawn. */
 const EVERY = new THREE.Layers()
 EVERY.enableAll()
@@ -87,10 +91,47 @@ const HOVERED_LINE = 1.5
  * How strongly the parts picked out together show through what is in front of them: the
  * veil over where each is, and the line round it. And how wide that line is, in pixels.
  */
-const HINTED = { veil: 0.4, line: 0.7, width: 1.5 }
+const HINTED = { veil: 0.4, line: 0.7, width: 1.5, glint: 0, dim: 0, rim: 0 }
 /**
- * What a part is drawn in where the parts picked out together are told apart: a colour
- * of its own, none of them near another, for as many as sixty-four of them.
+ * The same for the parts Claude is at work on, which show only faintly: and how many
+ * times as strongly again where the light that goes across them is.
+ */
+const CHANGED = {
+  veil: 0.1,
+  line: 0.22,
+  width: 1.5,
+  glint: 2.2,
+  dim: 0,
+  rim: 0,
+}
+/**
+ * The same for a model Claude is looking over, all of its parts at once, where the light
+ * is to be seen going across whatever colour they are, and plainly. Away from the light
+ * the parts are dimmed, by this much, the way the words that say so are. And the line
+ * round each is not ink but light (`rim`): faint away from the light, and bright in it,
+ * over a wider stretch than the parts themselves are.
+ */
+const READ = { veil: 0.06, line: 0.09, width: 2.5, glint: 9, dim: 0.46, rim: 1 }
+/**
+ * That light as the lines of the parts have it, which are drawn each on its own: which
+ * way it goes and how far along it is (kept by the Hint that draws the light), and
+ * whether it is on. And how much of itself a line is away from the light, and in it.
+ */
+const LIGHT = {
+  going: { value: new THREE.Vector3(0, 0, 0.25) },
+  on: { value: 0 },
+}
+const LINE_LIT = { away: 0.28, in: 1.25 }
+/**
+ * The light that goes across the parts Claude is at work on, the way one goes across the
+ * words that say so in the conversation: how often it comes by, in seconds, how far it
+ * leans, in degrees, and how far one is from the next, in pixels. And how many times a
+ * second the view is drawn for it, when nothing else has it drawn.
+ */
+const GLINT = { every: 2, lean: 20, apart: 640, rate: 30 }
+/**
+ * What a part is drawn in where parts that are hinted at together are told apart: a
+ * colour of its own, none of them near another, for as many as sixty-four of them.
  */
 const tell = (place: number) =>
   new THREE.Color().setRGB(
@@ -274,6 +315,38 @@ function onlyWhereItTurns(shader: { vertexShader: string }) {
     )
 }
 
+/**
+ * Makes a line fainter away from the light that goes across a model being looked over,
+ * and plainer in it; and as it ever is, while there is no such light.
+ */
+function inTheLight(shader: {
+  fragmentShader: string
+  uniforms: Record<string, THREE.IUniform>
+}) {
+  shader.uniforms.lightGoing = LIGHT.going
+  shader.uniforms.lightOn = LIGHT.on
+  shader.fragmentShader = shader.fragmentShader
+    .replace(
+      "void main() {",
+      "uniform vec3 lightGoing;\nuniform float lightOn;\nvoid main() {"
+    )
+    .replace(
+      "gl_FragColor = vec4( diffuseColor.rgb, alpha );",
+      `gl_FragColor = vec4( diffuseColor.rgb, alpha );
+      float lightAt = 0.5 + 0.5 * cos(6.2831853 * (dot(gl_FragCoord.xy, lightGoing.xy) - lightGoing.z));
+      gl_FragColor.a = min(1.0, gl_FragColor.a * mix(1.0, mix(${LINE_LIT.away}, ${LINE_LIT.in}, pow(lightAt, 2.0)), lightOn));`
+    )
+}
+/** Both, for the lines that are drawn only where a surface turns from the eye. */
+function turningInTheLight(
+  shader: Parameters<typeof inTheLight>[0] & {
+    vertexShader: string
+  }
+) {
+  onlyWhereItTurns(shader)
+  inTheLight(shader)
+}
+
 /** Whether a part is drawn at all, and how, under the current view. */
 export function appearance(
   loaded: LoadedPart,
@@ -310,6 +383,7 @@ const PartModel = React.memo(function PartModel({
   hovered,
   selected,
   hint,
+  changing,
   plain,
   explode,
   plane,
@@ -334,6 +408,8 @@ const PartModel = React.memo(function PartModel({
    * is in front of them; null if it is not one of them.
    */
   hint: number | null
+  /** Its place among the parts Claude is at work on, which are hinted at likewise. */
+  changing: number | null
   /** picked out, but to be seen in its own colour: one is being chosen for it */
   plain: boolean
   /** how far along its way out the part is: 0 assembled, 1 the model's own distance */
@@ -356,7 +432,17 @@ const PartModel = React.memo(function PartModel({
   }, [loaded.home])
 
   const planes = React.useMemo(() => [plane], [plane])
-  const told = React.useMemo(() => (hint === null ? null : tell(hint)), [hint])
+  // what it is drawn in to be told apart, on each occasion it is hinted at for
+  const told = React.useMemo(
+    () =>
+      [
+        { occasion: HINT, place: hint },
+        { occasion: CHANGING, place: changing },
+      ].flatMap(({ occasion, place }) =>
+        place === null ? [] : [{ occasion, colour: tell(place) }]
+      ),
+    [hint, changing]
+  )
   const skinColors = React.useMemo(
     () =>
       loaded.skins.map((skin) => skinColour(loaded, skin, colors.dark, colour)),
@@ -371,6 +457,7 @@ const PartModel = React.memo(function PartModel({
       depthWrite: false,
       clippingPlanes: [plane],
     })
+    material.onBeforeCompile = inTheLight
     const object = new LineSegments2(geometry, material)
     // edges are for looking at; picking goes by the surfaces
     object.raycast = () => {}
@@ -425,7 +512,7 @@ const PartModel = React.memo(function PartModel({
       depthWrite: false,
       clippingPlanes: [plane],
     })
-    material.onBeforeCompile = onlyWhereItTurns
+    material.onBeforeCompile = turningInTheLight
     const object = new LineSegments2(geometry, material)
     object.raycast = NOT_PICKED
     return object
@@ -496,7 +583,7 @@ const PartModel = React.memo(function PartModel({
       : GLASS_OPACITY.plain
   // its own lines go over the hint of it, where they are seen at all
   const lineOrder =
-    hint !== null ? ORDER.hinted : glass ? ORDER.glassEdges : ORDER.edges
+    told.length > 0 ? ORDER.hinted : glass ? ORDER.glassEdges : ORDER.edges
   return (
     <group ref={group}>
       {loaded.skins.map((skin, index) => (
@@ -562,16 +649,21 @@ const PartModel = React.memo(function PartModel({
               />
             </mesh>
           )}
-          {told && (
-            <mesh geometry={skin.geometry} layers={HINT} raycast={NOT_PICKED}>
+          {told.map(({ occasion, colour }) => (
+            <mesh
+              key={occasion.mask}
+              geometry={skin.geometry}
+              layers={occasion}
+              raycast={NOT_PICKED}
+            >
               <meshBasicMaterial
-                color={told}
+                color={colour}
                 toneMapped={false}
                 side={THREE.DoubleSide}
                 clippingPlanes={planes}
               />
             </mesh>
-          )}
+          ))}
         </React.Fragment>
       ))}
       <primitive object={lines} renderOrder={lineOrder}>
@@ -709,16 +801,44 @@ function Glass() {
 }
 
 /**
- * A hint of the parts picked out together, laid over the view: where each of them is,
- * whatever is in front of it. A box takes in what is inside other parts as readily as
- * what is not, and what it took would otherwise be nowhere to be seen.
+ * A hint of some of the parts, laid over the view: where each of them is, whatever is in
+ * front of it. It is how the parts picked out together are shown: a box takes in what is
+ * inside other parts as readily as what is not, and what it took would otherwise be
+ * nowhere to be seen. And it is how the parts Claude is at work on are shown, for as long
+ * as it is: more faintly, with a light going across them over and over.
  *
  * The parts are drawn on their own into a picture that is not shown, each all of one
  * colour that is no other's, the nearer in front of the further. Where the picture has a
  * part, the view is veiled in the selection's colour; where one colour gives way to
  * another, or to none, is the edge of a part as it is seen from here, and gets a line.
  */
-function Hint({ colors }: { colors: ThemeColors }) {
+function Hint({
+  colors,
+  occasion,
+  order,
+  how,
+}: {
+  colors: ThemeColors
+  /** the occasion the parts are drawn on to be in the picture */
+  occasion: THREE.Layers
+  /** where among all that is drawn it is laid over the view */
+  order: number
+  how: typeof HINTED
+}) {
+  const invalidate = useThree((state) => state.invalidate)
+  // Nothing goes across them for whoever has asked for less to move: they show evenly.
+  const moving = React.useMemo(
+    () =>
+      how.glint > 0 &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    [how]
+  )
+  React.useEffect(() => {
+    if (!moving) return
+    const drawn = setInterval(() => invalidate(), 1000 / GLINT.rate)
+    return () => clearInterval(drawn)
+  }, [moving, invalidate])
+
   const picture = React.useMemo(
     // as smooth at its edges as the view, which is what keeps the line smooth
     () => new THREE.WebGLRenderTarget(1, 1, { samples: 4 }),
@@ -732,8 +852,14 @@ function Hint({ colors }: { colors: ThemeColors }) {
           reach: { value: new THREE.Vector2() },
           veil: { value: new THREE.Color() },
           ink: { value: new THREE.Color(EDGE) },
-          veiled: { value: HINTED.veil },
-          inked: { value: HINTED.line },
+          veiled: { value: how.veil },
+          inked: { value: how.line },
+          glint: { value: how.glint },
+          dimmed: { value: how.dim },
+          rimmed: { value: how.rim },
+          // the way the light goes across, to a pixel, and how far along it is: none
+          // and a quarter is no light going anywhere, and all of it lit a little
+          going: { value: new THREE.Vector3(0, 0, 0.25) },
         },
         vertexShader: `
           varying vec2 at;
@@ -748,6 +874,10 @@ function Hint({ colors }: { colors: ThemeColors }) {
           uniform vec3 ink;
           uniform float veiled;
           uniform float inked;
+          uniform float glint;
+          uniform float dimmed;
+          uniform float rimmed;
+          uniform vec3 going;
           varying vec2 at;
           float unlike(vec4 here, vec2 by) {
             return distance(here, texture2D(picture, at + by * reach));
@@ -761,22 +891,39 @@ function Hint({ colors }: { colors: ThemeColors }) {
             edge = max(edge, max(
               max(unlike(here, vec2(0.7, 0.7)), unlike(here, vec2(-0.7, 0.7))),
               max(unlike(here, vec2(0.7, -0.7)), unlike(here, vec2(-0.7, -0.7)))));
-            float line = smoothstep(0.02, 0.2, edge) * inked;
-            float fill = here.a * veiled * (1.0 - line);
-            float alpha = line + fill;
+            // where the light going across is, all of it shows the more
+            float light = 0.5 + 0.5 * cos(6.2831853 * (dot(gl_FragCoord.xy, going.xy) - going.z));
+            float beam = pow(light, 4.0);
+            float lit = 1.0 + glint * beam;
+            // a line that is light and not ink is lit over a wider stretch than the rest
+            float lineLit = 1.0 + glint * mix(beam, pow(light, 2.0), rimmed);
+            float line = smoothstep(0.02, 0.2, edge) * min(inked * lineLit, 1.0);
+            float fill = here.a * min(veiled * lit, 1.0) * (1.0 - line);
+            // and away from it, what is to be dimmed is: a shade over it instead
+            float shade = here.a * dimmed * (1.0 - beam) * (1.0 - line) * (1.0 - fill);
+            float alpha = line + fill + shade;
             if (alpha < 0.002) discard;
-            gl_FragColor = vec4((ink * line + veil * fill) / alpha, alpha);
+            gl_FragColor = vec4((mix(ink, veil, rimmed) * line + ink * shade + veil * fill) / alpha, alpha);
             #include <colorspace_fragment>
           }`,
         transparent: true,
         depthTest: false,
         depthWrite: false,
       }),
-    [picture]
+    [picture, how]
   )
   React.useEffect(() => {
     material.uniforms.veil.value.copy(colors.picked)
   }, [material, colors.picked])
+  // the lines of the parts take the same light, for as long as it goes across them
+  const shared = moving && how.rim > 0
+  React.useEffect(() => {
+    if (!shared) return
+    LIGHT.on.value = 1
+    return () => {
+      LIGHT.on.value = 0
+    }
+  }, [shared])
   React.useEffect(
     () => () => {
       picture.dispose()
@@ -798,8 +945,19 @@ function Hint({ colors }: { colors: ThemeColors }) {
       if (picture.width !== size.x || picture.height !== size.y)
         picture.setSize(size.x, size.y)
       // half the line's width either side of an edge, in the picture's own measure
-      const half = (HINTED.width * renderer.getPixelRatio()) / 2
+      const half = (how.width * renderer.getPixelRatio()) / 2
       material.uniforms.reach.value.set(half / size.x, half / size.y)
+      if (moving) {
+        // across the view and a little down it, as far along as the time makes it
+        const lean = THREE.MathUtils.degToRad(GLINT.lean)
+        const apart = GLINT.apart * renderer.getPixelRatio()
+        material.uniforms.going.value.set(
+          Math.cos(lean) / apart,
+          -Math.sin(lean) / apart,
+          (performance.now() / 1000 / GLINT.every) % 1
+        )
+        if (shared) LIGHT.going.value.copy(material.uniforms.going.value)
+      }
       const was = {
         target: renderer.getRenderTarget(),
         autoClear: renderer.autoClear,
@@ -814,7 +972,7 @@ function Hint({ colors }: { colors: ThemeColors }) {
       renderer.setClearColor(0x000000, 0)
       renderer.autoClear = true
       scene.background = null
-      camera.layers.mask = HINT.mask
+      camera.layers.mask = occasion.mask
       renderer.setRenderTarget(picture)
       renderer.render(scene, camera)
       renderer.setRenderTarget(was.target)
@@ -823,15 +981,17 @@ function Hint({ colors }: { colors: ThemeColors }) {
       renderer.autoClear = was.autoClear
       renderer.setClearColor(cleared, was.alpha)
     }
-  }, [picture, material])
+  }, [picture, material, occasion, how, moving, shared])
 
   return (
     <mesh
       geometry={SCREEN}
       material={material}
       frustumCulled={false}
-      renderOrder={ORDER.hint}
+      renderOrder={order}
       raycast={NOT_PICKED}
+      // what goes across it is for whoever is at the view, not for a picture of it
+      userData={{ passing: how.glint > 0 }}
       onBeforeRender={draw}
     />
   )
@@ -1192,9 +1352,22 @@ function Camera() {
   const gl = useThree((state) => state.gl)
   const scene = useThree((state) => state.scene)
   const camera = useThree((state) => state.camera)
+  const invalidate = useThree((state) => state.invalidate)
   React.useEffect(() => {
     bridge.screenshot = () => {
+      // The picture is of the model, as it is: not of what only goes across it while
+      // Claude is at work, which is who the picture is for.
+      const passing: THREE.Object3D[] = []
+      scene.traverse((object) => {
+        if (object.userData.passing && object.visible) passing.push(object)
+      })
+      for (const object of passing) object.visible = false
+      const lit = LIGHT.on.value
+      LIGHT.on.value = 0
       gl.render(scene, camera)
+      LIGHT.on.value = lit
+      for (const object of passing) object.visible = true
+      invalidate()
       const source = gl.domElement
       // as large as an image needs to be for Claude to read it, and no larger
       const scale = Math.min(1, 1568 / Math.max(source.width, source.height))
@@ -1217,7 +1390,7 @@ function Camera() {
     return () => {
       bridge.screenshot = null
     }
-  }, [gl, scene, camera])
+  }, [gl, scene, camera, invalidate])
   return null
 }
 
@@ -1227,6 +1400,8 @@ export function Scene({
   view,
   selectedId,
   several,
+  changing,
+  reading = false,
   sweep,
   hoveredId,
   seeking,
@@ -1250,6 +1425,14 @@ export function Scene({
   selectedId: string | null
   /** the parts picked out together, with a box or with Shift: hinted at through the rest */
   several: string[]
+  /** the parts Claude is at work on: hinted at likewise, with a light going across them */
+  changing: string[]
+  /**
+   * They are the whole model, which Claude is looking over. The light is plainer to see,
+   * the camera goes slowly round the model, and the view is not the hand's to move or
+   * to pick from until it is through.
+   */
+  reading?: boolean
   /** what a box being drawn across the view takes in so far; null while none is drawn */
   sweep: string[] | null
   hoveredId: string | null
@@ -1301,6 +1484,11 @@ export function Scene({
   // Once the box is let go the model is drawn as it was, and the parts picked out
   // together are hinted at through whatever of it is in front of them (see Hint).
   const hinted = seeking || sweeping ? NOT_HINTED : several
+  // And so are the parts Claude is at work on, those of them that are there to be seen.
+  const changed = seeking || sweeping ? NOT_HINTED : changing
+  const anyChanged = loaded.parts.some(
+    (part, index) => looks[index].shown && changed.includes(part.part.id)
+  )
   /** Picked out, and drawn in the selection's colour for it. */
   const filled = (id: string) =>
     lit.has(id) && !(plain && !sweeping && id === selectedId)
@@ -1318,6 +1506,8 @@ export function Scene({
   return (
     <Canvas
       className={hoveredId && !sweeping ? "cursor-pointer" : undefined}
+      // (the view says of itself that the pointer is its own: that has to be unsaid)
+      style={reading ? { pointerEvents: "none" } : undefined}
       frameloop="demand"
       // Keep to the view's size as it changes, not once it has stopped changing. Left
       // alone, the canvas waits for a pause whenever it is not the window that is
@@ -1350,8 +1540,18 @@ export function Scene({
         intensity={0.55}
       />
       {anyGlass && <Glass />}
-      {hinted.length > 0 && <Hint colors={colors} />}
-      <Rig box={loaded.box} homeKey={homeKey} />
+      {hinted.length > 0 && (
+        <Hint colors={colors} occasion={HINT} order={ORDER.hint} how={HINTED} />
+      )}
+      {anyChanged && (
+        <Hint
+          colors={colors}
+          occasion={CHANGING}
+          order={ORDER.changing}
+          how={reading ? READ : CHANGED}
+        />
+      )}
+      <Rig box={loaded.box} homeKey={homeKey} circling={reading} />
       <Cut plane={plane} section={view.section} />
       <Picker
         root={root}
@@ -1369,6 +1569,7 @@ export function Scene({
       />
       <Camera />
       <Redraw on={view} />
+      <Redraw on={changed} />
       <group ref={root} rotation={MODEL_TO_WORLD}>
         {view.grid && <Ground colors={colors} order={ORDER.ground} />}
         {loaded.parts.map((part, index) => {
@@ -1389,6 +1590,11 @@ export function Scene({
               hint={
                 hinted.includes(part.part.id)
                   ? hinted.indexOf(part.part.id)
+                  : null
+              }
+              changing={
+                changed.includes(part.part.id)
+                  ? changed.indexOf(part.part.id)
                   : null
               }
               plain={

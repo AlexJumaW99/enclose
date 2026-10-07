@@ -200,6 +200,24 @@ function General() {
             Change…
           </Button>
         </Row>
+        <Row
+          title="Opened files"
+          detail="When CAD files are opened, Claude looks over the model made of them: it is shown pictures of it, says what it takes the thing to be, and names and groups the parts. Off, the parts keep the names and groups the files gave them."
+        >
+          <Choice
+            label="Have Claude look over opened files"
+            value={settings?.lookOver === false ? "off" : "on"}
+            onChange={(value) =>
+              void window.cad.settings
+                .setLookOver(value === "on")
+                .then(setSettings)
+            }
+            options={[
+              { value: "on", label: "On" },
+              { value: "off", label: "Off" },
+            ]}
+          />
+        </Row>
       </Group>
       <Group title="Conversations">
         <Row

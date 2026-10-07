@@ -5,7 +5,7 @@ import * as React from "react"
 import * as THREE from "three"
 
 import { useThemeColors } from "@/lib/css-color"
-import type { LoadedModel } from "./load"
+import type { LoadedModel, LoadedPart } from "./load"
 import { EDGE, finish, skinColour } from "./paint"
 import { HOME_DIRECTION, MODEL_TO_WORLD, toWorld } from "./rig"
 
@@ -66,20 +66,11 @@ function largestPiece(gl: WebGLRenderingContext | WebGL2RenderingContext) {
   return { ...best, covered: covered / (SIZE * SIZE) }
 }
 
-/** Draw every part of a model, handing each picture over as a data URL as it is made. */
-async function draw(
-  loaded: LoadedModel,
-  dark: boolean,
-  colours: Record<string, string>,
-  each: (partId: string, url: string) => void,
-  stopped: () => boolean
-) {
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
-  renderer.setPixelRatio(1)
-  renderer.setSize(SIZE, SIZE, false)
-  renderer.setClearColor(0x000000, 0)
-
-  // lit the way the view is
+/**
+ * Somewhere to draw a model off screen: lit the way the view is, with a place in it
+ * (`root`) where what is put stands the way the view stands it.
+ */
+export function stage() {
   const scene = new THREE.Scene()
   const sun = new THREE.DirectionalLight("#ffffff", 1.7)
   sun.position.set(180, 320, 220)
@@ -94,69 +85,120 @@ async function draw(
   const root = new THREE.Group()
   root.rotation.set(...MODEL_TO_WORLD)
   scene.add(root)
+  return { scene, root }
+}
 
+/**
+ * A part as it is drawn off screen, where it sits in the model: its surfaces in the
+ * colours the view gives them, and its edges. `dispose` gives back what was made for it.
+ */
+export function standing(
+  part: LoadedPart,
+  dark: boolean,
+  /** the colour the user has given it, if they have */
+  chosen: string | undefined
+) {
+  const holder = new THREE.Group()
+  holder.applyMatrix4(part.home)
+  const made: { dispose(): void }[] = []
+  for (const skin of part.skins) {
+    const material = new THREE.MeshStandardMaterial({
+      color: skinColour(part, skin, dark, chosen),
+      ...finish(part),
+      side: THREE.DoubleSide,
+      polygonOffset: true,
+      polygonOffsetFactor: 1.5,
+      polygonOffsetUnits: 1.5,
+    })
+    holder.add(new THREE.Mesh(skin.geometry, material))
+    made.push(material)
+  }
+  const edges = new THREE.BufferGeometry()
+  edges.setAttribute("position", new THREE.BufferAttribute(part.edges, 3))
+  const line = new THREE.LineBasicMaterial({
+    color: EDGE,
+    transparent: true,
+    opacity: 0.6,
+  })
+  holder.add(new THREE.LineSegments(edges, line))
+  made.push(edges, line)
+  return {
+    holder,
+    dispose: () => {
+      for (const thing of made) thing.dispose()
+    },
+  }
+}
+
+/**
+ * Point a camera at the middle of a box from the way `from` goes, and open the picture
+ * just wide enough for the box to take up `fill` of it. `shape` is how wide the picture
+ * is for its height. Returns half the picture's height, in the model's own measure.
+ */
+export function frame(
+  camera: THREE.OrthographicCamera,
+  box: THREE.Box3,
+  from: THREE.Vector3,
+  fill: number,
+  shape = 1
+): number {
+  const middle = box.getCenter(new THREE.Vector3())
+  const reach = box.getSize(new THREE.Vector3()).length() || 1
+  camera.position.copy(middle).addScaledVector(from, reach * 2)
+  camera.lookAt(middle)
+  camera.updateMatrixWorld(true)
+  const corner = new THREE.Vector3()
+  let half = 0
+  for (let i = 0; i < 8; i++) {
+    corner
+      .set(
+        i & 1 ? box.max.x : box.min.x,
+        i & 2 ? box.max.y : box.min.y,
+        i & 4 ? box.max.z : box.min.z
+      )
+      .applyMatrix4(camera.matrixWorldInverse)
+    half = Math.max(half, Math.abs(corner.x) / shape, Math.abs(corner.y))
+  }
+  half = (half || 1) / fill
+  Object.assign(camera, {
+    left: -half * shape,
+    right: half * shape,
+    top: half,
+    bottom: -half,
+    near: reach * 0.01,
+    far: reach * 4,
+  })
+  camera.updateProjectionMatrix()
+  return half
+}
+
+/** Draw every part of a model, handing each picture over as a data URL as it is made. */
+async function draw(
+  loaded: LoadedModel,
+  dark: boolean,
+  colours: Record<string, string>,
+  each: (partId: string, url: string) => void,
+  stopped: () => boolean
+) {
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
+  renderer.setPixelRatio(1)
+  renderer.setSize(SIZE, SIZE, false)
+  renderer.setClearColor(0x000000, 0)
+
+  const { scene, root } = stage()
   const camera = new THREE.OrthographicCamera()
   const from = toWorld(HOME_DIRECTION)
-  const corner = new THREE.Vector3()
 
   try {
     for (const part of loaded.parts) {
       if (stopped()) break
-      const holder = new THREE.Group()
-      holder.applyMatrix4(part.home)
-      const made: { dispose(): void }[] = []
-      for (const skin of part.skins) {
-        const material = new THREE.MeshStandardMaterial({
-          color: skinColour(part, skin, dark, colours[part.part.id]),
-          ...finish(part),
-          side: THREE.DoubleSide,
-          polygonOffset: true,
-          polygonOffsetFactor: 1.5,
-          polygonOffsetUnits: 1.5,
-        })
-        holder.add(new THREE.Mesh(skin.geometry, material))
-        made.push(material)
-      }
-      const edges = new THREE.BufferGeometry()
-      edges.setAttribute("position", new THREE.BufferAttribute(part.edges, 3))
-      const line = new THREE.LineBasicMaterial({
-        color: EDGE,
-        transparent: true,
-        opacity: 0.6,
-      })
-      holder.add(new THREE.LineSegments(edges, line))
-      made.push(edges, line)
+      const { holder, dispose } = standing(part, dark, colours[part.part.id])
       root.add(holder)
       root.updateMatrixWorld(true)
 
       // look at the middle of the part, and open the picture just wide enough for it
       const box = new THREE.Box3().setFromObject(holder)
-      const middle = box.getCenter(new THREE.Vector3())
-      const reach = box.getSize(new THREE.Vector3()).length() || 1
-      camera.position.copy(middle).addScaledVector(from, reach * 2)
-      camera.lookAt(middle)
-      camera.updateMatrixWorld(true)
-      let half = 0
-      for (let i = 0; i < 8; i++) {
-        corner
-          .set(
-            i & 1 ? box.max.x : box.min.x,
-            i & 2 ? box.max.y : box.min.y,
-            i & 4 ? box.max.z : box.min.z
-          )
-          .applyMatrix4(camera.matrixWorldInverse)
-        half = Math.max(half, Math.abs(corner.x), Math.abs(corner.y))
-      }
-      half = (half || 1) / FILL
-      Object.assign(camera, {
-        left: -half,
-        right: half,
-        top: half,
-        bottom: -half,
-        near: reach * 0.01,
-        far: reach * 4,
-      })
-      camera.updateProjectionMatrix()
+      const half = frame(camera, box, from, FILL)
 
       renderer.render(scene, camera)
       const piece = largestPiece(renderer.getContext())
@@ -179,7 +221,7 @@ async function draw(
       each(part.part.id, renderer.domElement.toDataURL("image/png"))
 
       root.remove(holder)
-      for (const thing of made) thing.dispose()
+      dispose()
       // one a frame, so a model of many parts does not hold the window up
       await new Promise(requestAnimationFrame)
     }

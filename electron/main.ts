@@ -17,15 +17,33 @@ import {
   type PartNote,
   type PermissionAnswer,
   type Project,
+  type Seen,
   type Settings,
+  type Vec3,
   type ViewportRequest,
   type ViewportResponse,
 } from "../shared/api"
-import { findClaude, followRename, listCommands, listModels } from "./claude"
+import {
+  claudeEnv,
+  findClaude,
+  followRename,
+  listCommands,
+  listModels,
+} from "./claude"
+import {
+  arrange,
+  bringIn,
+  broughtIn,
+  CAD_ENDINGS,
+  modelScript,
+  runBuild,
+  SCRIPT,
+  sortOpened,
+} from "./imports"
 import { standInName } from "./names"
-import { folderName, Projects, resolveInside } from "./projects"
+import { folderName, makeFolder, Projects, resolveInside } from "./projects"
 import { SettingsStore } from "./settings"
-import { Threads } from "./threads"
+import { Threads, type Arranging } from "./threads"
 
 const HERE = import.meta.dirname
 const DEV_URL = process.env.VITE_DEV_SERVER_URL
@@ -37,7 +55,7 @@ const ICONS = path.join(HERE, "../icons")
 //   --capture=<file.png>     load (window hidden), save a picture of it, quit
 //   --script=<file.js>       run this in the window first; it may return a promise
 //   --wait=<ms>              how long to let the window settle before each step
-//   <folder>                 add this folder as a project and open it
+//   <folder or CAD file>     open it as a project, as if it were dropped on the window
 const flag = (name: string) =>
   process.argv
     .find((a) => a.startsWith(`--${name}=`))
@@ -48,6 +66,25 @@ const CAPTURE = flag("capture")
 const ELSEWHERE =
   process.env.ENCLOSE_USER_DATA ?? process.env.CAD_AI_USER_DATA ?? null
 if (ELSEWHERE) app.setPath("userData", ELSEWHERE)
+else bringProfile()
+
+/**
+ * The app kept its state in a folder named cad-ai before it had its name. What is there
+ * is moved to where the app looks now, once, before anything is read from either. (To ask
+ * Electron where the state is kept is to have the folder made, so it is not asked yet.)
+ */
+function bringProfile() {
+  const before = path.join(app.getPath("appData"), "cad-ai")
+  const now = path.join(app.getPath("appData"), app.name)
+  if (fs.existsSync(now) || !fs.existsSync(before)) return
+  try {
+    fs.renameSync(before, now)
+  } catch (error) {
+    // better the old folder than an app with nothing in it
+    console.error("[profile]", error)
+    app.setPath("userData", before)
+  }
+}
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -74,8 +111,22 @@ let projects: Projects
 let threads: Threads
 let settings: SettingsStore
 let claude: ClaudeStatus = { path: null, version: null }
+/** the Claude Code on this machine, once it has been looked for */
+let claudeFound: Promise<ClaudeStatus> = Promise.resolve(claude)
+/** where the app keeps the exporter a project copies to write its model */
+const KIT = path.join(app.getAppPath(), "kit", "enclose.py")
 
-const list = (): Project[] => projects.list((id) => threads.summaries(id))
+const list = (): Project[] =>
+  projects
+    .list((id) => threads.summaries(id))
+    .map((project) =>
+      threads.lookingOver(project.id)
+        ? { ...project, lookOver: "underway" }
+        : // with no Claude Code to ask, a model waits to be looked over unseen
+          project.lookOver && !claude.path
+          ? { ...project, lookOver: null }
+          : project
+    )
 const send = (channel: string, ...args: unknown[]) => {
   if (win && !win.isDestroyed()) win.webContents.send(channel, ...args)
 }
@@ -203,13 +254,212 @@ async function capture(window: BrowserWindow, file: string) {
 function newFolder(): { dir: string; name: string } {
   const name = standInName()
   const base = folderName(name, new Date())
-  const { projectsFolder } = settings.get()
-  for (let n = 1; ; n++) {
-    const dir = path.join(projectsFolder, n === 1 ? base : `${base}-${n}`)
-    if (fs.existsSync(dir)) continue
-    fs.mkdirSync(dir, { recursive: true })
-    return { dir, name }
+  return { dir: makeFolder(settings.get().projectsFolder, base), name }
+}
+
+// --- opening what was made elsewhere --------------------------------------------------
+
+/** what stops the build of each project whose files are being made a model of */
+const builds = new Map<string, () => void>()
+
+/** Make a model of the files brought into a project, and say in the list how it goes. */
+function makeModel(id: string) {
+  const project = projects.get(id)
+  const command = project?.build
+  if (!project || !command) return
+  projects.report(id, { state: "working", done: 0, total: null })
+  // Python is found on the PATH a terminal would have, which a Mac gives an app no part
+  // of: looking for Claude Code is what takes that PATH up
+  void claudeFound.then(() => {
+    // taken off the list while that was waited for
+    if (!projects.get(id)) return
+    const build = runBuild(project.path, command, claudeEnv(), (done, total) =>
+      projects.report(id, { state: "working", done, total })
+    )
+    builds.set(id, build.stop)
+    void build.finished.then((failed) => {
+      // stopped, with the project taken off the list: there is nobody to tell
+      if (builds.get(id) !== build.stop) return
+      builds.delete(id)
+      projects.report(id, failed)
+    })
+  })
+}
+
+/**
+ * Open folders and CAD files, however they were given: picked, dropped on the window, or
+ * named on the command line. Returns the project to turn to (the last that came of it),
+ * and what was given that could not be opened.
+ */
+function open(paths: string[]): { id: string | null; refused: string[] } {
+  const opened = sortOpened(
+    paths.map((given) => path.resolve(given)),
+    (dir) => projects.knows(dir)
+  )
+  let id: string | null = null
+  for (const dir of opened.folders) id = projects.add(dir)
+  for (const bundle of opened.bundles) {
+    const { projectsFolder, lookOver } = settings.get()
+    const { dir, written } = bringIn(bundle, projectsFolder, KIT)
+    id = projects.add(dir, {
+      name: bundle.name,
+      reading: true,
+      // what is in the files is Claude's to name and group, once there is a model of it
+      ...(lookOver ? { lookOver: written } : {}),
+    })
+    makeModel(id)
   }
+  return { id, refused: opened.refused }
+}
+
+/** A model's parts as its manifest has them, each with what its group is called. */
+function partsOf(manifest: string) {
+  const { parts, groups } = JSON.parse(fs.readFileSync(manifest, "utf8")) as {
+    parts: { id: string; label?: string; group?: string }[]
+    groups?: { id: string; label?: string }[]
+  }
+  return parts.map((part) => ({
+    id: part.id,
+    label: part.label ?? part.id,
+    group:
+      groups?.find((group) => group.id === part.group)?.label ??
+      part.group ??
+      "Parts",
+  }))
+}
+
+/** What the window gave of a model to be looked over, as far as it is what it should be. */
+function seenFrom(given: unknown): Seen {
+  const { pictures, parts } = (given ?? {}) as Partial<
+    Record<keyof Seen, unknown>
+  >
+  const three = (v: unknown): Vec3 =>
+    Array.isArray(v) && v.length === 3 && v.every((n) => Number.isFinite(n))
+      ? (v as Vec3)
+      : [0, 0, 0]
+  return {
+    pictures: (Array.isArray(pictures) ? pictures : []).flatMap(
+      (picture: Partial<Seen["pictures"][number]> | null) =>
+        typeof picture?.data === "string" &&
+        typeof picture.mimeType === "string"
+          ? [
+              {
+                caption: String(picture.caption ?? ""),
+                data: picture.data,
+                mimeType: picture.mimeType,
+              },
+            ]
+          : []
+    ),
+    parts: (Array.isArray(parts) ? parts : []).flatMap(
+      (part: Partial<Seen["parts"][number]> | null) =>
+        typeof part?.id === "string"
+          ? [
+              {
+                id: part.id,
+                label: String(part.label ?? part.id),
+                group: String(part.group ?? ""),
+                size: three(part.size),
+                middle: three(part.middle),
+                color: typeof part.color === "string" ? part.color : null,
+              },
+            ]
+          : []
+    ),
+  }
+}
+
+/**
+ * Have Claude look over the model of files just opened, from what the window shows of
+ * it. What it makes of the parts is written into the project's model.py, which until
+ * then is as the app wrote it, and the model is built again. Returns the conversation
+ * that is had in, or null if the project is not waiting for this.
+ */
+function lookOver(id: string, seen: Seen, manner: Manner): string | null {
+  const project = projects.get(id)
+  const written = project?.lookOver
+  // (with no Claude Code to ask, it waits until there is one)
+  if (!project || !written || !claude.path) return null
+  try {
+    const { build, manifest } = project
+    if (!manifest || !build) return null
+    const script = path.join(project.path, SCRIPT)
+    // the parts as the files gave them: what Claude names them by, however often
+    const read = partsOf(manifest)
+    // the script as the app last wrote it: nothing but that is written over
+    let ours = modelScript(written.title, written.files)
+    const arranging: Arranging = async (given, signal) => {
+      const arranged = arrange(read, given)
+      if (fs.readFileSync(script, "utf8") !== ours)
+        throw new Error(
+          `The project's ${SCRIPT} has been changed since the files were opened, so it is not written over. Tell the user the names and groups you would give the parts, and that they can ask you to put them in.`
+        )
+      const next = modelScript(written.title, written.files, arranged)
+      fs.writeFileSync(script, next)
+      const building = runBuild(project.path, build, claudeEnv(), () => {})
+      signal.addEventListener("abort", building.stop, { once: true })
+      const failed = await building.finished
+      signal.removeEventListener("abort", building.stop)
+      if (failed || signal.aborted) {
+        // back as it was: the model on screen is still the one that script builds
+        fs.writeFileSync(script, ours)
+        throw new Error(
+          failed?.state === "failed" && !signal.aborted
+            ? `The model would not build with these names: ${failed.detail}`
+            : "Stopped."
+        )
+      }
+      ours = next
+      projects.refresh(id)
+      broadcast()
+      return `Done: ${arranged.parts.length} parts in ${arranged.groups.length} groups (${arranged.groups.map((group) => group.label).join(", ")}). The view shows the model so.`
+    }
+    return threads.lookOver(id, seen, written.files, manner, arranging)
+  } catch (error) {
+    // a manifest that cannot be read: there is nothing to go by
+    console.error("[look over]", error)
+    return null
+  } finally {
+    // asked once, whatever came of it: from here on the model is put in order by
+    // asking. (Said last, so that the project goes from waiting to being looked over
+    // with nothing in between.)
+    projects.lookedOver(id)
+  }
+}
+
+/** How a message is to be answered, from what the window said of it. */
+const mannerFrom = (manner: Partial<Manner> | null): Manner => ({
+  model: typeof manner?.model === "string" ? manner.model : null,
+  effort: EFFORTS.find((effort) => effort === manner?.effort) ?? null,
+  // what cannot be made out is not taken for leave to do anything
+  access: ACCESSES.find((access) => access === manner?.access) ?? "edits",
+})
+
+/** The same, for the window: it is told when nothing came of what it gave. */
+async function openFor(paths: string[]): Promise<Project | null> {
+  let id: string | null = null
+  let trouble: string | null = null
+  try {
+    const { id: last, refused } = open(paths)
+    id = last
+    if (!id && refused.length > 0)
+      trouble = `Enclose opens folders, and CAD files in STEP format (${CAD_ENDINGS.join(", ")}). ${
+        refused.length === 1
+          ? `“${path.basename(refused[0])}” is neither.`
+          : "What was given is neither."
+      }`
+  } catch (error) {
+    trouble = `The files could not be copied into a new project: ${
+      error instanceof Error ? error.message : String(error)
+    }`
+  }
+  if (trouble && win && !CAPTURE)
+    await dialog.showMessageBox(win, {
+      type: "info",
+      message: "Nothing was opened",
+      detail: trouble,
+    })
+  return list().find((p) => p.id === id) ?? null
 }
 
 // --- wiring ---------------------------------------------------------------------------
@@ -239,26 +489,45 @@ function wire() {
   })
 
   ipcMain.handle(CHANNEL.projectsList, () => list())
-  ipcMain.handle(CHANNEL.projectsAdd, async () => {
+  ipcMain.handle(CHANNEL.projectsAdd, async (_, kind: unknown) => {
     if (!win) return null
+    // A Mac's picker takes files and folders alike. No other system's does: there it
+    // is asked for the one kind or the other.
     const picked = await dialog.showOpenDialog(win, {
-      title: "Add a project folder",
-      buttonLabel: "Add",
-      properties: ["openDirectory", "createDirectory"],
+      title:
+        kind === "file"
+          ? "Open a file"
+          : kind === "folder"
+            ? "Open a folder"
+            : "Open a file or folder",
+      buttonLabel: "Open",
+      filters:
+        kind === "folder"
+          ? []
+          : [
+              {
+                name: "CAD files",
+                extensions: CAD_ENDINGS.map((ending) => ending.slice(1)),
+              },
+            ],
+      properties:
+        kind === "file"
+          ? ["openFile", "multiSelections"]
+          : kind === "folder"
+            ? ["openDirectory", "createDirectory"]
+            : [
+                "openFile",
+                "openDirectory",
+                "multiSelections",
+                "createDirectory",
+              ],
     })
-    if (picked.canceled || !picked.filePaths[0]) return null
-    const id = projects.add(picked.filePaths[0])
-    return list().find((p) => p.id === id) ?? null
+    if (picked.canceled || picked.filePaths.length === 0) return null
+    return openFor(picked.filePaths)
   })
-  ipcMain.handle(CHANNEL.projectsAddFolder, (_, dir: string) => {
-    try {
-      if (!fs.statSync(String(dir)).isDirectory()) return null
-    } catch {
-      return null
-    }
-    const id = projects.add(String(dir))
-    return list().find((p) => p.id === id) ?? null
-  })
+  ipcMain.handle(CHANNEL.projectsOpen, (_, paths: unknown) =>
+    openFor(Array.isArray(paths) ? paths.map(String) : [])
+  )
   ipcMain.handle(CHANNEL.projectsCreate, () => {
     const made = newFolder()
     const id = projects.add(made.dir, { name: made.name, standIn: true })
@@ -285,6 +554,9 @@ function wire() {
       if (response !== 0) return
     }
     threads.forget(project.id)
+    // a model still being made of its files is given up on
+    builds.get(project.id)?.()
+    builds.delete(project.id)
     projects.remove(project.id)
   })
   ipcMain.handle(CHANNEL.projectsReveal, (_, id: string) => {
@@ -331,22 +603,26 @@ function wire() {
       text: string,
       notes: PartNote[] | null,
       manner: Partial<Manner> | null
-    ) =>
+    ) => {
       // answers at once, with the conversation it went into: the turn runs for as long
       // as it runs, and reports through thread items
-      threads.send(
+      const into = threads.send(
         String(id),
         conversationId === null ? null : String(conversationId),
         String(text),
         Array.isArray(notes) ? notes.filter((note) => note?.part?.id) : [],
-        {
-          model: typeof manner?.model === "string" ? manner.model : null,
-          effort: EFFORTS.find((effort) => effort === manner?.effort) ?? null,
-          // what cannot be made out is not taken for leave to do anything
-          access:
-            ACCESSES.find((access) => access === manner?.access) ?? "edits",
-        }
+        mannerFrom(manner)
       )
+      // the user has started on the project themselves: its model is theirs to have
+      // put in order, by asking
+      if (into) projects.lookedOver(String(id))
+      return into
+    }
+  )
+  ipcMain.handle(
+    CHANNEL.threadLookOver,
+    (_, id: string, seen: unknown, manner: Partial<Manner> | null) =>
+      lookOver(String(id), seenFrom(seen), mannerFrom(manner))
   )
   ipcMain.handle(CHANNEL.threadStop, (_, id: string) => threads.stop(id))
   ipcMain.handle(
@@ -360,7 +636,7 @@ function wire() {
       threads.answer(id, permissionId, answer)
   )
 
-  const claudeFound = findClaude().then((status) => (claude = status))
+  claudeFound = findClaude().then((status) => (claude = status))
   // with Claude Code found, what the cards say can be summed up: have them asked for
   void claudeFound.then(broadcast)
   ipcMain.handle(CHANNEL.claudeStatus, () => claudeFound)
@@ -409,6 +685,9 @@ function wire() {
     fs.mkdirSync(projectsFolder, { recursive: true })
     void shell.openPath(projectsFolder)
   })
+  ipcMain.handle(CHANNEL.settingsSetLookOver, (_, on: unknown): Settings =>
+    settings.set({ lookOver: on === true })
+  )
 
   ipcMain.on(CHANNEL.viewportResponse, (_, response: ViewportResponse) => {
     const request = waiting.get(response.id)
@@ -433,6 +712,14 @@ if (!app.requestSingleInstanceLock()) {
     // Run from a checkout, the app in the Dock is Electron's own, and so is its icon.
     // An app made into a package has the icon in it, and macOS draws that one.
     if (!app.isPackaged) app.dock?.setIcon(path.join(ICONS, "icon.png"))
+    // What a Mac's About says is Electron's own too, down to the version, twice over.
+    // (A version given here is shown just as it is given, so the word goes with it.)
+    if (!app.isPackaged && process.platform === "darwin")
+      app.setAboutPanelOptions({
+        applicationName: app.name,
+        applicationVersion: `Version ${app.getVersion()}`,
+        version: "",
+      })
 
     const data = app.getPath("userData")
     settings = new SettingsStore(path.join(data, "settings.json"), {
@@ -441,13 +728,14 @@ if (!app.requestSingleInstanceLock()) {
       projectsFolder: ELSEWHERE
         ? path.join(ELSEWHERE, "Projects")
         : path.join(app.getPath("documents"), "Enclose"),
+      lookOver: true,
     })
     projects = new Projects(path.join(data, "projects.json"), broadcast)
     threads = new Threads({
       dir: path.join(data, "threads"),
       projects,
       claude: () => claude,
-      kit: path.join(app.getAppPath(), "kit", "enclose.py"),
+      kit: KIT,
       onRenamed: followRename,
       viewport: askViewport,
       onItem: (projectId, conversationId, item) =>
@@ -456,18 +744,31 @@ if (!app.requestSingleInstanceLock()) {
     })
     wire()
 
-    // a folder on the command line is added and opened, like `code <folder>`
-    let open: string | null = null
-    for (const arg of process.argv.slice(app.isPackaged ? 1 : 2)) {
-      if (arg.startsWith("-")) continue
-      try {
-        if (fs.statSync(arg).isDirectory())
-          open = projects.add(path.resolve(arg))
-      } catch {
-        // not a folder: ignore
-      }
+    // Files that were still being made a model of when the app was last quit, or that
+    // could not be: tried again, now that whatever was wanting may be there. Only in
+    // folders of the app's own making: nobody else's build is run unasked.
+    for (const { id } of projects.list(() => [])) {
+      const project = projects.get(id)
+      if (
+        project?.made &&
+        project.build &&
+        !project.manifest &&
+        broughtIn(project.path)
+      )
+        makeModel(id)
     }
-    createWindow(open)
+
+    // a folder or a CAD file on the command line is opened, like `code <folder>`
+    const given = process.argv
+      .slice(app.isPackaged ? 1 : 2)
+      .filter((arg) => !arg.startsWith("-"))
+    let first: string | null = null
+    try {
+      first = open(given).id
+    } catch (error) {
+      console.error("[open]", error)
+    }
+    createWindow(first)
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow(null)
@@ -478,6 +779,7 @@ if (!app.requestSingleInstanceLock()) {
     if (process.platform !== "darwin") app.quit()
   })
   app.on("before-quit", () => {
+    for (const stop of builds.values()) stop()
     threads?.close()
     projects?.close()
   })

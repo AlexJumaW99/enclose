@@ -21,6 +21,19 @@ build the parts in their assembled positions. `write()` puts everything in `buil
 beside the script that called it: a mesh and the edges of each part, a STEP file of each
 part and of the whole, and `enclose.model.json`, which the app watches and reloads from.
 
+A project that starts from CAD files made elsewhere reads them with `read_step`, which
+gives every body in them as a part to hand over, or to change first:
+
+    from enclose import Model, read_step
+
+    model = Model("Clock")
+    groups = {}
+    for found in read_step("source/clock.step"):
+        if found.group not in groups:
+            groups[found.group] = model.group(found.group)
+        model.part(found.id, found.shape, label=found.label, group=groups[found.group])
+    model.write()
+
 Needs build123d (pip install build123d).
 """
 
@@ -33,18 +46,41 @@ import os
 import re
 import sys
 import time
+from dataclasses import dataclass
 
-from build123d import Compound, export_gltf, export_step
-from OCP.BRep import BRep_Tool
+from build123d import Color, Compound, Solid, export_gltf, export_step
+from OCP.BRep import BRep_Builder, BRep_Tool
 from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
+from OCP.BRepBndLib import BRepBndLib
+from OCP.Bnd import Bnd_Box
 from OCP.GCPnts import GCPnts_TangentialDeflection
 from OCP.GeomAbs import GeomAbs_Cylinder, GeomAbs_Line, GeomAbs_Plane
-from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
-from OCP.TopExp import TopExp
-from OCP.TopoDS import TopoDS
-from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
+from OCP.IFSelect import IFSelect_RetDone
+from OCP.Quantity import Quantity_ColorRGBA
+from OCP.STEPCAFControl import STEPCAFControl_Reader
+from OCP.STEPConstruct import STEPConstruct
+from OCP.StepShape import StepShape_SolidModel
+from OCP.TCollection import TCollection_ExtendedString
+from OCP.TDataStd import TDataStd_Name
+from OCP.TDF import TDF_Label, TDF_LabelSequence
+from OCP.TDocStd import TDocStd_Document
+from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_SHELL, TopAbs_SOLID
+from OCP.TopExp import TopExp, TopExp_Explorer
+from OCP.TopLoc import TopLoc_Location
+from OCP.TopoDS import TopoDS, TopoDS_Compound
+from OCP.TopTools import (
+    TopTools_IndexedDataMapOfShapeListOfShape,
+    TopTools_IndexedMapOfShape,
+)
+from OCP.XCAFDoc import (
+    XCAFDoc_ColorCurv,
+    XCAFDoc_ColorGen,
+    XCAFDoc_ColorSurf,
+    XCAFDoc_ColorTool,
+    XCAFDoc_DocumentTool,
+)
 
-__all__ = ["Model"]
+__all__ = ["Model", "read_step"]
 
 MANIFEST = "enclose.model.json"
 
@@ -117,6 +153,213 @@ def _write_edges(shape, path: str) -> int:
     with open(path, "wb") as file:
         flat.tofile(file)
     return len(flat) // 6
+
+
+@dataclass
+class Found:
+    """One body found in a CAD file, as `read_step` gives it: what to hand to
+    `Model.part`. `shape` is a build123d shape, where the file puts it."""
+
+    id: str
+    label: str
+    group: str
+    color: str | None
+    shape: object
+
+
+# what a CAD program calls a thing it was given no name for
+_NO_NAME = re.compile(
+    r"^(|compound|compsolid|solid|shell|face|none|unnamed|=>.*|open cascade.*)$",
+    re.I,
+)
+
+_KINDS_OF_COLOUR = (XCAFDoc_ColorSurf, XCAFDoc_ColorGen, XCAFDoc_ColorCurv)
+
+
+def _name(text) -> str | None:
+    """A name as it was given, or None where it only stands in for there being none."""
+    text = re.sub(r"\s+", " ", text or "").strip()
+    return None if _NO_NAME.match(text) else text
+
+
+def _name_of(label) -> str | None:
+    """What an entry of the file's tree is called."""
+    name = TDataStd_Name()
+    # (asked for where there is none, a name is not merely not found: Python is ended)
+    if not label.IsAttribute(TDataStd_Name.GetID_s()):
+        return None
+    if not label.FindAttribute(TDataStd_Name.GetID_s(), name):
+        return None
+    text = name.Get()
+    letters = (text.Value(i) for i in range(1, text.Length() + 1))
+    return _name("".join(c if isinstance(c, str) else chr(c) for c in letters))
+
+
+def _hex(colour: Quantity_ColorRGBA) -> str:
+    red, green, blue = tuple(Color(colour))[:3]
+    return "#%02x%02x%02x" % tuple(round(255 * v) for v in (red, green, blue))
+
+
+def _read(file: str) -> list[tuple[list[str], str | None, str | None, object]] | None:
+    """The bodies in one STEP file, each with the names of what it is inside of (the
+    outermost first), its own name if it has one, its colour, and its shape. None if
+    it is no STEP file that can be read."""
+    document = TDocStd_Document(TCollection_ExtendedString("XCAF"))
+    tree = XCAFDoc_DocumentTool.ShapeTool_s(document.Main())
+    colours = XCAFDoc_DocumentTool.ColorTool_s(document.Main())
+    reader = STEPCAFControl_Reader()
+    reader.SetNameMode(True)
+    reader.SetColorMode(True)
+    if reader.ReadFile(file) != IFSelect_RetDone:
+        return None
+    reader.Transfer(document)
+
+    # A program that keeps its bodies in one product (Shapr3D does) names them where
+    # the file tree does not reach: on the solids themselves. Those names are had from
+    # the file's own entries, each of which knows the solid that was made of it.
+    session = reader.Reader().WS()
+    entries, made = session.Model(), session.TransferReader().TransientProcess()
+    nowhere = TopLoc_Location()
+    named, names = TopTools_IndexedMapOfShape(), [None]
+    for i in range(1, entries.NbEntities() + 1):
+        entry = entries.Value(i)
+        if not isinstance(entry, StepShape_SolidModel) or entry.Name() is None:
+            continue
+        try:
+            name = _name(entry.Name().ToCString())
+        except UnicodeDecodeError:
+            continue
+        solid = STEPConstruct.FindShape_s(made, entry)
+        if not name or solid.IsNull():
+            continue
+        # (adding one that is there already gives back the place it has)
+        if named.Add(solid.Located(nowhere)) == len(names):
+            names.append(name)
+
+    def colour_of(shape, *labels) -> str | None:
+        """The colour of a body: its own, or that of what it is one of, or failing
+        those the colour of the biggest of its faces."""
+        colour = Quantity_ColorRGBA()
+        for kind in _KINDS_OF_COLOUR:
+            if colours.GetColor(shape, kind, colour):
+                return _hex(colour)
+        for label in labels:
+            for kind in _KINDS_OF_COLOUR:
+                if XCAFDoc_ColorTool.GetColor_s(label, kind, colour):
+                    return _hex(colour)
+        biggest, found = -1.0, None
+        faces = TopExp_Explorer(shape, TopAbs_FACE)
+        while faces.More():
+            face = faces.Current()
+            if any(colours.GetColor(face, kind, colour) for kind in _KINDS_OF_COLOUR):
+                box = Bnd_Box()
+                BRepBndLib.Add_s(face, box)
+                if box.SquareExtent() > biggest:
+                    biggest, found = box.SquareExtent(), _hex(colour)
+            faces.Next()
+        return found
+
+    bodies: list[tuple[list[str], str | None, str | None, object]] = []
+
+    def walk(label, place, within: list[str], top: bool) -> None:
+        if tree.IsReference_s(label):  # one use of something, put somewhere
+            used = TDF_Label()
+            tree.GetReferredShape_s(label, used)
+            place = place.Multiplied(tree.GetLocation_s(label))
+        else:
+            used = label
+        name = _name_of(used) or _name_of(label)
+        # the file as a whole is not something its parts are "inside of"
+        inside = within if top or not name else [*within, name]
+        if tree.IsAssembly_s(used):
+            children = TDF_LabelSequence()
+            tree.GetComponents_s(used, children)
+            for i in range(1, children.Length() + 1):
+                walk(children.Value(i), place, inside, False)
+            return
+
+        whole = tree.GetShape_s(used)
+        if whole.IsNull():
+            return
+        pieces = []
+        solids = TopExp_Explorer(whole, TopAbs_SOLID)
+        while solids.More():
+            pieces.append(solids.Current())
+            solids.Next()
+        # surfaces that close no volume are a body too, all of them together
+        loose, builder, any_loose = TopoDS_Compound(), BRep_Builder(), False
+        builder.MakeCompound(loose)
+        for kind, not_in in ((TopAbs_SHELL, TopAbs_SOLID), (TopAbs_FACE, TopAbs_SHELL)):
+            others = TopExp_Explorer(whole, kind, not_in)
+            while others.More():
+                builder.Add(loose, others.Current())
+                any_loose = True
+                others.Next()
+        if any_loose:
+            pieces.append(loose)
+
+        for piece in pieces:
+            index = named.FindIndex(piece.Located(nowhere))
+            own = names[index] if index else None
+            moved = piece.Moved(place)
+            shape = (
+                Solid(TopoDS.Solid_s(moved))
+                if piece.ShapeType() == TopAbs_SOLID
+                else Compound(TopoDS.Compound_s(moved))
+            )
+            colour = colour_of(piece, label, used)
+            if len(pieces) == 1:
+                bodies.append((within, name or own, colour, shape))
+            else:
+                bodies.append((inside, own, colour, shape))
+
+    free = TDF_LabelSequence()
+    tree.GetFreeShapes(free)
+    for i in range(1, free.Length() + 1):
+        walk(free.Value(i), TopLoc_Location(), [], True)
+    return bodies
+
+
+def read_step(*files: str) -> list[Found]:
+    """Every body in one or more STEP files, each as a part to hand to `Model.part`.
+
+    A file path is relative to the script being run. A body is a part: a file that is
+    an assembly gives one for each of its components, and a component that is several
+    solids gives one for each solid. Each keeps the name the file has for it and stays
+    where the file puts it. `group` is what the file holds it in, at the top: the
+    sub-assembly it is part of, or the file it came from when several files are read,
+    or "Parts" where there is nothing of the kind. `color` is its colour in the file,
+    as "#rrggbb", unless every body wears the same one, which then says nothing about
+    any of them: it is left out, and the app gives each group a colour of its own."""
+    here = os.path.dirname(os.path.abspath(sys.argv[0] or "."))
+    found: list[Found] = []
+    taken: set[str] = set()
+    for file in files:
+        stem = os.path.splitext(os.path.basename(file))[0]
+        bodies = _read(file if os.path.isabs(file) else os.path.join(here, file))
+        if bodies is None:
+            raise ValueError(f"{file} could not be read as a STEP file.")
+        if not bodies:
+            raise ValueError(f"{file} has nothing in it that can be shown.")
+        counted: dict[str, int] = {}
+        for within, name, colour, shape in bodies:
+            if len(files) > 1 and len(bodies) > 1:
+                within = [stem, *within]
+            if not name:  # goes by what it is inside of, and a number
+                among = within[-1] if within else stem
+                counted[among] = counted.get(among, 0) + 1
+                name = among if len(bodies) == 1 else f"{among} {counted[among]}"
+            id = base = _slug(name)
+            n = 1
+            while id in taken:
+                n += 1
+                id = f"{base}_{n}"
+            taken.add(id)
+            found.append(Found(id, name, within[0] if within else "Parts", colour, shape))
+    if len({body.color for body in found}) == 1:
+        for body in found:
+            body.color = None
+    return found
 
 
 class Model:
@@ -201,6 +444,9 @@ class Model:
         os.makedirs(os.path.join(self.out, "step"), exist_ok=True)
         linear, angular = (0.02, 0.15) if self.fine else (0.08, 0.5)
         downloads = []
+        # how many there are to write, then each as it is done: the app shows how far
+        # along a model is from these lines
+        print(f"{len(self._parts)} part{'' if len(self._parts) == 1 else 's'}")
         for entry in self._parts:
             started = time.time()
             id, shape = entry["id"], self._shapes[entry["id"]]

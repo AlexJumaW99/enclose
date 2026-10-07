@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import type { ThreadItem } from "@shared/api"
-import { inBlocks } from "./steps"
+import { atWork, inBlocks } from "./steps"
 
 const user = (id: string, at = 0): ThreadItem => ({
   kind: "user",
@@ -119,5 +119,46 @@ describe("inBlocks", () => {
 
   it("has nothing to show for nothing", () => {
     expect(inBlocks([])).toEqual([])
+  })
+})
+
+describe("atWork", () => {
+  it("says nothing while Claude has only been asked", () => {
+    expect(atWork([])).toBeNull()
+    expect(atWork([user("u")])).toBeNull()
+  })
+
+  it("says the step Claude is on, in the conversation's words for it", () => {
+    expect(atWork([user("u"), step("a", "running")])).toBe(
+      "Run python3 model.py"
+    )
+    // of two under way, the later; and one that is over, until something follows it
+    expect(
+      atWork([user("u"), step("a", "running"), step("b", "running")])
+    ).toBe("Run python3 model.py")
+    expect(atWork([user("u"), step("a", "done")])).toBe("Run python3 model.py")
+    expect(
+      atWork([
+        user("u"),
+        {
+          kind: "tool",
+          id: "t",
+          at: 0,
+          name: "Look",
+          detail: "",
+          state: "done",
+        },
+      ])
+    ).toBe("Look")
+  })
+
+  it("says so when Claude is writing, and when it waits on the user", () => {
+    expect(atWork([user("u"), step("a"), says("s")])).toBe(
+      "Writing what it found"
+    )
+    expect(atWork([user("u"), asked("p", "pending")])).toBe(
+      "Waiting for your answer in the conversation"
+    )
+    expect(atWork([user("u"), asked("p", "denied")])).toBeNull()
   })
 })

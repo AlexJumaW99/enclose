@@ -137,9 +137,12 @@ function Switch({
 export function Tools({
   loaded,
   projectId,
+  locked = false,
 }: {
   loaded: LoadedModel | null
   projectId: string
+  /** the view is not the hand's to change for now: how it is looked at is put away */
+  locked?: boolean
 }) {
   const view = useStore((state) => state.view)
   const { section } = view
@@ -171,7 +174,7 @@ export function Tools({
       </Stack>
 
       {/* how the model is looked at */}
-      {loaded && (
+      {loaded && !locked && (
         <Stack className="absolute top-1/2 right-3 -translate-y-1/2">
           <div className="relative">
             {/* while the model is cut open, alongside: the cut put back to where it

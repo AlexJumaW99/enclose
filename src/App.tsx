@@ -88,8 +88,8 @@ function useAppKeys() {
 }
 
 /**
- * A folder dropped anywhere on the window becomes a project. True while one is being
- * dragged over it.
+ * A folder dropped anywhere on the window becomes a project, and so do CAD files. True
+ * while something is being dragged over it.
  */
 function useFolderDrop(): boolean {
   const [over, setOver] = React.useState(false)
@@ -120,10 +120,10 @@ function useFolderDrop(): boolean {
       event.preventDefault()
       inside = 0
       setOver(false)
-      const dirs = [...event.dataTransfer.files]
+      const paths = [...event.dataTransfer.files]
         .map((file) => window.cad.projects.pathOf(file))
         .filter(Boolean)
-      void useStore.getState().addFolders(dirs)
+      void useStore.getState().openPaths(paths)
     }
     window.addEventListener("dragenter", enter)
     window.addEventListener("dragover", hover)
@@ -183,7 +183,7 @@ export function App() {
           <div className="pointer-events-none fixed inset-2 z-50 flex items-center justify-center rounded-2xl bg-background/70 ring-2 ring-foreground/40 backdrop-blur-sm ring-inset">
             <div className="flex items-center gap-2.5 text-sm font-medium">
               <FolderPlusIcon className="size-5" />
-              Drop a folder to make it a project
+              Drop a file or folder to make it a project
             </div>
           </div>
         )}

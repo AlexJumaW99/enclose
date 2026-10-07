@@ -309,6 +309,81 @@ describe("folderName", () => {
   })
 })
 
+describe("Projects, of files being made a model of", () => {
+  it("lists a project as being read from the first, then as what came of it", () => {
+    let told = 0
+    const projects = new Projects(path.join(root, "state.json"), () => told++)
+    const dir = path.join(root, "made")
+    fs.mkdirSync(dir)
+    const id = projects.add(dir, { name: "Made", reading: true })
+    const now = () => projects.list(() => []).find((p) => p.id === id)!
+    expect(now().bringingIn).toEqual({ state: "working", done: 0, total: null })
+
+    projects.report(id, { state: "working", done: 3, total: 7 })
+    expect(now().bringingIn).toEqual({ state: "working", done: 3, total: 7 })
+
+    // the build is through: its model is found without being looked for again
+    write("made/build/enclose.model.json", MANIFEST)
+    const before = told
+    projects.report(id, null)
+    expect(now()).toMatchObject({
+      bringingIn: null,
+      manifest: path.join("build", "enclose.model.json"),
+    })
+    expect(told).toBe(before + 1)
+    projects.close()
+  })
+})
+
+describe("Projects, of a model Claude is to look over", () => {
+  const written = { title: "Made", files: ["source/made.step"] }
+
+  it("waits to be looked over only once there is a model, and until it has been", () => {
+    const file = path.join(root, "state.json")
+    const projects = new Projects(file, () => {})
+    const dir = path.join(root, "made")
+    fs.mkdirSync(dir)
+    const id = projects.add(dir, {
+      name: "Made",
+      reading: true,
+      lookOver: written,
+    })
+    const now = () => projects.list(() => []).find((p) => p.id === id)!
+    // nothing to look over yet
+    expect(now().lookOver).toBeNull()
+    write("made/build/enclose.model.json", MANIFEST)
+    projects.report(id, null)
+    expect(now().lookOver).toBe("wanted")
+    projects.close()
+
+    // it is still waiting when the app is next started
+    const again = new Projects(file, () => {})
+    expect(again.list(() => [])[0].lookOver).toBe("wanted")
+    expect(again.get(id)?.lookOver).toEqual(written)
+
+    // and is asked for once: what it was written from is handed over with that
+    let told = 0
+    const last = new Projects(file, () => told++)
+    expect(last.lookedOver(id)).toEqual(written)
+    expect(told).toBe(1)
+    expect(last.list(() => [])[0].lookOver).toBeNull()
+    expect(last.lookedOver(id)).toBeNull()
+    expect(told).toBe(1)
+    expect(new Projects(file, () => {}).get(id)?.lookOver).toBeUndefined()
+    again.close()
+    last.close()
+  })
+
+  it("asks it of no project that was not made of files", () => {
+    const projects = new Projects(path.join(root, "state.json"), () => {})
+    write("theirs/enclose.model.json", MANIFEST)
+    const id = projects.add(path.join(root, "theirs"))
+    expect(projects.list(() => [])[0].lookOver).toBeNull()
+    expect(projects.lookedOver(id)).toBeNull()
+    projects.close()
+  })
+})
+
 describe("standInName", () => {
   it("is two plain words", async () => {
     const { standInName } = await import("./names")
