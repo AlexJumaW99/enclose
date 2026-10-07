@@ -125,13 +125,18 @@ function Writing({ label, note }: { label: string; note: Note | null }) {
   }
 
   return (
-    <div onPointerDown={held} style={{ width: WRITING_WIDTH }}>
+    <div
+      onPointerDown={held}
+      className="relative"
+      style={{ width: WRITING_WIDTH }}
+    >
       <div
         ref={box}
         className="flex w-full flex-col gap-2 rounded-2xl border bg-popover/95 p-3 shadow-xl"
       >
-        {/* which part this is said of */}
-        <Badge variant="secondary" className="max-w-full self-start">
+        {/* which part this is said of: a chip like those on the message box, a little
+            lighter, so that it shows on this one */}
+        <Badge className="max-w-full self-start bg-foreground/20 text-foreground">
           <span className="truncate">{label}</span>
         </Badge>
         <textarea
@@ -161,11 +166,16 @@ function Writing({ label, note }: { label: string; note: Note | null }) {
           rows={2}
           className="field-sizing-content max-h-40 min-h-11 w-full resize-none bg-transparent text-sm leading-relaxed outline-none placeholder:text-muted-foreground"
         />
-        <div className="flex items-center justify-between gap-2">
-          {/* the sign for the key has room of its own to its left, which would set
-              the line in from the words above it */}
+        <div className="flex items-end justify-between gap-2">
+          {/* in its corner as the button is in its own: the letters stand as far up
+              from the bottom of the box as in from its side. Its own box is cut down to
+              the letters for that, and it is moved over by the room the sign for the key
+              has of its own to its left */}
           <span
-            className={cn("text-xs text-muted-foreground", MAC && "-ml-px")}
+            className={cn(
+              "text-xs text-muted-foreground [text-box:trim-both_cap_alphabetic]",
+              MAC && "-ml-[1.5px]"
+            )}
           >
             {MAC ? "⌘" : "Ctrl"} Enter to send now
           </span>
@@ -180,6 +190,16 @@ function Writing({ label, note }: { label: string; note: Note | null }) {
           </Button>
         </div>
       </div>
+      {/* leaving what is being written, without keeping it: off the top corner of the
+          box, and as plain to see over any part as the part's name is */}
+      <button
+        type="button"
+        onClick={() => write(null)}
+        className="absolute right-0 bottom-full mb-1.5 flex h-6 cursor-pointer items-center gap-1 rounded-full bg-foreground px-2 text-xs font-medium whitespace-nowrap text-background shadow-sm ring-1 ring-background/25 outline-none hover:bg-[color-mix(in_oklch,var(--foreground),var(--background)_15%)]"
+      >
+        <XIcon className="size-3.5" />
+        Cancel
+      </button>
     </div>
   )
 }
@@ -297,48 +317,6 @@ function Colours({
   )
 }
 
-/**
- * Leaving what is being written, without keeping it. It stands on its own over the view,
- * off the top corner of the box, in white that is turned to the opposite of whatever is
- * behind it, so that it shows on any part. With the pointer on it, it is plain: black on
- * white.
- */
-function Cancel({
-  at,
-  kept,
-}: {
-  at: THREE.Vector3
-  kept: (el: THREE.Object3D, camera: THREE.Camera, size: Size) => number[]
-}) {
-  const [over, setOver] = React.useState(false)
-  return (
-    <Html
-      position={at}
-      calculatePosition={kept}
-      zIndexRange={OVER}
-      // the whole of it is set against the view, which is how its colour is turned
-      wrapperClass={over ? "mix-blend-normal" : "mix-blend-difference"}
-    >
-      <button
-        type="button"
-        onPointerDown={held}
-        onPointerEnter={() => setOver(true)}
-        onPointerLeave={() => setOver(false)}
-        onClick={() => useStore.getState().write(null)}
-        // its right end over the right end of the box, a little above it
-        style={{ left: WRITING_WIDTH / 2, bottom: WRITING_ABOVE + 6 }}
-        className={cn(
-          "absolute flex h-6 -translate-x-full cursor-pointer items-center gap-1 rounded-full px-2 text-xs font-medium whitespace-nowrap outline-none",
-          over ? "bg-white text-black" : "text-white"
-        )}
-      >
-        <XIcon className="size-3.5" />
-        Cancel
-      </button>
-    </Html>
-  )
-}
-
 /** A place on a part, kept where the part really sits, in the part's own frame. */
 const placeOn = (loaded: LoadedPart, point: Vec3 | null) =>
   point
@@ -425,61 +403,55 @@ export function PartMarks({
   }, [written, choosing])
 
   return (
-    <>
-      {written && <Cancel at={at} kept={kept} />}
-      <Html position={at} calculatePosition={kept} zIndexRange={OVER}>
-        {writing !== null ? (
-          // over the place, where the buttons were
-          <div
-            className="-translate-x-1/2"
-            style={{ marginTop: -WRITING_ABOVE }}
-          >
-            <Writing key={writing} label={part.label} note={note} />
-          </div>
-        ) : choosing ? (
-          // round the first of the buttons, which is the one that was pressed
-          <div
-            className="absolute"
-            style={{ left: -((download ? 2 : 1) * STEP) / 2 }}
-          >
-            <Colours partId={part.id} shown={shown} onDone={chosen} />
-          </div>
-        ) : (
-          <div
-            onPointerDown={held}
-            className="relative flex -translate-1/2 gap-1.5"
-          >
-            {/* its name, beside them and of a piece with them; a long one is cut short */}
-            <span className="pointer-events-none absolute top-1/2 right-full mr-1.5 flex h-9 max-w-44 -translate-y-1/2 items-center rounded-full bg-foreground px-3.5 text-xs font-medium text-background shadow-sm ring-1 ring-background/25">
-              <span className="truncate">{part.label}</span>
-            </span>
-            <Does label="Change color" onClick={() => setChoosingAt(at)}>
-              <span
-                className="size-4 rounded-full ring-1 ring-foreground/20"
-                style={{ background: shown }}
-              />
+    <Html position={at} calculatePosition={kept} zIndexRange={OVER}>
+      {writing !== null ? (
+        // over the place, where the buttons were
+        <div className="-translate-x-1/2" style={{ marginTop: -WRITING_ABOVE }}>
+          <Writing key={writing} label={part.label} note={note} />
+        </div>
+      ) : choosing ? (
+        // round the first of the buttons, which is the one that was pressed
+        <div
+          className="absolute"
+          style={{ left: -((download ? 2 : 1) * STEP) / 2 }}
+        >
+          <Colours partId={part.id} shown={shown} onDone={chosen} />
+        </div>
+      ) : (
+        <div
+          onPointerDown={held}
+          className="relative flex -translate-1/2 gap-1.5"
+        >
+          {/* its name, beside them and of a piece with them; a long one is cut short */}
+          <span className="pointer-events-none absolute top-1/2 right-full mr-1.5 flex h-9 max-w-44 -translate-y-1/2 items-center rounded-full bg-foreground px-3.5 text-xs font-medium text-background shadow-sm ring-1 ring-background/25">
+            <span className="truncate">{part.label}</span>
+          </span>
+          <Does label="Change color" onClick={() => setChoosingAt(at)}>
+            <span
+              className="size-4 rounded-full ring-1 ring-foreground/20"
+              style={{ background: shown }}
+            />
+          </Does>
+          {download && (
+            <Does
+              label="Download part"
+              onClick={() =>
+                void window.cad.model.saveCopy(
+                  projectId,
+                  download.file,
+                  download.name
+                )
+              }
+            >
+              <DownloadIcon />
             </Does>
-            {download && (
-              <Does
-                label="Download part"
-                onClick={() =>
-                  void window.cad.model.saveCopy(
-                    projectId,
-                    download.file,
-                    download.name
-                  )
-                }
-              >
-                <DownloadIcon />
-              </Does>
-            )}
-            <Does label="Edit part" onClick={() => write("new")}>
-              <MessageSquareIcon />
-            </Does>
-          </div>
-        )}
-      </Html>
-    </>
+          )}
+          <Does label="Edit part" onClick={() => write("new")}>
+            <MessageSquareIcon />
+          </Does>
+        </div>
+      )}
+    </Html>
   )
 }
 
