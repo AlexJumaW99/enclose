@@ -207,6 +207,7 @@ function guide(
       : []),
     "- Keep to the model and the project. Say nothing about tools, connectors or settings of the user's that are no part of this app (an MCP server that wants signing in to, say) unless they ask.",
     "- A message may hold a <comments> block: things the user has said of parts of the model, one <comment> for each. Each names the part and gives the point on it they clicked, the way the surface faces there and which face it is, in the model's own coordinates (mm, Z up), and holds what they said. Take each as a change wanted at that place. The rest of the message, if there is any, is what they said of the model as a whole.",
+    "- A click in the view picks out a whole object, not one part of it: the parts of a group that touch one another, such as a circuit board with all that is on it. A <comment> made of one has object, what the app calls it, and parts, the ids of all its parts. Its part, id and point are then only where on the object the user clicked: take what they said as said of the whole object, unless it says otherwise.",
     "- A word in a message that begins with @ names a part of the model by its id, as the manifest and mcp__viewport__parts have it: @lid is the part whose id is lid.",
     "- A word in a message that begins with $ names one of your skills, which the user wants used for what they are asking: $pcb is the skill called pcb. Load it with the Skill tool before you start on the work, and follow it.",
     "- You can see what they see. mcp__viewport__screenshot returns the current view as an image, mcp__viewport__parts lists the parts with their groups and sizes, mcp__viewport__selection returns the current selection.",
@@ -265,7 +266,7 @@ export function withNotes(text: string, notes: PartNote[]): string {
   const comments = [
     "<comments>",
     ...notes.flatMap(({ part, text: said }) => [
-      `<comment part="${part.label}" id="${part.id}" point="${at(part.point)}" normal="${at(part.normal)}"${part.face === null ? "" : ` face="${part.face}"`}>`,
+      `<comment${part.piece ? ` object="${part.piece.label}" parts="${part.piece.parts.join(" ")}"` : ""} part="${part.label}" id="${part.id}" point="${at(part.point)}" normal="${at(part.normal)}"${part.face === null ? "" : ` face="${part.face}"`}>`,
       said,
       "</comment>",
     ]),
@@ -780,7 +781,7 @@ export class Threads {
         ),
         tool(
           "selection",
-          "The part the user has selected in the viewport, with the point they clicked (model coordinates, mm). Null if nothing is selected.",
+          "The part the user has selected in the viewport, with the point they clicked (model coordinates, mm). Where they selected a whole object and not one part, piece gives what the app calls it and the ids of all its parts, and the rest is where on it they clicked. Null if nothing is selected.",
           {},
           async () => ask("selection").then(text_, failed),
           UP_FRONT

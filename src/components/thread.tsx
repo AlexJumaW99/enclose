@@ -30,6 +30,7 @@ import { stretches } from "@/lib/mentions"
 import { inBlocks, type Block } from "@/lib/steps"
 import {
   fitThread,
+  goesBy,
   THREAD_WIDTH,
   useStack,
   useStore,
@@ -54,7 +55,7 @@ function UserMessage({ item }: { item: Of<"user"> }) {
       {item.part && (
         <Badge variant="outline">
           <BoxIcon data-icon="inline-start" />
-          {item.part.label}
+          {goesBy(item.part)}
         </Badge>
       )}
       {/* what was said of parts, each under the name of its part */}
@@ -65,7 +66,7 @@ function UserMessage({ item }: { item: Of<"user"> }) {
         >
           <Badge variant="outline">
             <BoxIcon data-icon="inline-start" />
-            {note.part.label}
+            {goesBy(note.part)}
           </Badge>
           {note.text}
         </div>

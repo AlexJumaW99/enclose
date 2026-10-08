@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/tooltip"
 import type { Model } from "@/lib/model"
 import { MAC } from "@/lib/platform"
-import { useStore, type Note } from "@/lib/store"
+import { goesBy, useStore, type Note } from "@/lib/store"
 import type { LoadedPart } from "./load"
 
 /** Over the view, under whatever of the window floats over it. */
@@ -237,21 +237,26 @@ const STEP = 42
  * a ring round the button that was pressed for them, which stays just where it was and
  * as it was. Choosing one puts them away, and choosing the one the part already has
  * takes it back; Esc, or the button in the middle, puts them away with nothing changed.
+ * A piece is given its colour as one thing: every part of it, the same.
  */
 function Colours({
-  partId,
+  partIds,
   shown,
   onDone,
 }: {
-  partId: string
+  /** the part, or all the parts of the piece */
+  partIds: string[]
   /** the colour the part is drawn in, "#rrggbb" */
   shown: string
   /** the ring is done with: a colour was given or taken back, or nothing was */
   onDone: (gave: boolean) => void
 }) {
-  const chosen = useStore((state) =>
-    state.activeId ? (state.colours[state.activeId]?.[partId] ?? null) : null
-  )
+  // the colour they have been given, where it is the same one for them all
+  const chosen = useStore((state) => {
+    const given = state.activeId ? state.colours[state.activeId] : undefined
+    const first = given?.[partIds[0]] ?? null
+    return partIds.every((id) => (given?.[id] ?? null) === first) ? first : null
+  })
   const setColour = useStore((state) => state.setColour)
   React.useEffect(() => {
     const key = (event: KeyboardEvent) => {
@@ -294,7 +299,7 @@ function Colours({
             title={chosen === name ? `${called}: take it back` : called}
             aria-pressed={chosen === name}
             onClick={() => {
-              setColour(partId, chosen === name ? null : name)
+              setColour(partIds, chosen === name ? null : name)
               onDone(true)
             }}
             style={{
@@ -329,6 +334,10 @@ const placeOn = (loaded: LoadedPart, point: Vec3 | null) =>
  * where that is written. They are fixed to that place on the part, and go where it goes
  * as the view is turned; only the edges of the view hold them back, so that they can
  * always be reached.
+ *
+ * Where it is the piece the part is of that is picked out, they are the piece's: its
+ * name, a colour for all of it, and what is said is said of it. There is no file of a
+ * piece to hand out.
  */
 export function PartMarks({
   loaded,
@@ -346,12 +355,15 @@ export function PartMarks({
   const writing = useStore((state) => state.writing)
   const write = useStore((state) => state.write)
   const point = useStore((state) => state.selection?.part.point ?? null)
+  const piece = useStore((state) => state.selection?.part.piece)
+  const label = piece?.label ?? part.label
+  const partIds = React.useMemo(() => piece?.parts ?? [part.id], [piece, part])
   const note = useStore((state) =>
     writing && writing !== "new"
       ? (state.notes[projectId]?.find((one) => one.id === writing) ?? null)
       : null
   )
-  const download = downloadFor(model, part.id, part.label)
+  const download = piece ? undefined : downloadFor(model, part.id, part.label)
   const written = writing !== null
   const at = React.useMemo(() => placeOn(loaded, point), [loaded, point])
   // a colour is being chosen, here: clicking anywhere else on the part is done with that
@@ -407,7 +419,7 @@ export function PartMarks({
       {writing !== null ? (
         // over the place, where the buttons were
         <div className="-translate-x-1/2" style={{ marginTop: -WRITING_ABOVE }}>
-          <Writing key={writing} label={part.label} note={note} />
+          <Writing key={writing} label={label} note={note} />
         </div>
       ) : choosing ? (
         // round the first of the buttons, which is the one that was pressed
@@ -415,16 +427,29 @@ export function PartMarks({
           className="absolute"
           style={{ left: -((download ? 2 : 1) * STEP) / 2 }}
         >
-          <Colours partId={part.id} shown={shown} onDone={chosen} />
+          <Colours partIds={partIds} shown={shown} onDone={chosen} />
         </div>
       ) : (
         <div
           onPointerDown={held}
+          // The second click of two on a part falls here, on what the first put under
+          // the pointer. It is not a press of any of these: it is for the part by
+          // itself, where the first picked out the piece it is of.
+          onClickCapture={(event) => {
+            if (event.detail < 2) return
+            event.stopPropagation()
+            const { selection, select } = useStore.getState()
+            if (selection?.part.piece)
+              select({
+                ...selection,
+                part: { ...selection.part, piece: undefined },
+              })
+          }}
           className="relative flex -translate-1/2 gap-1.5"
         >
           {/* its name, beside them and of a piece with them; a long one is cut short */}
           <span className="pointer-events-none absolute top-1/2 right-full mr-1.5 flex h-9 max-w-44 -translate-y-1/2 items-center rounded-full bg-foreground px-3.5 text-xs font-medium text-background shadow-sm ring-1 ring-background/25">
-            <span className="truncate">{part.label}</span>
+            <span className="truncate">{label}</span>
           </span>
           <Does label="Change color" onClick={() => setChoosingAt(at)}>
             <span
@@ -446,7 +471,10 @@ export function PartMarks({
               <DownloadIcon />
             </Does>
           )}
-          <Does label="Edit part" onClick={() => write("new")}>
+          <Does
+            label={piece ? "Edit object" : "Edit part"}
+            onClick={() => write("new")}
+          >
             <MessageSquareIcon />
           </Does>
         </div>
@@ -474,7 +502,7 @@ export function NoteMark({ loaded, note }: { loaded: LoadedPart; note: Note }) {
         className="flex size-7 cursor-pointer items-center justify-center rounded-full bg-foreground text-background shadow-md ring-1 ring-black/15 outline-none"
       >
         <MessageSquareIcon className="size-3.5 fill-current" />
-        <span className="sr-only">What was said of {note.part.label}</span>
+        <span className="sr-only">What was said of {goesBy(note.part)}</span>
       </button>
     </Html>
   )

@@ -130,8 +130,9 @@ export function callingOn(text: string, ids: string[]): string {
 }
 
 /**
- * The parts a message that was sent is about, by id: the ones something was said of, and
- * the ones it calls on by name. Each of them once.
+ * The parts a message that was sent is about, by id: the ones something was said of,
+ * each with the rest of its piece where it was said of that, and the ones it calls on
+ * by name. Each of them once.
  */
 export function partsOf(
   message: Extract<ThreadItem, { kind: "user" }>
@@ -141,6 +142,11 @@ export function partsOf(
     stretch.kind === "part" ? [stretch.text.slice(MARK.part.length)] : []
   )
   return [
-    ...new Set([...said.flatMap((part) => (part ? [part.id] : [])), ...called]),
+    ...new Set([
+      ...said.flatMap((part) =>
+        part ? [part.id, ...(part.piece?.parts ?? [])] : []
+      ),
+      ...called,
+    ]),
   ]
 }

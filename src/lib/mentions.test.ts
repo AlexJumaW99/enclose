@@ -202,6 +202,19 @@ describe("partsOf", () => {
     ).toEqual([])
   })
 
+  it("takes in all of a piece that something was said of", () => {
+    const board = {
+      ...part("chip"),
+      piece: { label: "Main board", parts: ["pcb", "chip", "socket"] },
+    }
+    expect(
+      partsOf({
+        ...message("@lid too"),
+        notes: [{ part: board, text: "lower" }],
+      })
+    ).toEqual(["chip", "pcb", "socket", "lid"])
+  })
+
   it("takes in the part a message was about, when it could be about only one", () => {
     expect(partsOf({ ...message("taller"), part: part("base") })).toEqual([
       "base",

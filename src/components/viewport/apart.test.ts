@@ -1,7 +1,7 @@
 import * as THREE from "three"
 import { describe, expect, it } from "vitest"
 
-import { piecesOf, waysOut } from "./apart"
+import { piecesOf, pieceWith, waysOut, wholeOf } from "./apart"
 
 /** A part in a group, in a box from one corner to the other. */
 const part = (
@@ -90,6 +90,93 @@ describe("piecesOf", () => {
     expect(piecesOf(stacked("board"), GROUPS, 20)).toEqual([0, 1])
     const mixed = [...stacked("parts"), part("board", [0, 0, 2], [10, 10, 3])]
     expect(new Set(piecesOf(mixed, GROUPS, 20)).size).toBe(3)
+  })
+})
+
+describe("wholeOf", () => {
+  // a board with two chips on it, a lid and a screw
+  const parts = [
+    { id: "lid", piece: 0 },
+    { id: "board", piece: 1 },
+    { id: "chip", piece: 1 },
+    { id: "screw", piece: 3 },
+    { id: "socket", piece: 1 },
+  ]
+
+  it("takes the rest of a piece with any part of it", () => {
+    expect(wholeOf(parts, ["chip"])).toEqual(["board", "chip", "socket"])
+  })
+
+  it("takes a part that is a piece of its own alone", () => {
+    expect(wholeOf(parts, ["lid"])).toEqual(["lid"])
+    expect(wholeOf(parts, [])).toEqual([])
+  })
+
+  it("gives them in the model's order, each once, whatever order they were asked for in", () => {
+    expect(wholeOf(parts, ["screw", "socket", "chip", "lid"])).toEqual([
+      "lid",
+      "board",
+      "chip",
+      "screw",
+      "socket",
+    ])
+  })
+
+  it("leaves out what is no part of the model", () => {
+    expect(wholeOf(parts, ["gone", "screw"])).toEqual(["screw"])
+  })
+})
+
+describe("pieceWith", () => {
+  const GROUPS = [
+    { id: "case", label: "Case" },
+    { id: "board", label: "Main board" },
+    { id: "buttons", label: "Buttons" },
+  ]
+  const part = (id: string, group: string, piece: number, across = 1) => ({
+    id,
+    label: id.replaceAll("_", " "),
+    group,
+    piece,
+    across,
+  })
+  // a lid; a board with a chip and a socket on it, which is all of its group; and two
+  // buttons, each a cap on a switch, which are one group between them
+  const parts = [
+    part("lid", "case", 0, 90),
+    part("pcb", "board", 1, 60),
+    part("chip", "board", 1, 8),
+    part("socket", "board", 1, 12),
+    part("power_cap", "buttons", 4, 9),
+    part("power_switch", "buttons", 4, 14),
+    part("record_cap", "buttons", 6, 20),
+    part("record_switch", "buttons", 6, 14),
+  ]
+
+  it("is nothing for a part that is a piece by itself, or no part at all", () => {
+    expect(pieceWith(parts, GROUPS, "lid")).toBeNull()
+    expect(pieceWith(parts, GROUPS, "gone")).toBeNull()
+  })
+
+  it("goes by its group's name when it is the whole of the group", () => {
+    expect(pieceWith(parts, GROUPS, "chip")).toEqual({
+      label: "Main board",
+      parts: ["pcb", "chip", "socket"],
+    })
+  })
+
+  it("goes by its widest part, and how many more, when it is only some of the group", () => {
+    expect(pieceWith(parts, GROUPS, "power_cap")).toEqual({
+      label: "power switch and 1 more",
+      parts: ["power_cap", "power_switch"],
+    })
+    expect(pieceWith(parts, GROUPS, "record_switch")?.label).toBe(
+      "record cap and 1 more"
+    )
+  })
+
+  it("goes by its widest part where the model does not say what its group is called", () => {
+    expect(pieceWith(parts, [], "socket")?.label).toBe("pcb and 2 more")
   })
 })
 

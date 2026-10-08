@@ -212,13 +212,22 @@ card says so.
 On top of what Claude Code can already do, the app gives Claude three tools: a screenshot
 of the view as you see it, the list of parts with their groups and sizes, and your current
 selection.
-Click a part and it is picked out: it turns white, with a heavier line round it,
-and three buttons appear where you clicked, with the part's name beside them,
-and stay on that spot of the part as it is turned. While you choose a colour for it, and
-for a moment after, the part is seen in its own colour instead. One gives it
-another of the app's colours, which is how the app draws it from then on (Claude is told,
-when it asks what the parts are). One downloads the part as STEP, where the model hands
-that out. And one opens a box to say what should change at the place you clicked.
+Click a part and it is picked out: it turns white, with a heavier line round it, and
+three buttons appear where you clicked, with the part's name beside them, and stay on
+that spot of the part as it is turned. While you choose a colour for it, and for a moment
+after, the part is seen in its own colour instead. One gives it another of the app's
+colours, which is how the app draws it from then on (Claude is told, when it asks what
+the parts are). One downloads the part as STEP, where the model hands that out. And one
+opens a box to say what should change at the place you clicked. Where the part is one of
+several that make one object (the parts of a group that touch one another, as they go
+when the model is pulled apart), the click picks out the whole object, and so does the
+pointer light it up: a circuit board with all that is on it, under the group's name, or
+under that of its widest part where it is only some of the group. The colour is then
+given to all of it, what you say is said of all of it (Claude is told which parts those
+are, and where on them you clicked), and there is no file of it to download. A click with
+Shift held picks out the one part, and while Shift is held the pointer lights up just
+that part. So does a second click on the same spot, or a click with Cmd held (Ctrl, off a
+Mac).
 With a part picked out, I shows it on its own and brings the camera to it, from the side
 the camera is on: the part in the middle of the view, filling it. The flat views and the
 opening view frame the part while it is alone. I again, or Esc, brings the rest back and
@@ -230,17 +239,20 @@ said goes to Claude with its part and the point clicked, in the model's coordina
 
 Drag across the view and a box is drawn, which picks out several parts at once: drawn
 from left to right, the parts wholly inside it; from right to left, every part it
-touches, and its edge is dashed to say so. Shift adds to what is picked out, with a box
-or with a click, and a click with Shift on a part already among it takes that part back
-out. What a box takes in goes right through the model, so while it is drawn the view
-shows what it takes in so far solid and everything else see-through, whatever the
-shading. Let go, the model is drawn as it was, and the parts picked out show through
-whatever is in front of them: veiled in white where each is, with a line round it. I
-shows them on their own, as it does one part. A button at the foot of the view, Add
-parts to chat, puts them on the message box, a chip for each in a row that scrolls
-sideways, and opens the conversation to go on from there; they go to Claude by name,
-ahead of what you write, as if you had written them with @. Click where there is nothing
-to let go of them; Esc drops a box that is still being drawn.
+touches, and its edge is dashed to say so. A box goes by the piece, as a click does: one
+that takes in one chip takes the board it is on and all else on that. Shift adds to what
+is picked out. With a box it adds what the box takes in; with a click it adds the one
+part clicked, or takes it back out if it was already among what is picked out, and on a
+part of an object that is picked out it picks out just that part. What a box takes in
+goes right through the model, so while it is drawn the view shows what it takes in so far
+solid and everything else see-through, whatever the shading. Let go, the model is drawn
+as it was, and the parts picked out show through whatever is in front of them: veiled in
+white where each is, with a line round it. I shows them on their own, as it does one
+part. A button at the foot of the view, Add parts to chat, puts them on the message box,
+a chip for each in a row that scrolls sideways, and opens the conversation to go on from
+there; they go to Claude by name, ahead of what you write, as if you had written them
+with @. Click where there is nothing to let go of them; Esc drops a box that is still
+being drawn.
 
 A message can call on things by name. Write @ and a list of the model's parts comes up
 over the box: the arrow keys move through it, and Enter or Tab puts the part in, by its

@@ -374,11 +374,16 @@ function Shortcuts() {
         the wheel zooms, and Shift with that drag pans.
       </p>
       <p className="px-1 text-sm text-muted-foreground">
-        A click picks a part out, and a drag draws a box that picks out several:
-        from left to right the parts wholly inside it, from right to left every
-        part it touches. Shift adds to what is picked out, or with a click on a
-        part already among it, takes that part back out. Parts picked out
-        together show through whatever is in front of them.
+        A click picks a part out, or the whole of the object it belongs to: the
+        parts of a group that touch one another, such as a circuit board and
+        what is on it. A click with {SHIFT} held picks out the one part: on its
+        own, or added to what is picked out, or taken back out of it. A second
+        click, or a click with {CMD} held, picks out the one part and nothing
+        else. A drag draws a box that picks out several: from left to right the
+        parts wholly inside it, from right to left every part it touches, and an
+        object goes whole with any part of it; with {SHIFT} held it adds to what
+        is picked out. Parts picked out together show through whatever is in
+        front of them.
       </p>
     </>
   )

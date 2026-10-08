@@ -70,6 +70,13 @@ export type PartRef = {
   normal: Vec3 | null
   /** which face of the part, counted in the order the model file lists them */
   face: number | null
+  /**
+   * The piece of the model it was picked out as, when it was not picked out for itself:
+   * the parts of its group that are one object with it, a circuit board with all that is
+   * on it. What the piece goes by, and its parts by id, this one among them; the rest of
+   * this is then where on the piece was clicked.
+   */
+  piece?: { label: string; parts: string[] }
 }
 
 /** Something said of a part: a change wanted at the point of it that was clicked. */

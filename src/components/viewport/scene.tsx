@@ -11,6 +11,7 @@ import type { PartRef, Vec3 } from "@shared/api"
 import { useThemeColors, type ThemeColors } from "@/lib/css-color"
 import type { Keepout } from "@/lib/model"
 import type { Turn } from "@/lib/orient"
+import { MAC } from "@/lib/platform"
 import type { Note, Section, Selection, View } from "@/lib/store"
 import { bridge } from "./bridge"
 import { Ground } from "./ground"
@@ -1233,9 +1234,17 @@ function Picker({
   root: React.RefObject<THREE.Group | null>
   loaded: LoadedModel
   plane: THREE.Plane
-  onHover: (partId: string | null) => void
-  /** a part was clicked, or nothing was; with Shift held, to add to what is picked out */
-  onPick: (selection: Selection | null, add: boolean) => void
+  /**
+   * The pointer is over a part, or over none: and whether a key is held that a click
+   * would pick out the part by itself with, and not the piece it is of.
+   */
+  onHover: (partId: string | null, alone: boolean) => void
+  /**
+   * A part was clicked, or nothing was: with Shift held, to add the part to what is
+   * picked out, or take it back out; and clicked twice, or with Cmd held (Ctrl, off a
+   * Mac), for the part by itself and not the piece it is of.
+   */
+  onPick: (selection: Selection | null, add: boolean, alone: boolean) => void
 }) {
   const gl = useThree((state) => state.gl)
   const camera = useThree((state) => state.camera)
@@ -1245,10 +1254,16 @@ function Picker({
     const canvas = gl.domElement
     const pointer = new THREE.Vector2()
     let pressed: { x: number; y: number } | null = null
+    /** where the pointer is, while it is over the view and pointing at it */
+    let over: { clientX: number; clientY: number } | null = null
     // glass is not in the picture the way the rest is, but is there to be pointed at
     raycaster.layers.enable(1)
 
-    const cast = (event: MouseEvent) => {
+    /** A click with these held is for the part itself. */
+    const alone = (event: MouseEvent | KeyboardEvent) =>
+      event.shiftKey || (MAC ? event.metaKey : event.ctrlKey)
+
+    const cast = (event: { clientX: number; clientY: number }) => {
       if (!root.current) return null
       const rect = canvas.getBoundingClientRect()
       pointer.set(
@@ -1295,14 +1310,29 @@ function Picker({
     const down = (event: PointerEvent) => {
       pressed = { x: event.clientX, y: event.clientY }
     }
+    const point = (event: MouseEvent | KeyboardEvent) => {
+      const hit = over && cast(over)
+      onHover(
+        (hit?.object.userData.partId as string | undefined) ?? null,
+        alone(event)
+      )
+    }
     const move = (event: PointerEvent) => {
       // turning the view, drawing a box across it, or dragging the section's handle:
       // not pointing at a part
       if (event.buttons !== 0 || bridge.handling) return
-      const hit = cast(event)
-      onHover((hit?.object.userData.partId as string | undefined) ?? null)
+      over = { clientX: event.clientX, clientY: event.clientY }
+      point(event)
     }
-    const leave = () => onHover(null)
+    const leave = () => {
+      over = null
+      onHover(null, false)
+    }
+    // one of those keys goes down or comes up while the pointer rests on a part: what
+    // is lit up under it is what a click would now pick out
+    const key = (event: KeyboardEvent) => {
+      if (over && ["Shift", "Meta", "Control"].includes(event.key)) point(event)
+    }
     const click = (event: MouseEvent) => {
       // the end of a drag is not a click
       if (
@@ -1316,7 +1346,8 @@ function Picker({
       const part = hit && describe(hit)
       onPick(
         part ? { part, at: { x: event.clientX, y: event.clientY } } : null,
-        event.shiftKey
+        event.shiftKey,
+        event.detail > 1 || alone(event)
       )
     }
 
@@ -1324,11 +1355,15 @@ function Picker({
     canvas.addEventListener("pointermove", move)
     canvas.addEventListener("pointerleave", leave)
     canvas.addEventListener("click", click)
+    window.addEventListener("keydown", key)
+    window.addEventListener("keyup", key)
     return () => {
       canvas.removeEventListener("pointerdown", down)
       canvas.removeEventListener("pointermove", move)
       canvas.removeEventListener("pointerleave", leave)
       canvas.removeEventListener("click", click)
+      window.removeEventListener("keydown", key)
+      window.removeEventListener("keyup", key)
     }
   }, [gl, camera, raycaster, root, loaded, plane, onHover, onPick])
 
@@ -1399,11 +1434,13 @@ export function Scene({
   projectId,
   view,
   selectedId,
+  selectedWith,
   several,
   changing,
   reading = false,
   sweep,
   hoveredId,
+  hoveredWith,
   seeking,
   plain,
   notes,
@@ -1423,6 +1460,12 @@ export function Scene({
   /** the colours the user has given parts, by part */
   colours: Record<string, string>
   selectedId: string | null
+  /**
+   * The part picked out with the rest of its piece, where it is the piece that is
+   * picked out: all of them are drawn as picked out, and what goes with that is shown
+   * on the one that was clicked. Just that part, where it was picked out by itself.
+   */
+  selectedWith: string[]
   /** the parts picked out together, with a box or with Shift: hinted at through the rest */
   several: string[]
   /** the parts Claude is at work on: hinted at likewise, with a light going across them */
@@ -1436,18 +1479,24 @@ export function Scene({
   /** what a box being drawn across the view takes in so far; null while none is drawn */
   sweep: string[] | null
   hoveredId: string | null
+  /**
+   * What is lit up for the part under the pointer: in the view, what a click there
+   * would pick out, which is all of its piece, or just the part while Shift or Cmd is
+   * held; in the list of parts, the one part.
+   */
+  hoveredWith: string[]
   /** a part is being looked for by name: the one lit up is shown through all the rest */
   seeking: boolean
   /** the part picked out is to be seen in its own colour: one is being chosen for it */
   plain: boolean
   /** changes when the camera should go back to its home view */
   homeKey: string
-  onPick: (selection: Selection | null, add: boolean) => void
+  onPick: (selection: Selection | null, add: boolean, alone: boolean) => void
   /** a box is being drawn across the view, and takes these in so far; null once it is not */
   onSweep: (partIds: string[] | null, add: boolean) => void
   /** the box was let go, having taken these in */
   onTake: (partIds: string[], add: boolean) => void
-  onHover: (partId: string | null) => void
+  onHover: (partId: string | null, alone: boolean) => void
   /** the section's handle was dragged */
   onSection: (moved: { position: Vec3; turn: Turn }) => void
 }) {
@@ -1459,16 +1508,14 @@ export function Scene({
   )
   const radius = loaded.box.getSize(new THREE.Vector3()).length() / 2
   const explode = view.exploded ? view.spread : 0
-  // What is lit as picked out: the one part or the several; or, while a box is being
-  // drawn across the view, what it takes in so far.
+  // What is lit as picked out: the one part or piece, or the several; or, while a box is
+  // being drawn across the view, what it takes in so far.
   const sweeping = sweep !== null
   const lit = React.useMemo(
-    () =>
-      new Set(
-        sweep ?? (several.length > 0 ? several : selectedId ? [selectedId] : [])
-      ),
-    [sweep, several, selectedId]
+    () => new Set(sweep ?? (several.length > 0 ? several : selectedWith)),
+    [sweep, several, selectedWith]
   )
+  const under = React.useMemo(() => new Set(hoveredWith), [hoveredWith])
   const looks = loaded.parts.map((part): ReturnType<typeof appearance> => {
     const seen = appearance(part, loaded, view)
     // While a part is looked for, it alone is solid and all the rest is see-through,
@@ -1491,7 +1538,7 @@ export function Scene({
   )
   /** Picked out, and drawn in the selection's colour for it. */
   const filled = (id: string) =>
-    lit.has(id) && !(plain && !sweeping && id === selectedId)
+    lit.has(id) && !(plain && !sweeping && selectedWith.includes(id))
   const anyGlass = looks.some(({ shown, look }) => shown && look === "glass")
   // The parts a cut leaves a face on: the solid ones, drawn as such. Each has its place
   // among them, which is the order their cut faces are drawn in.
@@ -1583,7 +1630,7 @@ export function Scene({
               cover={anyGlass}
               cut={place(index)}
               // the part that is looked for is the one thing picked out, while it is
-              hovered={!seeking && !sweeping && hoveredId === part.part.id}
+              hovered={!seeking && !sweeping && under.has(part.part.id)}
               selected={
                 seeking ? hoveredId === part.part.id : lit.has(part.part.id)
               }
@@ -1598,7 +1645,10 @@ export function Scene({
                   : null
               }
               plain={
-                plain && !seeking && !sweeping && selectedId === part.part.id
+                plain &&
+                !seeking &&
+                !sweeping &&
+                selectedWith.includes(part.part.id)
               }
               explode={explode}
               plane={plane}
@@ -1652,7 +1702,7 @@ export function Scene({
                             colors.dark,
                             colours[part.part.id]
                           ).lerp(WHITE, 0.14),
-                      hovered: !sweeping && hoveredId === part.part.id,
+                      hovered: !sweeping && under.has(part.part.id),
                       selected: filled(part.part.id),
                     },
                   ]

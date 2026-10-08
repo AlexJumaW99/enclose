@@ -78,10 +78,16 @@ export function fitThread(width: number, windowWidth: number): number {
 }
 
 /**
- * A part that is picked out. `at` is where on screen it was clicked, and is what the
- * prompt opens beside.
+ * A part that is picked out: or, where the part says so (`part.piece`), the piece of the
+ * model it is of, picked out as one thing at that place on it. `at` is where on screen
+ * it was clicked, and is what the prompt opens beside.
  */
 export type Selection = { part: PartRef; at: { x: number; y: number } | null }
+
+/** What a part that was picked out goes by: the name of its piece, if it was picked out as that. */
+export const goesBy = (part: PartRef) => part.piece?.label ?? part.label
+/** And the parts that are, by id: the one, or all those of its piece. */
+export const allOf = (part: PartRef) => part.piece?.parts ?? [part.id]
 
 /** Stable while no parts are picked out together. */
 const NONE: string[] = []
@@ -155,7 +161,10 @@ function savedWaiting(): Pick<State, "notes" | "drafts" | "called"> {
               typeof note?.id === "string" &&
               typeof note.text === "string" &&
               typeof note.part?.id === "string" &&
-              typeof note.part.label === "string"
+              typeof note.part.label === "string" &&
+              (note.part.piece === undefined ||
+                (typeof note.part.piece?.label === "string" &&
+                  Array.isArray(note.part.piece.parts)))
           ),
         ]
       )
@@ -360,8 +369,8 @@ type State = {
    */
   callOn(parts: Called[]): void
   dropCalled(partId: string): void
-  /** Give a part of the open project a colour of the app's, or (null) the model's own back. */
-  setColour(partId: string, colour: PaletteName | null): void
+  /** Give parts of the open project a colour of the app's, or (null) the model's own back. */
+  setColour(partIds: string[], colour: PaletteName | null): void
   setThreadOpen(open: boolean): void
   setThreadWidth(width: number): void
   setPartsOpen(open: boolean): void
@@ -621,15 +630,22 @@ export const useStore = create<State>()((set, get) => ({
     })
   },
 
-  setColour(partId, colour) {
+  setColour(partIds, colour) {
     const { activeId, colours } = get()
     if (!activeId) return
     const others = Object.fromEntries(
-      Object.entries(colours[activeId] ?? {}).filter(([id]) => id !== partId)
+      Object.entries(colours[activeId] ?? {}).filter(
+        ([id]) => !partIds.includes(id)
+      )
     )
     const next = {
       ...colours,
-      [activeId]: colour ? { ...others, [partId]: colour } : others,
+      [activeId]: colour
+        ? {
+            ...others,
+            ...Object.fromEntries(partIds.map((id) => [id, colour])),
+          }
+        : others,
     }
     localStorage.setItem(COLOURS_KEY, JSON.stringify(next))
     set({ colours: next })

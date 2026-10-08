@@ -4,6 +4,10 @@
 // go as one piece. What still comes apart part by part is the outside of the thing, which
 // has to for the inside to be seen, and whatever was never put in a group of its own.
 //
+// A piece is one object to whoever picks things out of the model too. A click on a part
+// picks out the piece it is of, and a box drawn across the view takes in the whole of
+// every piece it takes in any of. (The one part is got at with Shift.)
+//
 // Each piece goes straight out from the middle of the model, by where it is itself. That
 // alone leaves what sits inside something else still inside it: a board in the shell it
 // is screwed to, one ring within another. So any two pieces left in one another are then
@@ -64,6 +68,58 @@ export function piecesOf(
         piece[of(other)] = of(index)
   })
   return parts.map((_, index) => of(index))
+}
+
+/**
+ * Some parts with the rest of the pieces they are of: what a box drawn across the view
+ * picks out, having taken those in. `parts` is every part of the model with the piece it
+ * is of, and what comes back is in the order the model has them.
+ */
+export function wholeOf<Id>(
+  parts: { id: Id; piece: number }[],
+  ids: Id[]
+): Id[] {
+  const wanted = new Set(ids)
+  const pieces = new Set(
+    parts.filter((part) => wanted.has(part.id)).map((part) => part.piece)
+  )
+  return parts.filter((part) => pieces.has(part.piece)).map((part) => part.id)
+}
+
+/**
+ * The piece a part is of, for when that is what is picked out and not the part: what it
+ * goes by, and its parts. Null for a part that is a piece by itself. A piece that is the
+ * whole of its group goes by the group's name. One that is only some of the group has
+ * no name of its own, and goes by that of the part of it that is furthest across, which
+ * is what the rest sits on more often than not, and by how many more there are.
+ */
+export function pieceWith<Id>(
+  parts: {
+    id: Id
+    label: string
+    group: string
+    piece: number
+    /** how far the part is from corner to corner */
+    across: number
+  }[],
+  groups: { id: string; label: string }[],
+  id: Id
+): { label: string; parts: Id[] } | null {
+  const picked = parts.find((part) => part.id === id)
+  if (!picked) return null
+  const whole = parts.filter((part) => part.piece === picked.piece)
+  if (whole.length < 2) return null
+  const group = groups.find((one) => one.id === picked.group)
+  const all =
+    whole.length === parts.filter((part) => part.group === picked.group).length
+  const widest = whole.reduce((a, b) => (b.across > a.across ? b : a))
+  return {
+    label:
+      all && group
+        ? group.label
+        : `${widest.label} and ${whole.length - 1} more`,
+    parts: whole.map((part) => part.id),
+  }
 }
 
 type Axis = "x" | "y" | "z"

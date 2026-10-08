@@ -39,6 +39,12 @@ export type LoadedPart = {
   box: THREE.Box3
   /** where the part sits in the model */
   home: THREE.Matrix4
+  /**
+   * Which piece of the model it is of, a number the parts of one piece share: the parts
+   * of a group that are one object, which come apart as one and are picked out as one
+   * (see apart.ts).
+   */
+  piece: number
   /** where it moves to when the model is exploded, mm: with the rest of its piece */
   away: THREE.Vector3
   faces: number
@@ -180,6 +186,7 @@ async function loadPart(
     turn: 0,
     box,
     home,
+    piece: 0,
     away: new THREE.Vector3(...part.explode),
     faces,
   }
@@ -316,20 +323,22 @@ export async function loadModel(
   const box = new THREE.Box3()
   for (const part of parts) box.union(part.box.clone().applyMatrix4(part.home))
 
+  // The parts of a group that are one object are a piece of the model (see apart.ts).
+  const across = box.getSize(new THREE.Vector3()).length()
+  const boxes = parts.map((part) => part.box.clone().applyMatrix4(part.home))
+  const pieces = piecesOf(
+    parts.map((part, index) => ({ group: part.part.group, box: boxes[index] })),
+    model.groups,
+    across
+  )
+  parts.forEach((part, index) => {
+    part.piece = pieces[index]
+  })
+
   // A model that does not say how it comes apart is pulled out from its middle: not part
-  // by part, but piece by piece, where the parts of a group that are one object go
-  // together, and each piece clear of the rest (see apart.ts). A part goes as its piece.
+  // by part, but piece by piece, each piece clear of the rest. A part goes as its piece.
   if (parts.every((part) => part.away.lengthSq() === 0)) {
     const middle = box.getCenter(new THREE.Vector3())
-    const boxes = parts.map((part) => part.box.clone().applyMatrix4(part.home))
-    const pieces = piecesOf(
-      parts.map((part, index) => ({
-        group: part.part.group,
-        box: boxes[index],
-      })),
-      model.groups,
-      box.getSize(new THREE.Vector3()).length()
-    )
     // a piece is all of its parts: the box round them, and where their surfaces are,
     // each counting for as much as there is of it
     const wholes = new Map<
@@ -353,11 +362,7 @@ export async function loadModel(
     for (const whole of wholes.values())
       if (whole.area > 0) whole.centre.divideScalar(whole.area)
       else whole.box.getCenter(whole.centre)
-    const ways = waysOut(
-      [...wholes.values()],
-      middle,
-      box.getSize(new THREE.Vector3()).length()
-    )
+    const ways = waysOut([...wholes.values()], middle, across)
     const way = new Map([...wholes.keys()].map((piece, n) => [piece, ways[n]]))
     parts.forEach((part, index) => part.away.copy(way.get(pieces[index])!))
   }
@@ -421,6 +426,7 @@ export function standInModel(): LoadedModel {
         turn: 0,
         box,
         home: new THREE.Matrix4(),
+        piece: 0,
         away: new THREE.Vector3(),
         faces: 6,
       },

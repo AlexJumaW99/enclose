@@ -49,6 +49,7 @@ import { matching, putIn, tokenAt } from "@/lib/mentions"
 import {
   askCommands,
   askModels,
+  goesBy,
   useActiveProject,
   useStack,
   useStore,
@@ -352,7 +353,7 @@ function Waiting({ called, notes }: { called: Called[]; notes: Note[] }) {
               onClick={() => write(note.id)}
               className="flex min-w-0 cursor-pointer items-center gap-1.5 outline-none"
             >
-              <span className="shrink-0">{note.part.label}</span>
+              <span className="shrink-0">{goesBy(note.part)}</span>
               <span className="truncate font-normal text-muted-foreground">
                 {note.text}
               </span>
@@ -360,7 +361,7 @@ function Waiting({ called, notes }: { called: Called[]; notes: Note[] }) {
             <button
               type="button"
               onClick={() => dropNote(note.id)}
-              aria-label={`Take back what was said of ${note.part.label}`}
+              aria-label={`Take back what was said of ${goesBy(note.part)}`}
               className={OFF}
             >
               <XIcon className="size-3" />

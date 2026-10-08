@@ -7,7 +7,7 @@ import {
   TriangleAlertIcon,
 } from "lucide-react"
 
-import type { Project } from "@shared/api"
+import type { PartRef, Project } from "@shared/api"
 import { Mark } from "@/components/mark"
 import { RESTING_WIDTH } from "@/lib/mark"
 import { atWork } from "@/lib/steps"
@@ -30,6 +30,7 @@ import { MAC } from "@/lib/platform"
 import { notCalledOn, partsOf } from "@/lib/mentions"
 import { VIEWS } from "@/lib/orient"
 import {
+  allOf,
   SPREAD,
   useStore,
   type Called,
@@ -37,6 +38,7 @@ import {
   type Only,
   type Selection,
 } from "@/lib/store"
+import { pieceWith, wholeOf } from "./apart"
 import { AxisGizmo } from "./axis-gizmo"
 import { bridge } from "./bridge"
 import { ExplodeSlider } from "./explode-slider"
@@ -63,13 +65,13 @@ function nearOf(only: Only | null): string[] {
       : NO_PARTS
 }
 
-/** The parts picked out, by id: the several, or the one. */
+/** The parts picked out, by id: the several, or the one, or those of the one piece. */
 function pickedOut(): string[] {
   const { several, selection } = useStore.getState()
   return several.length > 0
     ? several
     : selection
-      ? [selection.part.id]
+      ? allOf(selection.part)
       : NO_PARTS
 }
 
@@ -422,47 +424,116 @@ function Model({ project }: { project: Project }) {
   // part it takes in, together, and so does a click with Shift held: it adds a part to
   // what is picked out, or takes back out one that was among it. Parts picked out
   // together are hinted at through whatever of the model is in front of them.
+  //
+  // A click and a box go by the piece: the parts of a group that are one object, a
+  // circuit board with all that is on it, are picked out as one, the way they come
+  // apart as one (see apart.ts). So a click on any of a piece picks out all of it, at
+  // that place on it, and a box that takes in any of it takes all of it. Shift with a
+  // click goes by the part, and is how the one part is got at: it picks out the part
+  // itself, adds it to what is picked out, or takes it back out. So does a second
+  // click, or a click with Cmd held, which pick out the part and nothing else.
+  /** The parts, as what a piece is made out from. */
+  const listed = React.useMemo(
+    () =>
+      (loaded?.parts ?? []).map(({ part, piece, box }) => ({
+        id: part.id,
+        label: part.label,
+        group: part.group,
+        piece,
+        across: box.min.distanceTo(box.max),
+      })),
+    [loaded]
+  )
+  /** These parts and the rest of their pieces, in the order the model has them. */
+  const whole = React.useCallback(
+    (ids: string[]) => wholeOf(listed, ids),
+    [listed]
+  )
+  /** A part as the piece it is of, where it is one of several in a piece. */
+  const asPiece = React.useCallback(
+    (part: PartRef): PartRef => {
+      const piece = loaded && pieceWith(listed, loaded.model.groups, part.id)
+      return piece ? { ...part, piece } : part
+    },
+    [loaded, listed]
+  )
   /** These parts with what is picked out already, in the order the model has them. */
   const withPicked = React.useCallback(
     (ids: string[]) => {
       const had = pickedOut()
-      return (loaded?.parts ?? [])
-        .map((part) => part.part.id)
+      return listed
+        .map((part) => part.id)
         .filter((id) => had.includes(id) || ids.includes(id))
     },
-    [loaded]
+    [listed]
   )
   const pick = React.useCallback(
-    (selection: Selection | null, add: boolean) => {
-      const { select, selectSeveral } = useStore.getState()
-      const had = pickedOut()
-      // the first part picked out is picked out the same, Shift or no
-      if (!add || (selection && had.length === 0)) return select(selection)
+    (selection: Selection | null, add: boolean, alone: boolean) => {
+      const { select, selectSeveral, selection: was } = useStore.getState()
+      if (!add)
+        return select(
+          selection && !alone
+            ? { ...selection, part: asPiece(selection.part) }
+            : selection
+        )
       // Shift on nothing leaves what is picked out as it is
       if (!selection) return
       const { id } = selection.part
+      const had = pickedOut()
+      // With nothing picked out, the part is picked out as a click on it alone would:
+      // and so is a part of the piece that is picked out, which is the part meant.
+      if (had.length === 0 || (was?.part.piece && had.includes(id)))
+        return select(selection)
       selectSeveral(
         had.includes(id)
           ? had.filter((other) => other !== id)
           : withPicked([id])
       )
     },
-    [withPicked]
+    [asPiece, withPicked]
   )
   const sweepTo = React.useCallback(
     (ids: string[] | null, add: boolean) =>
-      useStore.getState().sweepOver(ids && add ? withPicked(ids) : ids),
-    [withPicked]
+      useStore
+        .getState()
+        .sweepOver(ids && (add ? withPicked(whole(ids)) : whole(ids))),
+    [whole, withPicked]
   )
   const take = React.useCallback(
     (ids: string[], add: boolean) => {
       const { selectSeveral } = useStore.getState()
-      if (!add) return selectSeveral(ids)
+      const taken = whole(ids)
+      if (!add) return selectSeveral(taken)
       // nothing more than was picked out already: it stays as it was
       const had = pickedOut()
-      if (!ids.every((id) => had.includes(id))) selectSeveral(withPicked(ids))
+      if (!taken.every((id) => had.includes(id)))
+        selectSeveral(withPicked(taken))
     },
-    [withPicked]
+    [whole, withPicked]
+  )
+  const selectedWith = React.useMemo(
+    () => (selection ? allOf(selection.part) : NO_PARTS),
+    [selection]
+  )
+  // What a click would pick out is what lights up under the pointer: in the view, all
+  // of a piece, or the part by itself while a key is held that a click would pick out
+  // just the part with. A part pointed at in the list of parts is lit up alone.
+  const [over, setOver] = React.useState<string | null>(null)
+  const hoverOver = React.useCallback(
+    (id: string | null, alone: boolean) => {
+      setOver(alone ? null : id)
+      hover(id)
+    },
+    [hover]
+  )
+  const hoveredWith = React.useMemo(
+    () =>
+      hoveredId === null
+        ? NO_PARTS
+        : hoveredId === over
+          ? whole([hoveredId])
+          : [hoveredId],
+    [hoveredId, over, whole]
   )
 
   // Cmd+1 is the view the model opened with; Cmd+2 to 7 are the six flat ones. S cuts
@@ -597,6 +668,20 @@ function Model({ project }: { project: Project }) {
     )
     if (still.length < several.length) selectSeveral(still)
   }, [loaded])
+  // A piece that is picked out is the piece as the model now has it: what it has gained
+  // or lost, or come to be called, in a rebuild.
+  React.useEffect(() => {
+    const { selection } = useStore.getState()
+    if (!loaded || !selection?.part.piece) return
+    const { piece } = asPiece({ ...selection.part, piece: undefined })
+    const was = selection.part.piece
+    if (piece?.label === was.label && piece.parts.join() === was.parts.join())
+      return
+    // (not picked out afresh: what is being written of it is still being written)
+    useStore.setState({
+      selection: { ...selection, part: { ...selection.part, piece } },
+    })
+  }, [loaded, asPiece])
 
   // what Claude gets when it asks which parts are on screen
   React.useEffect(() => {
@@ -643,12 +728,14 @@ function Model({ project }: { project: Project }) {
           colours={colours}
           view={view}
           selectedId={selection?.part.id ?? null}
+          selectedWith={selectedWith}
           several={several}
           // the stand-in is nothing Claude was asked to change
           changing={loaded.standIn ? NO_PARTS : lookingOver ? every : changing}
           reading={lookingOver}
           sweep={sweep}
           hoveredId={hoveredId}
+          hoveredWith={hoveredWith}
           seeking={seeking && !loaded.standIn}
           plain={plain}
           // the first model made takes the cube's place, and is framed afresh
@@ -657,7 +744,7 @@ function Model({ project }: { project: Project }) {
           onPick={loaded.standIn ? nothing : pick}
           onSweep={loaded.standIn ? nothing : sweepTo}
           onTake={loaded.standIn ? nothing : take}
-          onHover={loaded.standIn ? nothing : hover}
+          onHover={loaded.standIn ? nothing : hoverOver}
           onSection={moveSection}
         />
       )}
