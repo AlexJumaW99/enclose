@@ -17,6 +17,7 @@ import type { Note, Section, Selection, View } from "@/lib/store"
 import { bridge } from "./bridge"
 import { FoundTags, namesOf, Place, type Named } from "./found-tags"
 import { Ground } from "./ground"
+import { UNDER_FROM, underlit } from "./light"
 import type { LoadedModel, LoadedPart } from "./load"
 import { DRAG_FROM, Marquee } from "./marquee"
 import { EDGE, finish, skinColour } from "./paint"
@@ -1377,6 +1378,22 @@ function Picker({
   return null
 }
 
+/** The light from under the model, as strong as where the camera is makes it (see light.ts). */
+function Underlight() {
+  const light = React.useRef<THREE.DirectionalLight>(null)
+  useFrame(({ camera }) => {
+    if (light.current) light.current.intensity = underlit(camera)
+  })
+  return (
+    <directionalLight
+      ref={light}
+      layers={EVERY}
+      position={UNDER_FROM}
+      intensity={0}
+    />
+  )
+}
+
 /**
  * The view is only redrawn when something asks for it. Most changes ask by themselves;
  * a part being taken out of the scene does not, so every change of view asks here.
@@ -1639,6 +1656,8 @@ export function Scene({
         />
       )}
       <Rig box={loaded.box} homeKey={homeKey} circling={reading} />
+      {/* after the camera has been moved for the frame: it goes by where that is */}
+      <Underlight />
       {named.length > 0 && <FoundTags named={named} onShow={onShow} />}
       <Cut plane={plane} section={view.section} />
       <Picker

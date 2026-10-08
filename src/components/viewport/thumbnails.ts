@@ -5,6 +5,7 @@ import * as React from "react"
 import * as THREE from "three"
 
 import { useThemeColors } from "@/lib/css-color"
+import { UNDER_FROM, underlit } from "./light"
 import type { LoadedModel, LoadedPart } from "./load"
 import { EDGE, finish, skinColour } from "./paint"
 import { HOME_DIRECTION, MODEL_TO_WORLD, toWorld } from "./rig"
@@ -76,11 +77,18 @@ export function stage() {
   sun.position.set(180, 320, 220)
   const fill = new THREE.DirectionalLight("#ffffff", 0.55)
   fill.position.set(-240, 160, -180)
+  // and from under it, as strong as where each picture is drawn from makes it
+  const under = new THREE.DirectionalLight("#ffffff", 0)
+  under.position.set(...UNDER_FROM)
+  scene.onBeforeRender = (_renderer, _scene, camera) => {
+    under.intensity = underlit(camera)
+  }
   scene.add(
     new THREE.AmbientLight("#ffffff", 0.55),
     new THREE.HemisphereLight("#ffffff", "#7d828c", 0.7),
     sun,
-    fill
+    fill,
+    under
   )
   const root = new THREE.Group()
   root.rotation.set(...MODEL_TO_WORLD)

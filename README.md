@@ -144,6 +144,11 @@ is turning, never while it is still.
 From above and from below alike, the model's back is at the top of the view: the bottom
 view turns the model over sideways, not end over end.
 
+The model is lit from above. Looked at from below it would be in its own shadow, so a
+light under it comes up as the camera goes below the level: from straight below, what
+faces down is as light as what faces up is from straight above. From above nothing is
+changed by it.
+
 **Shading** is on Z, the way it is in Blender: the key brings solid, glass, wireframe and
 outline up round the pointer. Hold it, flick towards one and let go; or tap it, and click
 one. A choice is pointed at by direction, so the pointer need not reach it. Esc, Z again
