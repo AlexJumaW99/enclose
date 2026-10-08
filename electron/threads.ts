@@ -233,6 +233,7 @@ function guide(
       "- If the project has an enclose.py, that is the app's exporter, copied in: read its docstring for how parts and groups are declared, and do not edit it.",
       "- If the project has a source/ folder, the app made the project of CAD files the user opened: they are kept there, and model.py reads every body in them as a part (enclose.read_step). That model.py is the project's own, to change as the user asks: change a body after it is read, add parts of your own beside the ones read. Leave the files in source/ as they are. Where model.py has a table of names (PARTS), the parts were named and grouped when the files were opened, by you, from how the model looked: the table is where a part is renamed or moved to another group. Where it has none, the names and groups are only what the files happened to give, which is often no grouping at all: the first time you change such a model, put its parts in the groups a person would look for them in, as above.",
       '- The groups are what the manifest says they are: its "groups" list, and the "group" each part names. Like the rest of the manifest they are written by the build.',
+      "- The user can also arrange the parts by hand in the app: make a group of some (Cmd+G), take some out of their groups (Shift+Cmd+G), call a group something else. That is kept by the app and not in the project's files, and it is how the model is listed and handled from then on, whatever the manifest says. mcp__viewport__parts gives each part's group as the user has it, with what the group goes by, and marks with byHand the parts they moved. Take that as how the user wants the model arranged: never put it back as it was unless asked, and when you next change the model's script for some other reason, give it the same groups and names, so that what is built agrees with what the user sees.",
       "- After a change to geometry: rebuild, take a screenshot, and check the result yourself before you report it."
     )
   } else if (build) {
@@ -864,7 +865,7 @@ export class Threads {
         ),
         tool(
           "parts",
-          "Every part of the model on screen: id, label, the group it is listed under, bounding box in model coordinates (mm), and whether it is currently shown.",
+          "Every part of the model on screen: id, label, the group it is listed under (its id, and groupLabel for what it goes by), bounding box in model coordinates (mm), and whether it is currently shown. byHand marks a part the user has put in another group than the manifest has it in, by hand in the app: that is the group given here.",
           {},
           async () => ask("parts").then(text_, failed),
           UP_FRONT

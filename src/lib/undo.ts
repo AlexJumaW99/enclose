@@ -1,10 +1,11 @@
 // What is done to a model by hand in the app, kept so that Cmd+Z can take it back: the
-// colours given to parts. (What Claude does to a project's files is kept by the app's
-// own process, a turn at a time: see electron/changes.ts. Cmd+Z takes back whichever
-// was done last.)
+// colours given to parts, and how the parts are put into groups. (What Claude does to a
+// project's files is kept by the app's own process, a turn at a time: see
+// electron/changes.ts. Cmd+Z takes back whichever was done last.)
 
 import type { Undone } from "@shared/api"
 import type { PaletteName } from "@shared/palette"
+import type { Arrangement } from "./arrange"
 
 /** The colours parts have been given, by part: those that have been given one. */
 export type Colours = Record<string, PaletteName>
@@ -14,6 +15,7 @@ type Had = Record<string, PaletteName | null>
 
 /** Parts given a colour, or their own back: what they had, what they have, and when. */
 export type Recolour = {
+  kind: "colour"
   at: number
   /** when it was taken back, while it is */
   undoneAt: number | null
@@ -21,8 +23,24 @@ export type Recolour = {
   after: Had
 }
 
+/**
+ * The parts put into groups another way, or a group called something else: how they
+ * were arranged before, how after, and what was done, in words that follow "Undid".
+ */
+export type Rearranged = {
+  kind: "arrangement"
+  at: number
+  undoneAt: number | null
+  before: Arrangement
+  after: Arrangement
+  said: string
+}
+
+/** One thing done by hand. */
+export type Change = Recolour | Rearranged
+
 /** What has been done, the latest last; and what of it is taken back, the latest last. */
-export type History = { done: Recolour[]; undone: Recolour[] }
+export type History = { done: Change[]; undone: Change[] }
 
 /** Stable for a project nothing has been done to. */
 export const NO_HISTORY: History = { done: [], undone: [] }
@@ -43,6 +61,7 @@ export function recolour(
   const changed = partIds.filter((id) => (colours[id] ?? null) !== colour)
   if (changed.length === 0) return null
   return {
+    kind: "colour",
     at,
     undoneAt: null,
     before: Object.fromEntries(changed.map((id) => [id, colours[id] ?? null])),
@@ -59,8 +78,18 @@ export function coloured(colours: Colours, had: Had): Colours {
   return next
 }
 
+/** The parts arranged another way: how they were, how they are, and what was done. */
+export function rearranged(
+  before: Arrangement,
+  after: Arrangement,
+  said: string,
+  at: number
+): Rearranged {
+  return { kind: "arrangement", at, undoneAt: null, before, after, said }
+}
+
 /** Something was done: it is the latest, and what was taken back cannot be put back over it. */
-export function record(history: History, change: Recolour): History {
+export function record(history: History, change: Change): History {
   return { done: [...history.done, change].slice(-KEPT), undone: [] }
 }
 
@@ -68,7 +97,7 @@ export function record(history: History, change: Recolour): History {
 export function back(
   history: History,
   at: number
-): { history: History; change: Recolour } | null {
+): { history: History; change: Change } | null {
   const change = history.done.at(-1)
   if (!change) return null
   return {
@@ -83,7 +112,7 @@ export function back(
 /** What was last taken back, put back: null if nothing is taken back. */
 export function forth(
   history: History
-): { history: History; change: Recolour } | null {
+): { history: History; change: Change } | null {
   const change = history.undone.at(-1)
   if (!change) return null
   return {

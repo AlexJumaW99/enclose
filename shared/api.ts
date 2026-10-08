@@ -183,6 +183,17 @@ export const EFFORTS: readonly Effort[] = [
   "max",
 ]
 
+/**
+ * A group of parts made by hand, as Claude is asked what to call it: what the thing
+ * modelled is called, if anything; what each part in the group goes by, and the group
+ * it was in before (null if none); and what the model's other groups are called.
+ */
+export type GroupAsked = {
+  title: string | null
+  parts: { label: string; from: string | null }[]
+  others: string[]
+}
+
 /** A model the installed Claude Code offers. */
 export type ModelChoice = {
   /** what Claude Code knows it by, or null for whichever model it is set to run */
@@ -309,6 +320,11 @@ export type CadApi = {
     /** save one of the model's files somewhere the user picks */
     saveCopy(projectId: string, file: string, name: string): Promise<boolean>
     /**
+     * what a group of parts the user has just made by hand might be called: Claude's
+     * answer, or null if there is none to be had
+     */
+    nameGroup(projectId: string, group: GroupAsked): Promise<string | null>
+    /**
      * save several of its files together: in a new folder, called `folder`, made in a
      * folder the user picks
      */
@@ -396,6 +412,7 @@ export const CHANNEL = {
   modelRead: "model:read",
   modelSaveCopy: "model:save-copy",
   modelSaveCopies: "model:save-copies",
+  modelNameGroup: "model:name-group",
   threadItems: "thread:items",
   threadSend: "thread:send",
   threadLookOver: "thread:look-over",

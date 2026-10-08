@@ -31,6 +31,8 @@ const api: CadApi = {
     read: (projectId) => ipcRenderer.invoke(CHANNEL.modelRead, projectId),
     saveCopy: (projectId, file, name) =>
       ipcRenderer.invoke(CHANNEL.modelSaveCopy, projectId, file, name),
+    nameGroup: (projectId, group) =>
+      ipcRenderer.invoke(CHANNEL.modelNameGroup, projectId, group),
     saveCopies: (projectId, files, folder) =>
       ipcRenderer.invoke(CHANNEL.modelSaveCopies, projectId, files, folder),
   },

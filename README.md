@@ -182,15 +182,31 @@ Down the right-hand edge:
 - **Parts** (P) lists what the model is made of: a card for each group the model puts
   its parts in, and in it a row of the group's parts, each a picture with its name and
   the size of its STEP file. A row with more parts than fit scrolls sideways. Pick a part
-  or a group (by its name) and the view shows it on its own, with the camera brought to
+  or a group and the view shows it on its own, with the camera brought to
   it, in the middle of what the list leaves of the view; pick it again and the rest
-  comes back, and the camera goes back to where it was. Esc, or a press anywhere else, puts the list away and leaves what you
+  comes back, and the camera goes back to where it was. (A group is picked by a click
+  on its card, anywhere but on its name.) Esc, or a press anywhere else, puts the list away and leaves what you
   picked showing, and the button stays lit while it is. A part put out of sight with H is
   dim in the list, as is a group all of whose parts are, and picking it there brings it
   back; the button stays lit while anything is out of sight. The arrow that comes up
   beside a part's name saves that part as STEP. The arrow beside a group's name saves
   the STEP files of all its parts, in a folder named after the group, inside one you
   choose.
+
+  The groups can be changed by hand. Several parts are picked in the list as in any
+  list, and shown together: hold Cmd and click parts to add them one by one (or take
+  one back out), or click one and hold Shift on another for every part from the one to
+  the other, across groups. Hold either key and click a group's card for the whole
+  group, which is how two groups are picked to be made one. Or pick parts out in the
+  view. **Cmd+G** makes a group of what is picked, which goes to the top of the list,
+  and Claude is asked what to call it: the card glimmers while the name is on its way. **Shift+Cmd+G** takes them out of
+  their groups, to be listed last as in none; with a whole group picked, by a click on
+  its card, that is the end of the group. Click a group's name to write another over it
+  (Enter keeps it, Esc does not, and nothing written gives back the name it had). All
+  of this is taken back with Cmd+Z. It is kept by the app, not in the project's files:
+  Claude is told how you have the parts when it asks what they are, and is to write the
+  same groups into the model the next time it changes it. Should a build put a part in
+  some other group, or call a group something else, the build is what is shown.
 - **Grid** (Shift+G, as in Figma) rules the ground into squares and draws the world's
   three axes through its origin, in the colours they have in the corner of the view.
   Both go on as far as can be seen, however far out the view is taken. The squares are a

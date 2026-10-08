@@ -6,6 +6,7 @@ import {
   forth,
   later,
   NO_HISTORY,
+  rearranged,
   record,
   recolour,
   saidOf,
@@ -17,6 +18,7 @@ const given: Colours = { lid: "red", base: "blue" }
 describe("recolour", () => {
   it("says what the parts had, and what they are given", () => {
     expect(recolour(given, ["lid", "screw"], "green", 5)).toEqual({
+      kind: "colour",
       at: 5,
       undoneAt: null,
       before: { lid: "red", screw: null },
@@ -83,6 +85,29 @@ describe("the history of what was done by hand", () => {
   it("lets go of what was taken back once something else is done", () => {
     const { history } = back(record(NO_HISTORY, first), 10)!
     expect(record(history, second)).toEqual({ done: [second], undone: [] })
+  })
+
+  it("holds the parts put into groups another way, among the colours", () => {
+    const before = { made: [], put: {}, called: {} }
+    const after = {
+      made: ["g1"],
+      put: { lid: { group: "g1", from: "case" } },
+      called: {},
+    }
+    const group = rearranged(before, after, "a grouping", 3)
+    expect(group).toEqual({
+      kind: "arrangement",
+      at: 3,
+      undoneAt: null,
+      before,
+      after,
+      said: "a grouping",
+    })
+    const history = record(record(NO_HISTORY, first), group)
+    const one = back(history, 10)!
+    expect(one.change).toBe(group)
+    expect(back(one.history, 11)!.change).toBe(first)
+    expect(forth(one.history)!.change).toMatchObject({ kind: "arrangement" })
   })
 
   it("has nothing to take back or put back to begin with", () => {

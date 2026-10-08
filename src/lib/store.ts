@@ -2,6 +2,12 @@
 // being looked at.
 import { create } from "zustand"
 
+import {
+  NOT_ARRANGED,
+  readArrangement,
+  type Arrangement,
+  type Named,
+} from "@/lib/arrange"
 import { finishedNow, stackOf, type Stack } from "@/lib/conversations"
 import { cutsOf, readCuts } from "@/lib/cuts"
 import { mannerOf, savedAccess } from "@/lib/manner"
@@ -13,6 +19,7 @@ import {
   forth,
   later,
   NO_HISTORY,
+  rearranged,
   record,
   recolour,
   saidOf,
@@ -119,6 +126,7 @@ const THREAD_WIDTH_KEY = "enclose:thread-width"
 const CUTS_KEY = "enclose:cuts"
 const FINISHED_KEY = "enclose:finished"
 const COLOURS_KEY = "enclose:colours"
+const ARRANGED_KEY = "enclose:arranged"
 const WAITING_KEY = "enclose:waiting"
 
 /** What was saved under a key, or under the name the app had before it was Enclose. */
@@ -155,6 +163,57 @@ const savedColours = (): Record<string, Record<string, PaletteName>> => {
     return {}
   }
 }
+/**
+ * How each project's parts were put into groups by hand, as it was kept: and the names
+ * Claude gave the groups that were made so.
+ */
+const savedArranged = (): {
+  arranged: Record<string, Arrangement>
+  named: Record<string, Named>
+} => {
+  const arranged: Record<string, Arrangement> = {}
+  const named: Record<string, Named> = {}
+  try {
+    const kept: unknown = JSON.parse(saved(ARRANGED_KEY) ?? "{}")
+    if (!kept || typeof kept !== "object") return { arranged, named }
+    for (const [project, one] of Object.entries(kept)) {
+      const read = readArrangement(one)
+      if (read !== NOT_ARRANGED) arranged[project] = read
+      const names = (one as { named?: unknown } | null)?.named
+      if (names && typeof names === "object")
+        named[project] = Object.fromEntries(
+          Object.entries(names).filter(
+            (entry): entry is [string, string] => typeof entry[1] === "string"
+          )
+        )
+    }
+  } catch {
+    // nothing kept that can be read: nothing was done by hand
+  }
+  return { arranged, named }
+}
+/** Keep how the projects' parts are arranged by hand, with the names given for it. */
+function keepArranged(
+  arranged: Record<string, Arrangement>,
+  named: Record<string, Named>
+) {
+  const projects = new Set([...Object.keys(arranged), ...Object.keys(named)])
+  localStorage.setItem(
+    ARRANGED_KEY,
+    JSON.stringify(
+      Object.fromEntries(
+        [...projects].map((project) => [
+          project,
+          {
+            ...(arranged[project] ?? NOT_ARRANGED),
+            named: named[project] ?? {},
+          },
+        ])
+      )
+    )
+  )
+}
+
 /**
  * What was waiting to be sent when the window was last up: what was said of parts, the
  * parts called on from the view, and what was written in the message boxes. Whatever of
@@ -345,8 +404,18 @@ type State = {
    */
   colours: Record<string, Record<string, PaletteName>>
   /**
+   * How the user has put each project's parts into groups by hand, over what its model
+   * says: groups made, parts taken out of theirs, groups called something else.
+   */
+  arranged: Record<string, Arrangement>
+  /** The names Claude has given groups that were made by hand, by project and group. */
+  named: Record<string, Named>
+  /** The groups made by hand that Claude is thinking of a name for, by id. */
+  naming: string[]
+  /**
    * What has been done by hand to each project's model, and can be taken back with
-   * Cmd+Z: the colours given to its parts. Kept for as long as the window is up.
+   * Cmd+Z: the colours given to its parts, and how they are put into groups. Kept for
+   * as long as the window is up.
    */
   history: Record<string, History>
   /**
@@ -415,8 +484,19 @@ type State = {
   /** Give parts of the open project a colour of the app's, or (null) the model's own back. */
   setColour(partIds: string[], colour: PaletteName | null): void
   /**
-   * Take back the last thing done to the open project's model: a colour given by hand,
-   * or what Claude did to its files in a turn, whichever was later.
+   * Put the open project's parts into groups another way, as worked out from how they
+   * are arranged now (see lib/arrange). `said` is what was done, as Cmd+Z will say it:
+   * "a grouping".
+   */
+  rearrange(next: Arrangement, said: string): void
+  /** Have a group made by hand shown as being named, or no longer. */
+  setNaming(groupId: string, on: boolean): void
+  /** The name Claude has come up with for a group that was made by hand. */
+  nameGroup(projectId: string, groupId: string, name: string): void
+  /**
+   * Take back the last thing done to the open project's model: a colour given by hand
+   * or the parts put into groups another way, or what Claude did to its files in a
+   * turn, whichever was later.
    */
   undo(): Promise<void>
   /** Put back what was last taken back. */
@@ -482,6 +562,20 @@ function repaint(
   seen = setTimeout(() => useStore.getState().showPlain(false), SEEN_FOR_MS)
 }
 
+/**
+ * Have a project's parts in groups as an arrangement says, and keep what has been done
+ * to the project as it now stands.
+ */
+function regroup(projectId: string, next: Arrangement, history: History) {
+  const state = useStore.getState()
+  const arranged = { ...state.arranged, [projectId]: next }
+  keepArranged(arranged, state.named)
+  useStore.setState({
+    arranged,
+    history: { ...state.history, [projectId]: history },
+  })
+}
+
 /** Have what Claude last did to a project's files taken back, or put back, and say what came of it. */
 async function turnBack(projectId: string, way: "undo" | "redo") {
   turning = true
@@ -543,6 +637,8 @@ export const useStore = create<State>()((set, get) => ({
   writing: null,
   ...savedWaiting(),
   colours: savedColours(),
+  ...savedArranged(),
+  naming: NONE,
   history: {},
   saying: null,
   homeRequests: 0,
@@ -779,6 +875,36 @@ export const useStore = create<State>()((set, get) => ({
     )
   },
 
+  rearrange(next, said) {
+    const { activeId, arranged, history } = get()
+    if (!activeId) return
+    const before = arranged[activeId] ?? NOT_ARRANGED
+    regroup(
+      activeId,
+      next,
+      record(
+        history[activeId] ?? NO_HISTORY,
+        rearranged(before, next, said, Date.now())
+      )
+    )
+  },
+
+  setNaming(groupId, on) {
+    const { naming } = get()
+    const rest = naming.filter((id) => id !== groupId)
+    set({ naming: on ? [...rest, groupId] : rest.length > 0 ? rest : NONE })
+  },
+
+  nameGroup(projectId, groupId, name) {
+    const { arranged, named } = get()
+    const next = {
+      ...named,
+      [projectId]: { ...named[projectId], [groupId]: name },
+    }
+    keepArranged(arranged, next)
+    set({ named: next })
+  },
+
   async undo() {
     const { activeId, projects, history } = get()
     const project = projects.find((p) => p.id === activeId)
@@ -788,8 +914,14 @@ export const useStore = create<State>()((set, get) => ({
     if (which === "mine") {
       const taken = back(kept, Date.now())
       if (!taken) return
-      repaint(project.id, taken.change.before, taken.history, true)
-      get().say("Undid a colour")
+      const { change } = taken
+      if (change.kind === "colour") {
+        repaint(project.id, change.before, taken.history, true)
+        get().say("Undid a colour")
+      } else {
+        regroup(project.id, change.before, taken.history)
+        get().say(`Undid ${change.said}`)
+      }
     } else if (which === "claudes") await turnBack(project.id, "undo")
   },
 
@@ -805,8 +937,14 @@ export const useStore = create<State>()((set, get) => ({
     if (which === "mine") {
       const put = forth(kept)
       if (!put) return
-      repaint(project.id, put.change.after, put.history, true)
-      get().say("Redid a colour")
+      const { change } = put
+      if (change.kind === "colour") {
+        repaint(project.id, change.after, put.history, true)
+        get().say("Redid a colour")
+      } else {
+        regroup(project.id, change.after, put.history)
+        get().say(`Redid ${change.said}`)
+      }
     } else if (which === "claudes") await turnBack(project.id, "redo")
   },
 

@@ -342,6 +342,8 @@ const KEYS: { title: string; rows: [string, string[]][] }[] = [
       ["Show what is picked out on its own, close to", ["I"]],
       ["Hide what is picked out, or bring back what is hidden", ["H"]],
       ["Parts", ["P"]],
+      ["Make a group of what is picked out", [CMD, "G"]],
+      ["Take it out of its groups", [SHIFT, CMD, "G"]],
       ["Grid: the ground and the world's axes", [SHIFT, "G"]],
       ["Search: find parts and groups by name", [CMD, "F"]],
       ["Undo the last change to the model, yours or Claude's", [CMD, "Z"]],

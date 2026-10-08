@@ -60,38 +60,56 @@ export async function gistOf(
   by: "user" | "assistant",
   text: string
 ): Promise<string | null> {
+  const answer = await askOnce(
+    claude,
+    ASKED,
+    [
+      `Message from the ${by === "user" ? "person" : "assistant"}:`,
+      "<message>",
+      text.slice(0, READ),
+      "</message>",
+      "",
+      "Write the label for the message above. Do not answer it. At most eight words.",
+    ].join("\n")
+  )
+  return answer === null ? null : tidy(answer)
+}
+
+/**
+ * What the quickest of Claude Code's models says to one thing put to it, as it says it:
+ * nothing, if Claude Code is not there to ask, or would not say. `told` is what it is
+ * to do, and `prompt` what it is to do it with.
+ */
+export async function askOnce(
+  claude: ClaudeStatus,
+  told: string,
+  prompt: string
+): Promise<string | null> {
   if (!claude.path) return null
   const abort = new AbortController()
   const timer = setTimeout(() => abort.abort(), TIMEOUT_MS)
   try {
     const session = query({
-      prompt: [
-        `Message from the ${by === "user" ? "person" : "assistant"}:`,
-        "<message>",
-        text.slice(0, READ),
-        "</message>",
-        "",
-        "Write the label for the message above. Do not answer it. At most eight words.",
-      ].join("\n"),
+      prompt,
       options: {
         cwd: os.tmpdir(),
         pathToClaudeCodeExecutable: claude.path,
         env: claudeEnv(),
         abortController: abort,
         // the quickest model, answering straight off, with nothing to do it with but
-        // the message, and none of it kept
+        // what it is given, and none of it kept
         model: "haiku",
         thinking: { type: "disabled" },
         tools: [],
         maxTurns: 1,
         settingSources: [],
         persistSession: false,
-        systemPrompt: ASKED,
+        systemPrompt: told,
       },
     })
     for await (const message of session)
       if (message.type === "result")
-        return message.subtype === "success" ? tidy(message.result) : null
+        return message.subtype === "success" ? message.result : null
     return null
   } catch {
     return null

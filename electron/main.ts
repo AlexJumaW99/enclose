@@ -10,6 +10,7 @@ import {
   EFFORTS,
   MODEL_SCHEME,
   type ClaudeStatus,
+  type GroupAsked,
   type Manner,
   type Commands,
   type ModelChoice,
@@ -44,6 +45,7 @@ import {
   sortOpened,
 } from "./imports"
 import { standInName } from "./names"
+import { groupNameOf } from "./naming"
 import { folderName, makeFolder, Projects, resolveInside } from "./projects"
 import { SettingsStore } from "./settings"
 import { Threads, type Arranging } from "./threads"
@@ -373,6 +375,33 @@ function partsOf(manifest: string) {
   }))
 }
 
+/** A group to be named, as the window gave it: null if it is nothing that can be. */
+function groupFrom(given: unknown): GroupAsked | null {
+  const { title, parts, others } = (given ?? {}) as Partial<
+    Record<keyof GroupAsked, unknown>
+  >
+  if (!Array.isArray(parts)) return null
+  const named = parts.flatMap(
+    (part: Partial<GroupAsked["parts"][number]> | null) =>
+      typeof part?.label === "string"
+        ? [
+            {
+              label: part.label,
+              from: typeof part.from === "string" ? part.from : null,
+            },
+          ]
+        : []
+  )
+  if (named.length === 0) return null
+  return {
+    title: typeof title === "string" ? title : null,
+    parts: named,
+    others: (Array.isArray(others) ? others : []).filter(
+      (other): other is string => typeof other === "string"
+    ),
+  }
+}
+
 /** What the window gave of a model to be looked over, as far as it is what it should be. */
 function seenFrom(given: unknown): Seen {
   const { pictures, parts } = (given ?? {}) as Partial<
@@ -648,6 +677,14 @@ function wire() {
       if (picked.canceled || !picked.filePath) return false
       await fs.promises.copyFile(source, picked.filePath)
       return true
+    }
+  )
+  ipcMain.handle(
+    CHANNEL.modelNameGroup,
+    async (_, id: string, asked: unknown): Promise<string | null> => {
+      if (!projects.get(String(id))) return null
+      const group = groupFrom(asked)
+      return group ? groupNameOf(await claudeFound, group) : null
     }
   )
   ipcMain.handle(

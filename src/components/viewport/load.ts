@@ -9,7 +9,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js"
 import { MeshBVH } from "three-mesh-bvh"
 
-import type { Model, Part } from "@/lib/model"
+import type { Group, Model, Part } from "@/lib/model"
 import { piecesOf, waysOut } from "./apart"
 import { contoursOf, type Contours } from "./contours"
 import { shellOf } from "./shell"
@@ -55,6 +55,11 @@ export type LoadedModel = {
   parts: LoadedPart[]
   /** the assembled model, model mm */
   box: THREE.Box3
+  /**
+   * the model does not say how it comes apart: where its parts go when it is pulled
+   * apart is the app's working out, from the pieces it is in
+   */
+  worked: boolean
   /** not a model of the project's: the cube shown until it has one */
   standIn?: true
 }
@@ -269,6 +274,16 @@ function creases(skins: Skin[]): Float32Array {
  * them, each triangle counting for its size, and how much of them there is.
  */
 function surfaceOf(part: LoadedPart): { centre: THREE.Vector3; area: number } {
+  // gone through once for a part, however often its model is put into pieces
+  const known = surfaces.get(part.skins)
+  if (known) return { centre: known.centre.clone(), area: known.area }
+  const found = measured(part)
+  surfaces.set(part.skins, found)
+  return { centre: found.centre.clone(), area: found.area }
+}
+const surfaces = new WeakMap<Skin[], { centre: THREE.Vector3; area: number }>()
+
+function measured(part: LoadedPart): { centre: THREE.Vector3; area: number } {
   const centre = new THREE.Vector3()
   let area = 0
   const [a, b, c] = [
@@ -322,22 +337,38 @@ export async function loadModel(
     )
   const box = new THREE.Box3()
   for (const part of parts) box.union(part.box.clone().applyMatrix4(part.home))
+  const worked = parts.every((part) => part.away.lengthSq() === 0)
+  const { pieces, ways } = pieced(parts, model.groups, box, worked)
+  parts.forEach((part, index) => {
+    part.piece = pieces[index]
+    if (ways) part.away.copy(ways[index])
+  })
+  return { model, parts, box, worked }
+}
 
+/**
+ * Which piece of the model each part is of, going by the groups the parts are in: and,
+ * for a model that does not say how it comes apart (`worked`), where each part goes
+ * when it is pulled apart.
+ */
+function pieced(
+  parts: LoadedPart[],
+  groups: Group[],
+  box: THREE.Box3,
+  worked: boolean
+): { pieces: number[]; ways: THREE.Vector3[] | null } {
   // The parts of a group that are one object are a piece of the model (see apart.ts).
   const across = box.getSize(new THREE.Vector3()).length()
   const boxes = parts.map((part) => part.box.clone().applyMatrix4(part.home))
   const pieces = piecesOf(
     parts.map((part, index) => ({ group: part.part.group, box: boxes[index] })),
-    model.groups,
+    groups,
     across
   )
-  parts.forEach((part, index) => {
-    part.piece = pieces[index]
-  })
 
   // A model that does not say how it comes apart is pulled out from its middle: not part
   // by part, but piece by piece, each piece clear of the rest. A part goes as its piece.
-  if (parts.every((part) => part.away.lengthSq() === 0)) {
+  if (worked) {
     const middle = box.getCenter(new THREE.Vector3())
     // a piece is all of its parts: the box round them, and where their surfaces are,
     // each counting for as much as there is of it
@@ -364,9 +395,47 @@ export async function loadModel(
       else whole.box.getCenter(whole.centre)
     const ways = waysOut([...wholes.values()], middle, across)
     const way = new Map([...wholes.keys()].map((piece, n) => [piece, ways[n]]))
-    parts.forEach((part, index) => part.away.copy(way.get(pieces[index])!))
+    return { pieces, ways: pieces.map((piece) => way.get(piece)!.clone()) }
   }
-  return { model, parts, box }
+  return { pieces, ways: null }
+}
+
+/**
+ * A model with its parts in other groups than it was loaded with: the groups, and the
+ * group each part is in, by part. It is the same model, as it was loaded, but for what
+ * follows from the groups: which parts are one piece, and where they go when the model
+ * is pulled apart. A part is the very same one where none of that is any different for
+ * it, so that nothing drawn of it is drawn again.
+ */
+export function regrouped(
+  loaded: LoadedModel,
+  groups: Group[],
+  of: Map<string, string>
+): LoadedModel {
+  const placed = new Map(
+    loaded.model.parts.map((part) => {
+      const group = of.get(part.id) ?? part.group
+      return [part.id, group === part.group ? part : { ...part, group }]
+    })
+  )
+  const model = {
+    ...loaded.model,
+    groups,
+    parts: loaded.model.parts.map((part) => placed.get(part.id)!),
+  }
+  const moved = loaded.parts.map((part) => {
+    const now = placed.get(part.part.id) ?? part.part
+    return now === part.part ? part : { ...part, part: now }
+  })
+  const { pieces, ways } = pieced(moved, groups, loaded.box, loaded.worked)
+  const parts = moved.map((part, index) => {
+    const away =
+      ways && !ways[index].equals(part.away) ? ways[index] : part.away
+    return part.piece === pieces[index] && away === part.away
+      ? part
+      : { ...part, piece: pieces[index], away }
+  })
+  return { ...loaded, model, parts }
 }
 
 /** How big the cube shown for a project with no model is, in mm a side. */
@@ -408,6 +477,7 @@ export function standInModel(): LoadedModel {
   const stage = box.clone().expandByScalar(STAND_IN * 0.75)
   return {
     standIn: true,
+    worked: false,
     model: {
       title: null,
       parts: [part],

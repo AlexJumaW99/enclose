@@ -24,6 +24,17 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
+import {
+  arranged,
+  grouped,
+  LOOSE,
+  NOT_ARRANGED,
+  renamed,
+  ungrouped,
+  UNNAMED,
+  untouched,
+  type Named,
+} from "@/lib/arrange"
 import { lookFor, type Found } from "@/lib/find"
 import { readModel } from "@/lib/model"
 import { spokenFor } from "@/lib/keys"
@@ -44,7 +55,13 @@ import { objectsOf, pieceWith, wholeOf } from "./apart"
 import { AxisGizmo } from "./axis-gizmo"
 import { bridge } from "./bridge"
 import { ExplodeSlider } from "./explode-slider"
-import { disposeModel, loadModel, standInModel, type LoadedModel } from "./load"
+import {
+  disposeModel,
+  loadModel,
+  regrouped,
+  standInModel,
+  type LoadedModel,
+} from "./load"
 import { picturesOf } from "./pictures"
 import { appearance, Scene } from "./scene"
 import { Search } from "./search"
@@ -57,6 +74,7 @@ const NO_NOTES: Note[] = []
 const NO_COLOURS: Record<string, string> = {}
 const NO_PARTS: string[] = []
 const NO_CALLED: Called[] = []
+const NO_NAMES: Named = {}
 
 /** The room kept, in pixels, between a part the camera goes to and the list of parts. */
 const LIST_GAP = 12
@@ -66,7 +84,12 @@ const LIST_GAP = 12
  * found by name or from the list of parts: none, if nothing has.
  */
 function nearOf(only: Only | null, loaded: LoadedModel | null): string[] {
-  if (!only?.near) return NO_PARTS
+  return only?.near ? aloneOf(only, loaded) : NO_PARTS
+}
+
+/** The parts that are shown on their own, by id: none, if all of the model is shown. */
+function aloneOf(only: Only | null, loaded: LoadedModel | null): string[] {
+  if (!only) return NO_PARTS
   return only.kind === "parts"
     ? only.ids
     : only.kind === "part"
@@ -385,7 +408,17 @@ function useLoadedModel(project: Project) {
 }
 
 function Model({ project }: { project: Project }) {
-  const { loaded, state } = useLoadedModel(project)
+  const { loaded: base, state } = useLoadedModel(project)
+  // The model as the user has its parts in groups, where they have put them in others
+  // than the model says, by hand (see lib/arrange): the same model, as it was loaded,
+  // but for its groups and what follows from them.
+  const arrangement = useStore((s) => s.arranged[project.id] ?? NOT_ARRANGED)
+  const named = useStore((s) => s.named[project.id] ?? NO_NAMES)
+  const loaded = React.useMemo(() => {
+    if (!base || base.standIn || untouched(arrangement)) return base
+    const { groups, of } = arranged(base.model, arrangement, named)
+    return regrouped(base, groups, of)
+  }, [base, arrangement, named])
   const view = useStore((s) => s.view)
   const setView = useStore((s) => s.setView)
   const selection = useStore((s) => s.selection)
@@ -402,7 +435,8 @@ function Model({ project }: { project: Project }) {
   const colours = useStore((s) => s.colours[project.id] ?? NO_COLOURS)
   const changing = useChanging(project)
   const lookOver = useStore((s) => s.lookOver)
-  const thumbs = useThumbnails(loaded, partsOpen, colours)
+  // (the pictures are of the parts, whatever groups they are in)
+  const thumbs = useThumbnails(base, partsOpen, colours)
   const goHome = useStore((s) => s.goHome)
   const setThreadOpen = useStore((s) => s.setThreadOpen)
 
@@ -654,6 +688,96 @@ function Model({ project }: { project: Project }) {
     [hoveredId, over, whole]
   )
 
+  // Parts are put into groups by hand, over what the model says (see lib/arrange).
+  // Cmd+G makes a group of what is picked out, or failing that of what is shown on its
+  // own, as it is by being picked in the list of parts: the group is new, and goes to
+  // the top of the list. Shift+Cmd+G takes the same parts out of the groups they are
+  // in, to be in none. Either is taken back with Cmd+Z.
+  const meant = React.useCallback((): string[] => {
+    const picked = pickedOut()
+    return picked.length > 0
+      ? picked
+      : aloneOf(useStore.getState().view.only, loaded)
+  }, [loaded])
+  const groupThem = React.useCallback(() => {
+    if (!base || base.standIn) return
+    const { model } = base
+    const store = useStore.getState()
+    const now = store.arranged[project.id] ?? NOT_ARRANGED
+    const names = store.named[project.id] ?? NO_NAMES
+    const ids = meant()
+    if (ids.length === 0)
+      return store.say("Pick out the parts to make a group of first")
+    const id = `by-hand-${Date.now().toString(36)}`
+    const next = grouped(model, now, ids, id)
+    if (!next) return store.say("Those parts are a group already")
+    // what each part was in, and what the other groups are called, are what Claude has
+    // to go by in saying what this one is to be called
+    const before = arranged(model, now, names)
+    const after = arranged(model, next, names)
+    const was = new Map(before.groups.map((group) => [group.id, group.label]))
+    const parts = model.parts
+      .filter((part) => after.of.get(part.id) === id)
+      .map((part) => {
+        const from = before.of.get(part.id)
+        return {
+          label: part.label,
+          from: from && from !== LOOSE ? (was.get(from) ?? null) : null,
+        }
+      })
+    store.rearrange(next, "a grouping")
+    store.say(`Grouped ${counted(parts.length, "part")}`)
+    store.setNaming(id, true)
+    void window.cad.model
+      .nameGroup(project.id, {
+        title: model.title,
+        parts,
+        others: after.groups
+          .filter((group) => group.id !== id && group.id !== LOOSE)
+          .map((group) => group.label)
+          .filter((label) => label !== UNNAMED),
+      })
+      .catch(() => null)
+      .then((name) => {
+        const { nameGroup, setNaming, partsOpen, say } = useStore.getState()
+        setNaming(id, false)
+        if (!name) return
+        nameGroup(project.id, id, name)
+        // with the list away there is nowhere the name shows: it is said
+        if (!partsOpen) say(`Named the group "${name}"`)
+      })
+  }, [base, meant, project.id])
+  const ungroupThem = React.useCallback(() => {
+    if (!base || base.standIn) return
+    const store = useStore.getState()
+    const now = store.arranged[project.id] ?? NOT_ARRANGED
+    const ids = meant()
+    if (ids.length === 0)
+      return store.say("Pick out the parts to ungroup first")
+    const next = ungrouped(base.model, now, ids)
+    if (!next) return store.say("Those parts are in no group")
+    const places = arranged(base.model, now, NO_NAMES).of
+    const out = ids.filter((id) => places.has(id) && places.get(id) !== LOOSE)
+    store.rearrange(next, "an ungrouping")
+    store.say(`Ungrouped ${counted(out.length, "part")}`)
+  }, [base, meant, project.id])
+  /** Call a group something else, as written by hand: or, with nothing written, what it went by. */
+  const renameGroup = React.useCallback(
+    (groupId: string, label: string) => {
+      if (!base || base.standIn) return
+      const store = useStore.getState()
+      const next = renamed(
+        base.model,
+        store.arranged[project.id] ?? NOT_ARRANGED,
+        store.named[project.id] ?? NO_NAMES,
+        groupId,
+        label
+      )
+      if (next) store.rearrange(next, "a renaming")
+    },
+    [base, project.id]
+  )
+
   // Cmd+1 is the view the model opened with; Cmd+2 to 7 are the six flat ones. S cuts
   // the model open and E pulls it apart, both again to undo. I shows what is picked
   // out, one part or several, on its own and close to, and again brings the rest back.
@@ -667,8 +791,12 @@ function Model({ project }: { project: Project }) {
   // grid in Figma, and again takes them away. (Cmd+F, which looks for parts by name, is
   // listened for where the name is typed: see Search.)
   //
-  // Cmd+Z takes back the last thing done to the model, a colour given by hand or what
-  // Claude did in a turn, and with Shift puts it back. In a box that is written in it is
+  // Cmd+G makes a group of the parts picked out, and Shift+Cmd+G takes them out of
+  // their groups (see above).
+  //
+  // Cmd+Z takes back the last thing done to the model, a colour given by hand, parts
+  // put into groups another way or what Claude did in a turn, and with Shift puts it
+  // back. In a box that is written in it is
   // the writing's, as ever, for as long as there is any: with nothing written there,
   // which is how the message box is left by a message just sent, it is the model's.
   React.useEffect(() => {
@@ -689,6 +817,17 @@ function Model({ project }: { project: Project }) {
         if (event.repeat) return
         const { undo, redo } = useStore.getState()
         void (event.shiftKey ? redo() : undo())
+        return
+      }
+      if (
+        (MAC ? event.metaKey && !event.ctrlKey : event.ctrlKey) &&
+        event.key.toLowerCase() === "g"
+      ) {
+        // there is nothing else the key does, wherever the typing is
+        event.preventDefault()
+        if (event.repeat) return
+        if (event.shiftKey) ungroupThem()
+        else groupThem()
         return
       }
       if (event.shiftKey) {
@@ -762,7 +901,7 @@ function Model({ project }: { project: Project }) {
     }
     window.addEventListener("keydown", key)
     return () => window.removeEventListener("keydown", key)
-  }, [goHome, loaded, middle, lookingOver])
+  }, [goHome, loaded, middle, lookingOver, groupThem, ungroupThem])
 
   // The camera goes to what I shows on its own, one part or several together, and
   // follows it if it is pulled out from the rest; and goes back when that is no longer
@@ -866,14 +1005,24 @@ function Model({ project }: { project: Project }) {
   // what Claude gets when it asks which parts are on screen
   React.useEffect(() => {
     if (!loaded) return
+    const called = new Map(
+      loaded.model.groups.map((group) => [group.id, group.label])
+    )
+    // where the model itself has each part, to tell which were moved by hand
+    const own = new Map(
+      (base?.model.parts ?? []).map((part) => [part.id, part.group])
+    )
     bridge.parts = () =>
       loaded.parts.map((part) => {
         const box = part.box.clone().applyMatrix4(part.home)
         const round = (n: number) => Math.round(n * 100) / 100
+        const { group } = part.part
         return {
           id: part.part.id,
           label: part.part.label,
-          group: part.part.group,
+          group,
+          groupLabel: called.get(group) ?? group,
+          ...(own.get(part.part.id) !== group && { byHand: true }),
           min: box.min.toArray().map(round),
           max: box.max.toArray().map(round),
           faces: part.faces,
@@ -887,7 +1036,7 @@ function Model({ project }: { project: Project }) {
     return () => {
       bridge.parts = null
     }
-  }, [loaded, project.id])
+  }, [loaded, base, project.id])
 
   // the section's handle was dragged in the view: the cut moves, the side shown stays
   const moveSection = React.useCallback(
@@ -973,6 +1122,7 @@ function Model({ project }: { project: Project }) {
           loaded={loaded}
           projectId={project.id}
           thumbs={thumbs}
+          onRename={renameGroup}
           // further in while the section's other buttons stand where it would be, and
           // no wider than leaves it room in the view
           className={cn(
