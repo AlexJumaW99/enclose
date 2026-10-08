@@ -21,9 +21,10 @@ export const bridge: {
   flat: (() => boolean) | null
   /**
    * bring the camera to what fills this box of the model, a part of it; or, with no box,
-   * take it back to where it was before
+   * take it back to where it was before. `covered` is how many pixels of the view's
+   * right side something lies over: the part is put in the middle of the rest
    */
-  focus: ((box: THREE.Box3 | null) => void) | null
+  focus: ((box: THREE.Box3 | null, covered?: number) => void) | null
   /**
    * true while a handle in the view is being dragged, or a box drawn across it: not the
    * moment to pick the part under the pointer

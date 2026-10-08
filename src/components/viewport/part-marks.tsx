@@ -22,7 +22,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import type { Model } from "@/lib/model"
+import { partFile, type Model } from "@/lib/model"
 import { MAC } from "@/lib/platform"
 import { goesBy, useStore, type Note, type Selection } from "@/lib/store"
 import type { LoadedPart } from "./load"
@@ -51,16 +51,6 @@ const between = (value: number, least: number, most: number) =>
   Math.min(Math.max(value, least), Math.max(least, most))
 
 type Size = { width: number; height: number }
-
-/** The STEP file of one part, if the model hands one out. */
-function downloadFor(model: Model, partId: string, label: string) {
-  return (
-    model.downloads.find((d) => d.part === partId) ??
-    model.downloads.find(
-      (d) => d.kind === "part" && d.label.toLowerCase() === label.toLowerCase()
-    )
-  )
-}
 
 /**
  * The box becoming a chip on the message box: it goes there as it shrinks, quickly, and
@@ -366,7 +356,9 @@ export function PartMarks({
       ? (state.notes[projectId]?.find((one) => one.id === writing) ?? null)
       : null
   )
-  const download = piece ? undefined : downloadFor(model, part.id, part.label)
+  const download = piece
+    ? undefined
+    : partFile(model.downloads, part.id, part.label)
   const written = writing !== null
   const at = React.useMemo(() => placeOn(loaded, point), [loaded, point])
   // a colour is being chosen, here: clicking anywhere else on the part is done with that

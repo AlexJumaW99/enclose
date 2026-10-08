@@ -650,6 +650,41 @@ function wire() {
       return true
     }
   )
+  ipcMain.handle(
+    CHANNEL.modelSaveCopies,
+    async (_, id: string, files: unknown, folder: string) => {
+      const manifest = projects.get(id)?.manifest
+      if (!win || !manifest || !Array.isArray(files)) return false
+      const from = path.dirname(manifest)
+      const wanted = (files as { file?: unknown; name?: unknown }[]).flatMap(
+        (entry) => {
+          const source = resolveInside(from, String(entry?.file))
+          return source && fs.existsSync(source)
+            ? [{ source, name: path.basename(String(entry?.name)) }]
+            : []
+        }
+      )
+      if (wanted.length === 0) return false
+      // a name a folder can have, whatever the group is called
+      const called =
+        String(folder)
+          .replace(/[\\/:]+/g, "-")
+          .replace(/^\.+/, "")
+          .trim() || "parts"
+      const picked = await dialog.showOpenDialog(win, {
+        message: `Choose where the folder "${called}" goes, with its ${wanted.length} STEP files`,
+        buttonLabel: "Save here",
+        defaultPath: app.getPath("downloads"),
+        properties: ["openDirectory", "createDirectory"],
+      })
+      if (picked.canceled || !picked.filePaths[0]) return false
+      // a folder of its own, numbered where the name is taken: nothing is written over
+      const into = makeFolder(picked.filePaths[0], called)
+      for (const { source, name } of wanted)
+        await fs.promises.copyFile(source, path.join(into, name))
+      return true
+    }
+  )
 
   ipcMain.handle(CHANNEL.threadItems, (_, id: string, conversationId: string) =>
     threads.items(String(id), String(conversationId))

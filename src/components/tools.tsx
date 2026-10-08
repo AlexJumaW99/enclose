@@ -3,6 +3,7 @@ import { cn } from "cn"
 import {
   FlipHorizontal2Icon,
   BoxesIcon,
+  DownloadIcon,
   Grid3x3Icon,
   MessageSquareIcon,
   RotateCcwIcon,
@@ -10,7 +11,6 @@ import {
   UnfoldVerticalIcon,
 } from "lucide-react"
 
-import { DownloadMenu } from "@/components/download-menu"
 import { SectionIcon } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Kbd } from "@/components/ui/kbd"
@@ -20,6 +20,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { oneFile, sizeOf } from "@/lib/model"
 import { MAC } from "@/lib/platform"
 import { SPREAD, useStore } from "@/lib/store"
 import type { LoadedModel } from "./viewport/load"
@@ -47,12 +48,15 @@ type Side = React.ComponentProps<typeof TooltipContent>["side"]
 /** A button that does one thing, named by its tooltip. */
 function Press({
   label,
+  detail,
   side = "left",
   onClick,
   className,
   children,
 }: {
   label: string
+  /** something more about it, said more quietly beside the name */
+  detail?: string
   /** where the tooltip goes, when something else has the left */
   side?: Side
   onClick: () => void
@@ -74,7 +78,10 @@ function Press({
         {children}
         <span className="sr-only">{label}</span>
       </TooltipTrigger>
-      <TooltipContent side={side}>{label}</TooltipContent>
+      <TooltipContent side={side}>
+        {label}
+        {detail && <span className="tabular-nums opacity-60">{detail}</span>}
+      </TooltipContent>
     </Tooltip>
   )
 }
@@ -133,7 +140,7 @@ function Switch({
 
 /**
  * The buttons down the right-hand edge. At the top, what leaves the view: the
- * conversation and the downloads. In the middle, how the model is looked at.
+ * conversation, and the model as a file. In the middle, how the model is looked at.
  */
 export function Tools({
   loaded,
@@ -155,6 +162,7 @@ export function Tools({
   const setPartsOpen = useStore((state) => state.setPartsOpen)
   const finding = useStore((state) => state.finding !== null)
   const find = useStore((state) => state.find)
+  const whole = loaded ? oneFile(loaded.model.downloads) : null
 
   return (
     <div className="pointer-events-none absolute inset-y-0 right-0 w-15">
@@ -167,12 +175,18 @@ export function Tools({
         >
           <MessageSquareIcon />
         </Switch>
-        {loaded && loaded.model.downloads.length > 0 && (
-          <DownloadMenu
-            downloads={loaded.model.downloads}
-            projectId={projectId}
-            className={ROUND}
-          />
+        {/* the whole model in one file, saved at a press: one part of it, or the
+            parts of one group, are had from the list of parts */}
+        {whole && (
+          <Press
+            label="Download STEP"
+            detail={sizeOf(whole.bytes)}
+            onClick={() =>
+              void window.cad.model.saveCopy(projectId, whole.file, whole.name)
+            }
+          >
+            <DownloadIcon />
+          </Press>
         )}
       </Stack>
 

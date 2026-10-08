@@ -446,9 +446,8 @@ export function Composer({
   const called = useStore((state) =>
     project ? (state.called[project.id] ?? NO_CALLED) : NO_CALLED
   )
-  // a line high until it is being written in: then it has room for what is written
+  // whether it is being written in, which is when a name being written is looked for
   const [within, setWithin] = React.useState(false)
-  const roomy = within || text !== ""
 
   // A name being written - a part's after @, a skill's after $, a command's after / -
   // brings up what it could be, over the box. Esc puts the list away for that name.
@@ -621,16 +620,11 @@ export function Composer({
         placeholder={placeholder}
         autoFocus={autoFocus}
         rows={1}
-        // a little more room over the words than the box gives, to match what is under
-        // the words of the choices below
-        className={cn(
-          "pt-3 transition-[min-height] duration-150",
-          // with nothing written and nobody writing, the one line is all there is of
-          // it, however long what it suggests is
-          roomy
-            ? "max-h-48 min-h-14"
-            : "max-h-10 min-h-10 overflow-hidden whitespace-nowrap placeholder:text-ellipsis"
-        )}
+        // A little more room over the words than the box gives, to match what is under
+        // the words of the line below. The box is one size, written in or not, until
+        // what is written needs more; and what it suggests keeps to one line, however
+        // long it is, so that the first letter written does not change the size either.
+        className="max-h-48 min-h-14 pt-3 placeholder-shown:overflow-hidden placeholder-shown:whitespace-nowrap"
       />
       {/* by which model, thinking how hard, asking how much: one line that says so */}
       <InputGroupAddon

@@ -10,8 +10,8 @@ import type { LoadedModel, LoadedPart } from "./load"
 import { EDGE, finish, skinColour } from "./paint"
 import { HOME_DIRECTION, MODEL_TO_WORLD, toWorld } from "./rig"
 
-/** Pixels a side: three times the size they are shown at, for sharp screens. */
-const SIZE = 96
+/** Pixels a side: twice the size they are shown at, for sharp screens. */
+const SIZE = 300
 /** How much of the picture the part fills. */
 const FILL = 0.86
 /**

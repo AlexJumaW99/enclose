@@ -198,3 +198,38 @@ export function readModel(manifest: unknown): Model {
     downloads,
   }
 }
+
+/**
+ * The model in one file, for taking elsewhere: the one with every part in it, where the
+ * build wrote one. A model of a single part has no such file, being all there in its
+ * part's. None where the parts were written apart and nothing of the whole.
+ */
+export function oneFile(downloads: Download[]): Download | null {
+  return (
+    downloads.find((d) => d.kind === "full") ??
+    downloads.find((d) => d.kind === "set") ??
+    (downloads.length === 1 ? downloads[0] : null)
+  )
+}
+
+/** The file of one part, if the model hands one out: by the part, or else by its name. */
+export function partFile(
+  downloads: Download[],
+  partId: string,
+  label: string
+): Download | undefined {
+  return (
+    downloads.find((d) => d.part === partId) ??
+    downloads.find(
+      (d) => d.kind === "part" && d.label.toLowerCase() === label.toLowerCase()
+    )
+  )
+}
+
+/** How big a file is, said shortly: "1.2 MB", "340 kB". Nothing, for a size not known. */
+export function sizeOf(bytes: number): string {
+  if (!bytes) return ""
+  return bytes >= 1e6
+    ? `${(bytes / 1e6).toFixed(1)} MB`
+    : `${Math.max(1, Math.round(bytes / 1e3))} kB`
+}

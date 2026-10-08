@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { readModel } from "./model"
+import { oneFile, partFile, readModel, sizeOf, type Download } from "./model"
 
 const part = (id: string, extra: object = {}) => ({
   id,
@@ -126,5 +126,60 @@ describe("readModel", () => {
     expect(() => readModel({ parts: [part("a"), part("a")] })).toThrow(
       'share the id "a"'
     )
+  })
+})
+
+const file = (name: string, extra: Partial<Download> = {}): Download => ({
+  file: `step/${name}.step`,
+  name: `${name}.step`,
+  label: name,
+  detail: "",
+  kind: "part",
+  bytes: 1000,
+  part: name,
+  ...extra,
+})
+
+describe("oneFile", () => {
+  it("is the file with every part in it", () => {
+    const all = file("all", { kind: "full", part: null })
+    expect(oneFile([file("lid"), all, file("base")])).toBe(all)
+  })
+
+  it("is the one file there is, for a model of one part", () => {
+    const lid = file("lid")
+    expect(oneFile([lid])).toBe(lid)
+  })
+
+  it("is none where the parts were written apart and nothing of the whole", () => {
+    expect(oneFile([file("lid"), file("base")])).toBeNull()
+    expect(oneFile([])).toBeNull()
+  })
+})
+
+describe("partFile", () => {
+  it("goes by the part, and failing that by what the file is called", () => {
+    const lid = file("lid")
+    const base = file("Base", { part: null })
+    expect(partFile([lid, base], "lid", "Lid")).toBe(lid)
+    expect(partFile([lid, base], "base", "base")).toBe(base)
+    expect(partFile([lid, base], "screw", "Screw")).toBeUndefined()
+  })
+
+  it("does not take the whole model for a part of the same name", () => {
+    const all = file("Cube", { kind: "full", part: null })
+    expect(partFile([all], "cube", "Cube")).toBeUndefined()
+  })
+})
+
+describe("sizeOf", () => {
+  it("says a size shortly", () => {
+    expect(sizeOf(2_931_005)).toBe("2.9 MB")
+    expect(sizeOf(155_741)).toBe("156 kB")
+    expect(sizeOf(300)).toBe("1 kB")
+  })
+
+  it("says nothing of a size that is not known", () => {
+    expect(sizeOf(0)).toBe("")
   })
 })

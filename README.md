@@ -160,6 +160,9 @@ turns out of sight, which is no edge of the model's and moves as the model is tu
 
 Down the right-hand edge:
 
+- **Download STEP**, at the top, saves the whole model as one STEP file, with every part
+  in its place; its tooltip says how big the file is. (One part, or the parts of one
+  group, are saved from the list of parts, below.)
 - **Section** (S) cuts the model open. Three squares appear by the axes, one per direction
   to cut across, which the X, Y and Z keys choose too; in the view, drag the arrow to push
   the cut through the model and the arcs to tilt it. While the pointer is on either, or
@@ -176,12 +179,18 @@ Down the right-hand edge:
 - **Explode** (E) pulls the parts apart by the distances the manifest gives (or straight
   out from the middle, if it gives none), and a slider along the bottom pulls them
   further.
-- **Parts** (P) lists what the model is made of: each part with a small picture of it,
-  under the groups the model puts them in. Pick a part or a group and the view shows it
-  on its own; pick it again and the rest comes back. Esc, or a press anywhere else, puts the
-  list away and leaves what you picked showing, and the button stays lit while it is. A
-  part put out of sight with H is dim in the list, as is a group all of whose parts are,
-  and picking it there brings it back; the button stays lit while anything is out of sight.
+- **Parts** (P) lists what the model is made of: a card for each group the model puts
+  its parts in, and in it a row of the group's parts, each a picture with its name and
+  the size of its STEP file. A row with more parts than fit scrolls sideways. Pick a part
+  or a group (by its name) and the view shows it on its own, with the camera brought to
+  it, in the middle of what the list leaves of the view; pick it again and the rest
+  comes back, and the camera goes back to where it was. Esc, or a press anywhere else, puts the list away and leaves what you
+  picked showing, and the button stays lit while it is. A part put out of sight with H is
+  dim in the list, as is a group all of whose parts are, and picking it there brings it
+  back; the button stays lit while anything is out of sight. The arrow that comes up
+  beside a part's name saves that part as STEP. The arrow beside a group's name saves
+  the STEP files of all its parts, in a folder named after the group, inside one you
+  choose.
 - **Grid** (Shift+G, as in Figma) rules the ground into squares and draws the world's
   three axes through its origin, in the colours they have in the corner of the view.
   Both go on as far as can be seen, however far out the view is taken. The squares are a

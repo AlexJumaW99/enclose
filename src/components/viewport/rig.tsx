@@ -76,6 +76,8 @@ const CIRCLE = { rate: 0.3, ease: 1.2 }
 const RIGHTING = 0.1
 /** Room left around the model when a flat view is fitted to it. */
 const MARGIN = 1.35
+/** The least of the view's width, in pixels, for a part to be shown beside what covers the rest. */
+const LEAST_CLEAR = 240
 /** And when the view it opens with is: less, since that one is seen from a corner. */
 const HOME_MARGIN = 1.18
 
@@ -437,8 +439,11 @@ function direct(stage: {
      * goes to the middle of the view and fills it, and the set views frame it from then
      * on. With no part given, the camera goes back to what it was looking at before it
      * was brought to one, as near as it was then, still from the side it is on now.
+     *
+     * `covered` is how much of the view's right side, in pixels, something lies over:
+     * the part goes to the middle of what is left, and fills that.
      */
-    focus(box: THREE.Box3 | null) {
+    focus(box: THREE.Box3 | null, covered = 0) {
       if (box ? subject?.equals(box) : !subject) return
       controls.smoothTime = SMOOTH.turn
       const { theta, phi } = heading()
@@ -468,15 +473,30 @@ function direct(stage: {
       subject = box.clone()
       atHome = false
       const { width, height } = stage.size()
+      // too little left of the view to show a part in: it has all of it after all
+      const over = width - covered < LEAST_CLEAR ? 0 : Math.max(0, covered)
       const { target, distance, scale } = fitting(
         box,
         theta,
         phi,
-        width / height,
+        (width - over) / height,
         MARGIN
       )
+      const flatly = mode === "flat" || tie?.kind === "closing"
+      if (over > 0) {
+        // The camera looks at a point to the right of the part, by half of what is
+        // covered: that puts the part as far to the left of the middle of the view.
+        // Right is as the picture has it, which may be turned on the way it looks.
+        const toward = new THREE.Vector3().setFromSphericalCoords(1, phi, theta)
+        const right = new THREE.Vector3(Math.cos(theta), 0, -Math.sin(theta))
+        const up = toward.cross(right)
+        const shown = flatly ? scale : height / (2 * distance * HALF_FOV)
+        target
+          .addScaledVector(right, (Math.cos(rollTo) * over) / 2 / shown)
+          .addScaledVector(up, (Math.sin(rollTo) * over) / 2 / shown)
+      }
       void controls.moveTo(target.x, target.y, target.z, true)
-      if (mode === "flat" || tie?.kind === "closing") scaleTo(scale)
+      if (flatly) scaleTo(scale)
       else void controls.dollyTo(distance * narrowing, true)
       stage.redraw()
     },
@@ -737,7 +757,7 @@ export function Rig({
     bridge.orbit = (dx, dy) => made.orbit(dx * TURN.axes, dy * TURN.axes)
     bridge.eye = () => made.eye()
     bridge.flat = () => made.isFlat()
-    bridge.focus = (box) => made.focus(box)
+    bridge.focus = (box, covered) => made.focus(box, covered)
     // lets a script see what the camera is doing when the app is checked without a person
     if (import.meta.env.DEV) Object.assign(window, { __camera: made.probe })
     return () => {

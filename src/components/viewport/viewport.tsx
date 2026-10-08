@@ -58,9 +58,12 @@ const NO_COLOURS: Record<string, string> = {}
 const NO_PARTS: string[] = []
 const NO_CALLED: Called[] = []
 
+/** The room kept, in pixels, between a part the camera goes to and the list of parts. */
+const LIST_GAP = 12
+
 /**
- * The parts that have been shown on their own and gone up to, with I or from what was
- * found by name: none, if nothing has.
+ * The parts that have been shown on their own and gone up to, with I, from what was
+ * found by name or from the list of parts: none, if nothing has.
  */
 function nearOf(only: Only | null, loaded: LoadedModel | null): string[] {
   if (!only?.near) return NO_PARTS
@@ -763,7 +766,9 @@ function Model({ project }: { project: Project }) {
 
   // The camera goes to what I shows on its own, one part or several together, and
   // follows it if it is pulled out from the rest; and goes back when that is no longer
-  // what is shown.
+  // what is shown. So it does to what is picked in the list of parts; and while the list
+  // is up, lying over the right of the view, it is the middle of what the list leaves
+  // of the view that the part goes to.
   const near = React.useMemo(
     () => nearOf(view.only, loaded),
     [view.only, loaded]
@@ -778,8 +783,13 @@ function Model({ project }: { project: Project }) {
           .applyMatrix4(part.home)
           .translate(part.away.clone().multiplyScalar(explode))
       )
+    const list = document.querySelector<HTMLElement>("[data-parts-list]")
+    const within = list?.offsetParent?.getBoundingClientRect()
     bridge.focus?.(
-      boxes.length > 0 ? boxes.reduce((all, box) => all.union(box)) : null
+      boxes.length > 0 ? boxes.reduce((all, box) => all.union(box)) : null,
+      list && within
+        ? within.right - list.getBoundingClientRect().left + LIST_GAP
+        : 0
     )
   }, [loaded, near, explode])
 
@@ -961,11 +971,15 @@ function Model({ project }: { project: Project }) {
       {loaded && partsOpen && !lookingOver && (
         <PartsPanel
           loaded={loaded}
+          projectId={project.id}
           thumbs={thumbs}
-          // further in while the section's other buttons stand where it would be
+          // further in while the section's other buttons stand where it would be, and
+          // no wider than leaves it room in the view
           className={cn(
-            "absolute top-1/2 max-h-[70%] -translate-y-1/2 transition-[right]",
-            view.section ? "right-36" : "right-15"
+            "absolute top-1/2 max-h-[80%] -translate-y-1/2 transition-[right]",
+            view.section
+              ? "right-36 max-w-[calc(100%-9.75rem)]"
+              : "right-15 max-w-[calc(100%-4.5rem)]"
           )}
         />
       )}

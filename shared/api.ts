@@ -308,6 +308,15 @@ export type CadApi = {
     read(projectId: string): Promise<ModelSource | null>
     /** save one of the model's files somewhere the user picks */
     saveCopy(projectId: string, file: string, name: string): Promise<boolean>
+    /**
+     * save several of its files together: in a new folder, called `folder`, made in a
+     * folder the user picks
+     */
+    saveCopies(
+      projectId: string,
+      files: { file: string; name: string }[],
+      folder: string
+    ): Promise<boolean>
   }
   thread: {
     items(projectId: string, conversationId: string): Promise<ThreadItem[]>
@@ -386,6 +395,7 @@ export const CHANNEL = {
   projectsChanged: "projects:changed",
   modelRead: "model:read",
   modelSaveCopy: "model:save-copy",
+  modelSaveCopies: "model:save-copies",
   threadItems: "thread:items",
   threadSend: "thread:send",
   threadLookOver: "thread:look-over",
