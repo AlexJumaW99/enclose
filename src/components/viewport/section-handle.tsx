@@ -1,6 +1,7 @@
 // The handle of a section, where it cuts: what the cut is pushed through the model by,
 // and tilted by. It is drawn the same size on the screen wherever the cut is, and over
-// everything, so that it can always be got at.
+// everything, so that it can always be got at. Every line of it has an edge of the other
+// shade, so that it shows on whatever of the model it lies over, light or dark.
 import * as React from "react"
 import * as THREE from "three"
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber"
@@ -12,12 +13,19 @@ import type { Turn } from "@/lib/orient"
 import type { Section } from "@/lib/store"
 import { bridge } from "./bridge"
 import { dragAlong, seenAs } from "./drag"
+import { EDGE } from "./paint"
 
 /** How long the arrow is on the screen, in pixels. The rest is in parts of that. */
 const SIZE = 78
 const LINE = 3
+/** How wide the faint rings are drawn, in pixels. */
+const RING_LINE = 1.25
 /** Drawn after everything else, and whatever is in front of it. */
 const OVER = { depthTest: false, transparent: true, renderOrder: 20 }
+/** Its edges are drawn just before it, all of them: none lies over a line of the handle. */
+const UNDER = { ...OVER, renderOrder: OVER.renderOrder - 1 }
+/** How wide the edge round each line and arrowhead is, in pixels. */
+const EDGED = 1.5
 /** How far out from the middle the tilts are drawn. */
 const RING = 0.65
 /** The part of each ring that is taken hold of, in degrees round it. */
@@ -43,6 +51,125 @@ const TILTS = [
 
 type Moved = { position: Vec3; turn: Turn }
 type Press = ThreeEvent<PointerEvent>
+
+/** The shade the handle is edged in: dark round a light handle, light round a dark one. */
+const edgeOf = (colors: ThemeColors) => (colors.dark ? EDGE : "#ffffff")
+
+/** A line of the handle, with its edge. */
+function Stroke({
+  points,
+  color,
+  edge,
+  width,
+}: {
+  points: THREE.Vector3[] | [number, number, number][]
+  color: THREE.ColorRepresentation
+  edge: string
+  width: number
+}) {
+  return (
+    <>
+      <Line
+        points={points}
+        color={edge}
+        lineWidth={width + 2 * EDGED}
+        raycast={NOT_PICKED}
+        {...UNDER}
+      />
+      <Line
+        points={points}
+        color={color}
+        lineWidth={width}
+        raycast={NOT_PICKED}
+        {...OVER}
+      />
+    </>
+  )
+}
+
+/**
+ * One of the faint rings, with its edge. It is see-through, and a line that is would
+ * show every joint in it, where one stretch lies over the next: so it is a hoop, which
+ * is the same all the way round. `about` is what it goes round.
+ */
+function Hoop({
+  about,
+  color,
+  edge,
+  opacity,
+}: {
+  about: THREE.Vector3
+  color: THREE.ColorRepresentation
+  edge: string
+  opacity: number
+}) {
+  const turned = React.useMemo(
+    () => new THREE.Quaternion().setFromUnitVectors(Z, about),
+    [about]
+  )
+  const thick = RING_LINE / 2 / SIZE
+  return (
+    <>
+      <mesh
+        quaternion={turned}
+        renderOrder={UNDER.renderOrder}
+        raycast={NOT_PICKED}
+      >
+        <torusGeometry args={[RING, thick + EDGED / SIZE, 8, 96]} />
+        <meshBasicMaterial
+          color={edge}
+          opacity={opacity}
+          depthTest={false}
+          transparent
+        />
+      </mesh>
+      <mesh
+        quaternion={turned}
+        renderOrder={OVER.renderOrder}
+        raycast={NOT_PICKED}
+      >
+        <torusGeometry args={[RING, thick, 8, 96]} />
+        <meshBasicMaterial
+          color={color}
+          opacity={opacity}
+          depthTest={false}
+          transparent
+        />
+      </mesh>
+    </>
+  )
+}
+
+/** An arrowhead of the handle, with its edge: the same again behind it, a little larger. */
+function Head({
+  radius,
+  length,
+  color,
+  edge,
+  ...placed
+}: {
+  radius: number
+  length: number
+  color: THREE.ColorRepresentation
+  edge: string
+  position: THREE.Vector3 | [number, number, number]
+  quaternion?: THREE.Quaternion
+  rotation?: [number, number, number]
+}) {
+  const by = EDGED / SIZE
+  return (
+    <>
+      <mesh {...placed} renderOrder={UNDER.renderOrder} raycast={NOT_PICKED}>
+        <coneGeometry args={[radius + by, length + 2 * by, 20]} />
+        <meshBasicMaterial color={edge} depthTest={false} transparent />
+      </mesh>
+      <mesh {...placed} renderOrder={OVER.renderOrder} raycast={NOT_PICKED}>
+        <coneGeometry args={[radius, length, 20]} />
+        <meshBasicMaterial color={color} depthTest={false} transparent />
+      </mesh>
+    </>
+  )
+}
 
 /** Somewhere round a ring, in the handle's own measure. */
 const round = (tilt: (typeof TILTS)[number], degrees: number) => {
@@ -144,10 +271,21 @@ type Piece = {
   frame: React.RefObject<THREE.Group | null>
   colors: ThemeColors
   onChange: (moved: Moved) => void
+  /** the pointer has come onto this piece (1), or has gone from it and let go of it (-1) */
+  onLit: (by: 1 | -1) => void
+}
+
+/** Tells the handle while one of its pieces is under the pointer, or held. */
+function useLit(over: boolean, onLit: Piece["onLit"]) {
+  React.useEffect(() => {
+    if (!over) return
+    onLit(1)
+    return () => onLit(-1)
+  }, [over, onLit])
 }
 
 /** The arrow: drag it to push the cut through the model, along the way it faces. */
-function Push({ section, frame, colors, onChange }: Piece) {
+function Push({ section, frame, colors, onChange, onLit }: Piece) {
   const { over, grip } = useGrip((press, size) => {
     const standing = frame.current!.matrixWorld
     const along = dragAlong(
@@ -164,28 +302,28 @@ function Push({ section, frame, colors, onChange }: Piece) {
         turn: section.turn,
       })
   })
+  useLit(over, onLit)
   const shaft = 1 - HEAD.length * 1.2
+  const edge = edgeOf(colors)
   return (
     <>
-      <Line
+      <Stroke
         points={[
           [0, 0, 0],
           [0, 0, shaft],
         ]}
         color={over ? colors.section : colors.foreground}
-        lineWidth={LINE}
-        raycast={NOT_PICKED}
-        {...OVER}
+        edge={edge}
+        width={LINE}
       />
-      <mesh
+      <Head
         position={[0, 0, shaft + (HEAD.length * 1.2) / 2]}
         rotation={[Math.PI / 2, 0, 0]}
-        renderOrder={OVER.renderOrder}
-        raycast={NOT_PICKED}
-      >
-        <coneGeometry args={[HEAD.radius * 1.2, HEAD.length * 1.2, 20]} />
-        <meshBasicMaterial color={TIP} depthTest={false} transparent />
-      </mesh>
+        radius={HEAD.radius * 1.2}
+        length={HEAD.length * 1.2}
+        color={TIP}
+        edge={edge}
+      />
       <mesh
         position={[0, 0, 0.5]}
         rotation={[Math.PI / 2, 0, 0]}
@@ -209,6 +347,7 @@ function Tilt({
   sized,
   colors,
   onChange,
+  onLit,
 }: Piece & {
   tilt: (typeof TILTS)[number]
   /** the part of the handle that is kept the same size on the screen */
@@ -270,7 +409,6 @@ function Tilt({
       }
     }
     return {
-      ring: between(0, 360, 72),
       arc: between(ARC.from, ARC.to, 16),
       heads: [head(ARC.from, false), head(ARC.to, true)],
       // what the pointer takes hold of: the arc and its heads, and a little to spare
@@ -284,35 +422,28 @@ function Tilt({
   }, [tilt])
   React.useEffect(() => () => drawn.grip.dispose(), [drawn])
 
+  useLit(over, onLit)
   const color = over ? colors.section : colors.foreground
+  const edge = edgeOf(colors)
   return (
     <>
-      <Line
-        points={drawn.ring}
+      <Hoop
+        about={tilt.about}
         color={color}
-        lineWidth={1.25}
+        edge={edge}
         opacity={over ? 0.55 : 0.3}
-        raycast={NOT_PICKED}
-        {...OVER}
       />
-      <Line
-        points={drawn.arc}
-        color={color}
-        lineWidth={LINE}
-        raycast={NOT_PICKED}
-        {...OVER}
-      />
+      <Stroke points={drawn.arc} color={color} edge={edge} width={LINE} />
       {drawn.heads.map((head, index) => (
-        <mesh
+        <Head
           key={index}
           position={head.position}
           quaternion={head.quaternion}
-          renderOrder={OVER.renderOrder}
-          raycast={NOT_PICKED}
-        >
-          <coneGeometry args={[HEAD.radius, HEAD.length, 20]} />
-          <meshBasicMaterial color={color} depthTest={false} transparent />
-        </mesh>
+          radius={HEAD.radius}
+          length={HEAD.length}
+          color={color}
+          edge={edge}
+        />
       ))}
       <mesh geometry={drawn.grip} visible={false} {...grip} />
     </>
@@ -322,7 +453,9 @@ function Tilt({
 /**
  * The section's handle: an arrow to push the cut through the model, and two rings to
  * tilt it about the two directions that lie in it. With it, a faint square where the cut
- * is, so that its tilt can be read at a glance.
+ * is, so that its tilt can be read at a glance: for as long as the pointer is on the
+ * handle, or has hold of it, and not otherwise, when it would only be in the way of the
+ * model.
  */
 export function SectionHandle({
   section,
@@ -360,10 +493,16 @@ export function SectionHandle({
     )
   })
 
-  const piece = { section, frame, colors, onChange }
+  // how many of its pieces are under the pointer, or held
+  const [lit, setLit] = React.useState(0)
+  const onLit = React.useCallback(
+    (by: 1 | -1) => setLit((pieces) => pieces + by),
+    []
+  )
+  const piece = { section, frame, colors, onChange, onLit }
   return (
     <group ref={frame} matrix={matrix} matrixAutoUpdate={false}>
-      <mesh renderOrder={4} raycast={NOT_PICKED}>
+      <mesh visible={lit > 0} renderOrder={4} raycast={NOT_PICKED}>
         <planeGeometry args={[reach * 0.85, reach * 0.85]} />
         <meshBasicMaterial
           color={colors.section}

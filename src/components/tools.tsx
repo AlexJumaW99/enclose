@@ -185,7 +185,7 @@ export function Tools({
             {section && (
               <div className="absolute top-0 right-full mr-1.5 flex gap-1.5">
                 <Press
-                  label="Start the cut again"
+                  label="Reset cut"
                   side="top"
                   onClick={() =>
                     setView({ section: sectionFacing(loaded.box) })
@@ -194,7 +194,7 @@ export function Tools({
                   <RotateCcwIcon />
                 </Press>
                 <Press
-                  label="Show the other side"
+                  label="Invert side"
                   side="top"
                   onClick={() =>
                     setView({

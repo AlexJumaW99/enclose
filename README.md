@@ -162,11 +162,12 @@ Down the right-hand edge:
 
 - **Section** (S) cuts the model open. Three squares appear by the axes, one per direction
   to cut across, which the X, Y and Z keys choose too; in the view, drag the arrow to push
-  the cut through the model and the arcs to tilt it. Two more buttons appear to the left
-  of this one: one shows the other half, the other starts the cut again. A cut is kept
-  as it is left: cut open again, the model is cut the same way, until it is started
-  again. While the model is cut open a tap of Z is the cut across Z, and holding the
-  key, or flicking with it down, brings up the shading.
+  the cut through the model and the arcs to tilt it. While the pointer is on either, or
+  has hold of it, a faint square shows where the cut lies and how it is tilted. Two more
+  buttons appear to the left of this one: one shows the other half, the other starts the
+  cut again. A cut is kept as it is left: cut open again, the model is cut the same way,
+  until it is started again. While the model is cut open a tap of Z is the cut across Z,
+  and holding the key, or flicking with it down, brings up the shading.
   Where the cut passes through a solid part it leaves a face in the part's colour, with
   lines across it, the way a drawing marks what has been cut through. Where two parts
   are in the same place by more than a tenth of a millimetre, the cut shows it in red.
