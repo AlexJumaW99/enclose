@@ -4,14 +4,13 @@
 //   npm run dev -- <folder>     ...with that folder added as a project
 import { spawn } from "node:child_process"
 
-import electron from "electron"
 import { context } from "esbuild"
 import { createServer } from "vite"
 
 import { main, preload } from "./electron-build.mjs"
-import { nameElectron } from "./electron-name.mjs"
+import { namedElectron } from "./electron-name.mjs"
 
-nameElectron()
+const electron = namedElectron()
 
 const server = await createServer()
 await server.listen()

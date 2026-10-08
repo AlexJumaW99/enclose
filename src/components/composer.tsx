@@ -3,11 +3,10 @@ import { cn } from "cn"
 import {
   ArrowUpIcon,
   BoxesIcon,
-  CheckIcon,
   ChevronDownIcon,
-  GaugeIcon,
-  LockIcon,
-  LockOpenIcon,
+  CircleGaugeIcon,
+  LockKeyholeIcon,
+  LockKeyholeOpenIcon,
   PencilIcon,
   SparklesIcon,
   SquareIcon,
@@ -60,138 +59,98 @@ import {
 import { useNow } from "@/lib/time"
 import { bridge } from "./viewport/bridge"
 
-/** What the choices under a message go without, one after another, as room runs out. */
-const GIVEN_UP = ["arrows", "access", "effort", "model"]
-
 /**
- * The choices sit a little lower than the round button beside them, which is taller: as
- * far from the bottom of the box, near enough, as they are from its side.
+ * The line under a message sits a little lower than the round button beside it, which is
+ * taller: as far from the bottom of the box, near enough, as it is from its side.
  */
 const LOW = "translate-y-1"
 
-/**
- * One of the choices: small print, never squeezed. Its pictures are small to match, and
- * drawn with a heavier line for it, to be of a weight with the words; its arrow is a
- * little bigger than they are, being less of a shape.
- */
-const CHOICE = `shrink-0 ${LOW} text-[11px] [&>svg]:size-3! [&>svg]:stroke-3 [&>svg[data-icon]]:size-3.5! [&>svg[data-icon]]:stroke-[2.5]`
+/** How far in from the side of the box the line begins: its edge, and the room by it. */
+const BAR_INSET = 7
 
-/** The arrow of a choice that can do without one. */
-const ARROW = "opacity-60 group-data-[short~=arrows]/bar:hidden"
+/** How far the box is from the side of the window. */
+const BOX_INSET = 14
 
-/**
- * Has the choices under a message say as much as there is room for. They are tried in
- * full; while they do not fit, they give up one thing at a time: their arrows, then the
- * words for what Claude may do unasked, then those for how hard it thinks, and at last
- * some of the model's name. `said` is what they say, so that a change in it is fitted.
- */
-function useFit(said: string) {
-  const ref = React.useRef<HTMLDivElement>(null)
-  React.useLayoutEffect(() => {
-    const row = ref.current
-    if (!row) return
-    const fit = () => {
-      for (let count = 0; count <= GIVEN_UP.length; count++) {
-        row.dataset.short = GIVEN_UP.slice(0, count).join(" ")
-        if (row.scrollWidth <= row.clientWidth) return
-      }
-    }
-    fit()
-    const observer = new ResizeObserver(fit)
-    observer.observe(row)
-    // the words are no width to speak of until their letters have come
-    void document.fonts.ready.then(fit)
-    return () => observer.disconnect()
-  }, [said])
-  return ref
-}
-
-// what each choice is a choice of: over its list, and on it when it is down to a picture
+// what each choice is a choice of: over its list
+const MODEL_TITLE = "Which model answers"
 const EFFORT_TITLE = "How hard Claude thinks"
 const ACCESS_TITLE = "What Claude may do without asking"
 
-/** A thin line between two of the choices under the message. */
-function Divider() {
-  return <span aria-hidden className={`h-3.5 w-px shrink-0 bg-border ${LOW}`} />
+/**
+ * One of the three choices, where they are made: what it is set to, and an arrow to the
+ * others. The three sit side by side as one box, a line between each two.
+ */
+const CHOICE =
+  "flex h-14.5 flex-auto cursor-pointer items-center gap-2.5 border-l pr-4.5 pl-5 text-sm font-semibold whitespace-nowrap outline-none transition-colors first-of-type:border-l-0 hover:bg-foreground/5 focus-visible:bg-foreground/5 data-popup-open:bg-foreground/5 [&>svg]:size-3.5 [&>svg]:shrink-0"
+
+/** The arrow of a choice: bigger than its picture and drawn lighter, being less of a shape. */
+function Arrow() {
+  return (
+    <ChevronDownIcon className="size-5.5! stroke-[1.5] text-muted-foreground" />
+  )
 }
 
-/** The model that will answer, by whose it is and its name. It opens onto the others. */
-function ModelMenu() {
+/**
+ * What one of a list's choices says: what it is called and, under that, what it comes
+ * to. Both in the same letters, the name in the heavier of them.
+ */
+function Words({ name, detail }: { name: string; detail?: string }) {
+  return (
+    <div className="flex min-w-0 flex-col">
+      <span className="font-medium">{name}</span>
+      {detail && <span className="text-muted-foreground">{detail}</span>}
+    </div>
+  )
+}
+
+/** Which model answers. */
+function ModelChoice() {
   const models = useStore((state) => state.models)
   const picked = useStore((state) => state.model)
   const setModel = useStore((state) => state.setModel)
-  const [open, setOpen] = React.useState(false)
   const chosen = chosenModel(models, picked)
   return (
-    <Popover
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next)
-        // Claude Code may not have said when the app started: it is asked again
-        if (next) void askModels()
-      }}
-    >
-      <PopoverTrigger
-        render={
-          <InputGroupButton
-            className={cn(
-              CHOICE,
-              "min-w-0 group-data-[short~=model]/bar:shrink"
-            )}
-          />
-        }
+    <DropdownMenu>
+      <DropdownMenuTrigger className={CHOICE} title={MODEL_TITLE}>
+        {chosen?.short ?? "Claude"}
+        <Arrow />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        side="top"
+        // there are many of them: the list is no taller than it was, and scrolls. It is
+        // as wide as the longest thing said in it, short of a width to read across
+        className="max-h-[min(22rem,var(--available-height))] w-max max-w-[min(26rem,var(--available-width))]"
       >
-        <ClaudeIcon className="shrink-0" />
-        <span className="truncate">{chosen?.short ?? "Claude"}</span>
-        <ChevronDownIcon data-icon="inline-end" className="opacity-60" />
-      </PopoverTrigger>
-      <PopoverContent align="start" side="top" className="w-80 gap-0 p-1">
-        {/* whose models: one maker for now, so one tab */}
-        <Tabs defaultValue="claude" className="gap-1">
-          <TabsList variant="line" className="h-8! justify-start px-1">
-            <TabsTrigger value="claude" title="Claude" className="flex-none">
-              <ClaudeIcon />
-              <span className="sr-only">Claude</span>
-            </TabsTrigger>
-          </TabsList>
-          <TabsContent
-            value="claude"
-            className="flex max-h-80 flex-col overflow-y-auto border-t pt-1"
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>{MODEL_TITLE}</DropdownMenuLabel>
+          {models.length === 0 && (
+            <p className="px-3 py-2 text-sm text-muted-foreground">
+              Claude Code has not said what models it has.
+            </p>
+          )}
+          <DropdownMenuRadioGroup
+            value={chosen?.id ?? ""}
+            onValueChange={(value) => setModel(value === "" ? null : value)}
           >
-            {models.length === 0 && (
-              <p className="px-2.5 py-2 text-muted-foreground">
-                Claude Code has not said what models it has.
-              </p>
-            )}
             {models.map((model) => (
-              <button
+              <DropdownMenuRadioItem
                 key={model.id ?? ""}
-                type="button"
-                aria-pressed={model === chosen}
-                onClick={() => {
-                  setModel(model.id)
-                  setOpen(false)
-                }}
-                className="flex items-center gap-2 rounded-xl px-2.5 py-1.5 text-left outline-none hover:bg-accent focus-visible:bg-accent aria-pressed:bg-accent"
+                value={model.id ?? ""}
+                closeOnClick
               >
-                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="truncate font-medium">{model.name}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {model.detail}
-                  </span>
-                </span>
-                {model === chosen && <CheckIcon className="size-4 shrink-0" />}
-              </button>
+                <Words name={model.name} detail={model.detail} />
+              </DropdownMenuRadioItem>
             ))}
-          </TabsContent>
-        </Tabs>
-      </PopoverContent>
-    </Popover>
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
 /** How hard the model thinks, for a model that can be told. */
-function EffortMenu() {
+function EffortChoice() {
   const models = useStore((state) => state.models)
   const model = chosenModel(
     models,
@@ -202,101 +161,168 @@ function EffortMenu() {
   if (!model || model.efforts.length === 0) return null
   const effort = chosenEffort(model, picked)
   return (
-    <>
-      <Divider />
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={<InputGroupButton className={CHOICE} title={EFFORT_TITLE} />}
-        >
-          <GaugeIcon />
-          <span className="group-data-[short~=effort]/bar:sr-only">
-            {effort ? EFFORT_WORDS[effort] : "Default"}
-          </span>
-          <ChevronDownIcon data-icon="inline-end" className={ARROW} />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" side="top" className="w-56">
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>{EFFORT_TITLE}</DropdownMenuLabel>
-            <DropdownMenuRadioGroup
-              value={effort ?? ""}
-              onValueChange={(value) =>
-                setEffort(value === "" ? null : (value as Effort))
-              }
-            >
-              <DropdownMenuRadioItem value="">
-                <div className="flex flex-col gap-0.5">
-                  <span>Default</span>
-                  <span className="text-xs text-muted-foreground">
-                    As Claude Code is set
-                  </span>
-                </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger className={CHOICE} title={EFFORT_TITLE}>
+        <CircleGaugeIcon />
+        {effort ? EFFORT_WORDS[effort] : "Default"}
+        <Arrow />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" side="top" className="w-56">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>{EFFORT_TITLE}</DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={effort ?? ""}
+            onValueChange={(value) =>
+              setEffort(value === "" ? null : (value as Effort))
+            }
+          >
+            <DropdownMenuRadioItem value="" closeOnClick>
+              <Words name="Default" detail="As Claude Code is set" />
+            </DropdownMenuRadioItem>
+            {model.efforts.map((level) => (
+              <DropdownMenuRadioItem key={level} value={level} closeOnClick>
+                <Words name={EFFORT_WORDS[level]} />
               </DropdownMenuRadioItem>
-              {model.efforts.map((level) => (
-                <DropdownMenuRadioItem key={level} value={level}>
-                  {EFFORT_WORDS[level]}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
 const ACCESS_ICON: Record<Access, LucideIcon> = {
-  supervised: LockIcon,
+  supervised: LockKeyholeIcon,
   edits: PencilIcon,
   auto: SparklesIcon,
-  full: LockOpenIcon,
+  full: LockKeyholeOpenIcon,
 }
 
 /** What Claude may do without asking. */
-function AccessMenu() {
+function AccessChoice() {
   const access = useStore((state) => state.access)
   const setAccess = useStore((state) => state.setAccess)
   const Icon = ACCESS_ICON[access]
   return (
-    <>
-      <Divider />
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={<InputGroupButton className={CHOICE} title={ACCESS_TITLE} />}
-        >
-          <Icon />
-          <span className="group-data-[short~=access]/bar:sr-only">
-            {ACCESS_WORDS[access].label}
-          </span>
-          <ChevronDownIcon data-icon="inline-end" className={ARROW} />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" side="top" className="w-80">
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>{ACCESS_TITLE}</DropdownMenuLabel>
-            <DropdownMenuRadioGroup
-              value={access}
-              onValueChange={(value) => setAccess(value as Access)}
+    <DropdownMenu>
+      <DropdownMenuTrigger className={CHOICE} title={ACCESS_TITLE}>
+        <Icon />
+        {ACCESS_WORDS[access].label}
+        <Arrow />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        side="top"
+        // as wide as the longest thing said in it
+        className="w-max max-w-(--available-width)"
+      >
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>{ACCESS_TITLE}</DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={access}
+            onValueChange={(value) => setAccess(value as Access)}
+          >
+            {(Object.keys(ACCESS_WORDS) as Access[]).map((key) => {
+              const ItemIcon = ACCESS_ICON[key]
+              return (
+                <DropdownMenuRadioItem key={key} value={key} closeOnClick>
+                  {/* its picture stands left of all that is said of it, half way
+                      down the two lines, and is drawn with a line a pixel wide */}
+                  <ItemIcon size={16} absoluteStrokeWidth strokeWidth={1} />
+                  <Words
+                    name={ACCESS_WORDS[key].label}
+                    detail={ACCESS_WORDS[key].detail}
+                  />
+                </DropdownMenuRadioItem>
+              )
+            })}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+/**
+ * How the next message will be answered, said in one line under it: by which model,
+ * thinking how hard, asking how much. The line is a button: it opens onto the three
+ * choices, under the makers whose models there are to choose from.
+ */
+function Manner() {
+  const models = useStore((state) => state.models)
+  const model = chosenModel(
+    models,
+    useStore((state) => state.model)
+  )
+  const effort = chosenEffort(
+    model,
+    useStore((state) => state.effort)
+  )
+  const access = useStore((state) => state.access)
+  const said = [
+    model?.short ?? "Claude",
+    // a model that cannot be told how hard to think has nothing to say of it
+    ...(model && model.efforts.length > 0
+      ? [effort ? EFFORT_WORDS[effort] : "Default effort"]
+      : []),
+    ACCESS_WORDS[access].label,
+  ].join(", ")
+  return (
+    <Popover
+      onOpenChange={(open) => {
+        // Claude Code may not have said when the app started: it is asked again
+        if (open) void askModels()
+      }}
+    >
+      <PopoverTrigger
+        render={
+          <InputGroupButton
+            // what it opens is in plain sight over it: it is drawn no differently for
+            // being open
+            className={`min-w-0 shrink gap-1.5 text-xs font-normal ${LOW} aria-expanded:bg-transparent aria-expanded:text-muted-foreground aria-expanded:hover:bg-muted/50 aria-expanded:hover:text-foreground [&>svg]:size-3!`}
+          />
+        }
+      >
+        <ClaudeIcon className="shrink-0" />
+        <span className="truncate">Using {said}</span>
+      </PopoverTrigger>
+      {/* its side is the side of the box the message is written in: the left one where
+          there is room for that, and the right one where the box is the narrower */}
+      <PopoverContent
+        align="start"
+        alignOffset={-BAR_INSET}
+        side="top"
+        sideOffset={12}
+        collisionAvoidance={{ side: "flip", align: "shift" }}
+        collisionPadding={BOX_INSET}
+        className="w-auto gap-0 p-1.5 ring-foreground/8"
+      >
+        {/* whose models: one maker for now, so one tab */}
+        <Tabs defaultValue="claude" className="gap-1.75">
+          <TabsList
+            variant="line"
+            className="h-11.5! w-full justify-start gap-0 border-b p-0"
+          >
+            <TabsTrigger
+              value="claude"
+              title="Claude"
+              className="h-full w-11.5 flex-none p-0 after:-bottom-px! after:h-px!"
             >
-              {(Object.keys(ACCESS_WORDS) as Access[]).map((key) => {
-                const ItemIcon = ACCESS_ICON[key]
-                return (
-                  <DropdownMenuRadioItem key={key} value={key}>
-                    <div className="flex flex-col gap-0.5">
-                      <span className="flex items-center gap-2">
-                        <ItemIcon className="text-muted-foreground" />
-                        {ACCESS_WORDS[key].label}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {ACCESS_WORDS[key].detail}
-                      </span>
-                    </div>
-                  </DropdownMenuRadioItem>
-                )
-              })}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </>
+              <ClaudeIcon className="size-6" />
+              <span className="sr-only">Claude</span>
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent
+            value="claude"
+            className="flex overflow-hidden rounded-[0.75rem] border bg-foreground/6"
+          >
+            <ModelChoice />
+            <EffortChoice />
+            <AccessChoice />
+          </TabsContent>
+        </Tabs>
+      </PopoverContent>
+    </Popover>
   )
 }
 
@@ -512,11 +538,6 @@ export function Composer({
     hover(lit)
     return () => hover(null)
   }, [lit, hover])
-  const choices = useFit(
-    useStore((state) =>
-      [state.models.length, state.model, state.effort, state.access].join()
-    )
-  )
   // one thing at a time is done in a project's folder: Claude is at work in the
   // conversation this writes to, which can be stopped, or in another of the project's
   const running = project?.conversations.find((c) => c.status !== "idle")
@@ -611,18 +632,14 @@ export function Composer({
             : "max-h-10 min-h-10 overflow-hidden whitespace-nowrap placeholder:text-ellipsis"
         )}
       />
-      {/* by which model, thinking how hard, asking how much: each says what it is set
-          to, in fewer words where there is less room */}
+      {/* by which model, thinking how hard, asking how much: one line that says so */}
       <InputGroupAddon
-        ref={choices}
         align="block-end"
-        // the choices have room of their own around their words, which the round button
-        // has not: it is kept as far from the side as it is from the bottom
-        className="group/bar gap-1 pr-3 pl-1.5"
+        // the line has room of its own around its words, which the round button has
+        // not: that is kept as far from the side as it is from the bottom
+        className="gap-1 pr-3 pl-1.5"
       >
-        <ModelMenu />
-        <EffortMenu />
-        <AccessMenu />
+        <Manner />
         {busy && project ? (
           <InputGroupButton
             variant="secondary"

@@ -314,9 +314,11 @@ you name before it starts on the work. A message that begins with / is a command
 that you, the project or a plugin have given Claude Code, and three of its own that mean
 something here (compact, context and usage). Esc puts the list away.
 
-Under the message box are three choices: which of Claude Code's models answers, how hard
-it thinks, and what it may do without asking. The models are the ones your Claude Code
-offers; "Default" leaves the model, and how hard it thinks, as Claude Code is set.
+Under the message, one line says how it will be answered: "Using Opus 5.5, High, Full
+access". Click it for the three choices behind it: which of Claude Code's models answers,
+how hard it thinks, and what it may do without asking. The models are the ones your
+Claude Code offers; "Default" leaves the model, and how hard it thinks, as Claude Code is
+set.
 Claude starts out with full access and never asks. It can be made to ask before it
 changes a file or runs anything ("Supervised"), to edit files freely and ask before
 anything else ("Auto-accept edits"), or to do what is routine and ask about the rest
