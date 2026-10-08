@@ -262,6 +262,22 @@ other parts, which gather there. Click a chip or a mark to change what you said.
 sends at once, with everything gathered and whatever is in the message box. Each thing
 said goes to Claude with its part and the point clicked, in the model's coordinates.
 
+Cmd+Z takes back the last thing done to the model, and Cmd+Shift+Z puts it back. That is
+a colour you gave a part, or what Claude did in a turn, whichever was done later; press
+it again for the one before. What Claude did is taken back whole and at once, without
+asking it for anything and without building anything: before each turn the app puts the
+project's files aside, and keeps of them whatever the turn then wrote to, made or took
+away, the built model with the rest. A turn you stopped part of the way is taken back
+like any other. The conversation says that it was done, and Claude is told with your
+next message, so that it does not go on as though its change were still there. Nothing
+is taken back while Claude is at work, or over a file that has been changed since the
+turn, by you in an editor say: the app names the file that is in the way and leaves all
+of it as it is. The last twelve turns that changed anything are kept for each project.
+What is not the project's own is left out, and left alone: `.git`, `node_modules`, a
+Python environment. In a box you are writing in, Cmd+Z is the writing's for as long as
+there is any; in an empty one, as the message box is after a message is sent, it is the
+model's.
+
 Drag across the view and a box is drawn, which picks out several parts at once: drawn
 from left to right, the parts wholly inside it; from right to left, every part it
 touches, and its edge is dashed to say so. A box goes by the piece, as a click does: one

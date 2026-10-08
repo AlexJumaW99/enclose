@@ -36,6 +36,22 @@ export type BringingIn =
   | { state: "working"; done: number; total: number | null }
   | { state: "failed"; why: "python" | "build"; detail: string }
 
+/**
+ * Something Claude did to a project's files in one turn, which can be taken back, or
+ * has been and can be put back: what was asked for in that turn, and when it was done
+ * (or, of one taken back, when it was taken back).
+ */
+export type Undoable = { what: string; at: number }
+
+/**
+ * What came of taking such a change back, or putting it back. busy: Claude is at work in
+ * the project. changed: the files named have been written to since, and are not written
+ * over.
+ */
+export type Undone =
+  | { ok: true; what: string }
+  | { ok: false; why: "nothing" | "busy" | "changed"; files: string[] }
+
 /** A folder on disk, and the conversations about it. */
 export type Project = {
   id: string
@@ -55,6 +71,9 @@ export type Project = {
   lookOver: "wanted" | "underway" | null
   /** goes up each time the manifest is rewritten, so the window knows to reload */
   revision: number
+  /** the latest thing Claude did to its files that can be taken back, and put back */
+  undo: Undoable | null
+  redo: Undoable | null
   /**
    * The conversations had about it, the latest first. One that is over is kept: only
    * taking the project off the list forgets them. At most one is running at a time.
@@ -257,6 +276,12 @@ export type Settings = {
 
 export type CadApi = {
   platform: string
+  changes: {
+    /** Take back what the latest turn did to a project's files. */
+    undo(projectId: string): Promise<Undone>
+    /** Put back what was last taken back. */
+    redo(projectId: string): Promise<Undone>
+  }
   projects: {
     list(): Promise<Project[]>
     /**
@@ -368,6 +393,8 @@ export const CHANNEL = {
   threadRename: "thread:rename",
   threadAnswer: "thread:answer",
   threadItem: "thread:item",
+  changesUndo: "changes:undo",
+  changesRedo: "changes:redo",
   claudeStatus: "claude:status",
   claudeModels: "claude:models",
   claudeCommands: "claude:commands",

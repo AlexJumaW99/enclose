@@ -137,6 +137,32 @@ describe("withNotes", () => {
     )
   })
 
+  it("leads with the turns that had what they did taken back, and put back", () => {
+    expect(
+      withNotes("Try it wider instead", [], [], {
+        undone: ['Make it "taller"\nby 5 mm'],
+        redone: [],
+      })
+    ).toBe(
+      [
+        "<undone>",
+        "<turn asked=\"Make it 'taller' by 5 mm\" />",
+        "</undone>",
+        "",
+        "Try it wider instead",
+      ].join("\n")
+    )
+    const said = withNotes(
+      "and tidy up",
+      [{ part: chip, text: "Smaller" }],
+      [buttons[0]],
+      { undone: ["Taller"], redone: ["Wider"] }
+    )
+    expect(said.startsWith("<undone>\n")).toBe(true)
+    expect(said.indexOf("<redone>")).toBeLessThan(said.indexOf("<objects>"))
+    expect(said.indexOf("</redone>\n\n<objects>")).toBeGreaterThan(0)
+  })
+
   it("says which object, and all its parts, where one was picked out whole", () => {
     const board = {
       ...chip,

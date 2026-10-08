@@ -344,6 +344,8 @@ const KEYS: { title: string; rows: [string, string[]][] }[] = [
       ["Parts", ["P"]],
       ["Grid: the ground and the world's axes", [SHIFT, "G"]],
       ["Search: find parts and groups by name", [CMD, "F"]],
+      ["Undo the last change to the model, yours or Claude's", [CMD, "Z"]],
+      ["Redo it", [SHIFT, CMD, "Z"]],
       [
         "Put away the search or the list, then leave the last thing gone into",
         ["Esc"],

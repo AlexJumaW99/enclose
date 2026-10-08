@@ -167,6 +167,40 @@ function useChanging(project: Project): string[] {
   )
 }
 
+/** How long the app's saying something stays at the foot of the view, ms. */
+const SAID_FOR_MS = 3200
+
+/**
+ * At the foot of the view, for a moment: what the app has to say of something just done
+ * that would otherwise go unsaid. What Cmd+Z took back, or why it could not.
+ */
+function Saying() {
+  const saying = useStore((s) => s.saying)
+  React.useEffect(() => {
+    if (!saying) return
+    const over = setTimeout(
+      () =>
+        // unless something else has been said since
+        useStore.setState((state) =>
+          state.saying === saying ? { saying: null } : {}
+        ),
+      SAID_FOR_MS
+    )
+    return () => clearTimeout(over)
+  }, [saying])
+  if (!saying) return null
+  return (
+    <div
+      key={saying.key}
+      role="status"
+      className="glass max-w-[min(34rem,calc(100%-22rem))] animate-in truncate rounded-full bg-background/60 px-5 py-2.5 text-sm shadow-md ring-1 ring-foreground/10 duration-200 select-none fade-in slide-in-from-bottom-2"
+      title={saying.text}
+    >
+      {saying.text}
+    </div>
+  )
+}
+
 /** How big the square the mark turns in is while something is waited for, px. */
 const MARK_SIZE = 96
 
@@ -629,10 +663,31 @@ function Model({ project }: { project: Project }) {
   // into last. Shift+G rules the ground and draws the world's axes, as it brings up the
   // grid in Figma, and again takes them away. (Cmd+F, which looks for parts by name, is
   // listened for where the name is typed: see Search.)
+  //
+  // Cmd+Z takes back the last thing done to the model, a colour given by hand or what
+  // Claude did in a turn, and with Shift puts it back. In a box that is written in it is
+  // the writing's, as ever, for as long as there is any: with nothing written there,
+  // which is how the message box is left by a message just sent, it is the model's.
   React.useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.altKey || lookingOver) return
       if (useStore.getState().settingsOpen) return
+      if (
+        (MAC ? event.metaKey && !event.ctrlKey : event.ctrlKey) &&
+        event.key.toLowerCase() === "z"
+      ) {
+        const on = event.target
+        const written =
+          on instanceof HTMLInputElement || on instanceof HTMLTextAreaElement
+            ? on.value !== ""
+            : spokenFor(on)
+        if (written) return
+        event.preventDefault()
+        if (event.repeat) return
+        const { undo, redo } = useStore.getState()
+        void (event.shiftKey ? redo() : undo())
+        return
+      }
       if (event.shiftKey) {
         // the one key here that Shift goes with: and not a capital G being typed
         const alone = !event.metaKey && !event.ctrlKey && !event.repeat
@@ -919,6 +974,7 @@ function Model({ project }: { project: Project }) {
       {loaded && (
         <div className="pointer-events-none absolute inset-x-0 bottom-5 flex flex-col items-center gap-2.5">
           {lookingOver && <LookingOver project={project} />}
+          <Saying />
           <AddToChat
             listed={listed}
             groups={loaded.model.groups}

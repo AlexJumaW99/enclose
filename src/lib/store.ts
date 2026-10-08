@@ -7,6 +7,17 @@ import { cutsOf, readCuts } from "@/lib/cuts"
 import { mannerOf, savedAccess } from "@/lib/manner"
 import { callingOn, notCalledOn } from "@/lib/mentions"
 import { usePreferences } from "@/lib/preferences"
+import {
+  back,
+  coloured,
+  forth,
+  later,
+  NO_HISTORY,
+  record,
+  recolour,
+  saidOf,
+  type History,
+} from "@/lib/undo"
 import { PALETTE, type PaletteName } from "@shared/palette"
 
 import {
@@ -333,6 +344,17 @@ type State = {
    * name. It is how the app draws the part, whatever the model says of its colour.
    */
   colours: Record<string, Record<string, PaletteName>>
+  /**
+   * What has been done by hand to each project's model, and can be taken back with
+   * Cmd+Z: the colours given to its parts. Kept for as long as the window is up.
+   */
+  history: Record<string, History>
+  /**
+   * What the app has to say of something just done that would otherwise go unsaid: what
+   * Cmd+Z took back, or why it could not. It is shown at the foot of the view for a
+   * moment. `key` tells one such thing from the next.
+   */
+  saying: { text: string; key: number } | null
   /** bumps to ask the viewport to return to its home view */
   homeRequests: number
   /** bumps to ask the message box to take the typing, after what is written in it */
@@ -392,6 +414,14 @@ type State = {
   dropCalled(id: string): void
   /** Give parts of the open project a colour of the app's, or (null) the model's own back. */
   setColour(partIds: string[], colour: PaletteName | null): void
+  /**
+   * Take back the last thing done to the open project's model: a colour given by hand,
+   * or what Claude did to its files in a turn, whichever was later.
+   */
+  undo(): Promise<void>
+  /** Put back what was last taken back. */
+  redo(): Promise<void>
+  say(text: string): void
   setThreadOpen(open: boolean): void
   setThreadWidth(width: number): void
   setPartsOpen(open: boolean): void
@@ -412,6 +442,55 @@ type State = {
    * shows of it: answered the way a message would be, as far as that is chosen.
    */
   lookOver(projectId: string, seen: Seen): Promise<void>
+}
+
+/** How many things the app has had to say: what tells one from the next. */
+let said = 0
+/** What Claude did is being taken back, or put back: one at a time. */
+let turning = false
+/** When a part picked out, shown in its own colour for a change to be seen, is to stop being. */
+let seen: ReturnType<typeof setTimeout> | undefined
+/** How long that is, ms: as long as a colour just given is seen for. */
+const SEEN_FOR_MS = 1400
+
+/**
+ * Put some of a project's parts to the colours a change has for them, and keep what has
+ * been done to it as it now stands. `shown`: let the change be seen on a part that is
+ * picked out, which is drawn in the selection's colour and would not show it.
+ */
+function repaint(
+  projectId: string,
+  had: Record<string, PaletteName | null>,
+  history: History,
+  shown = false
+) {
+  const state = useStore.getState()
+  const colours = {
+    ...state.colours,
+    [projectId]: coloured(state.colours[projectId] ?? {}, had),
+  }
+  localStorage.setItem(COLOURS_KEY, JSON.stringify(colours))
+  useStore.setState({
+    colours,
+    history: { ...state.history, [projectId]: history },
+  })
+  const { selection } = state
+  if (!shown || !selection) return
+  if (!allOf(selection.part).some((id) => id in had)) return
+  state.showPlain(true)
+  clearTimeout(seen)
+  seen = setTimeout(() => useStore.getState().showPlain(false), SEEN_FOR_MS)
+}
+
+/** Have what Claude last did to a project's files taken back, or put back, and say what came of it. */
+async function turnBack(projectId: string, way: "undo" | "redo") {
+  turning = true
+  try {
+    const saying = saidOf(way, await window.cad.changes[way](projectId))
+    if (saying) useStore.getState().say(saying)
+  } finally {
+    turning = false
+  }
 }
 
 /** Something said of a part, waiting to be sent: the part and point, and the words. */
@@ -464,6 +543,8 @@ export const useStore = create<State>()((set, get) => ({
   writing: null,
   ...savedWaiting(),
   colours: savedColours(),
+  history: {},
+  saying: null,
   homeRequests: 0,
   writeRequests: 0,
 
@@ -682,24 +763,55 @@ export const useStore = create<State>()((set, get) => ({
   },
 
   setColour(partIds, colour) {
-    const { activeId, colours } = get()
+    const { activeId, colours, history } = get()
     if (!activeId) return
-    const others = Object.fromEntries(
-      Object.entries(colours[activeId] ?? {}).filter(
-        ([id]) => !partIds.includes(id)
-      )
+    const change = recolour(
+      colours[activeId] ?? {},
+      partIds,
+      colour,
+      Date.now()
     )
-    const next = {
-      ...colours,
-      [activeId]: colour
-        ? {
-            ...others,
-            ...Object.fromEntries(partIds.map((id) => [id, colour])),
-          }
-        : others,
-    }
-    localStorage.setItem(COLOURS_KEY, JSON.stringify(next))
-    set({ colours: next })
+    if (!change) return
+    repaint(
+      activeId,
+      change.after,
+      record(history[activeId] ?? NO_HISTORY, change)
+    )
+  },
+
+  async undo() {
+    const { activeId, projects, history } = get()
+    const project = projects.find((p) => p.id === activeId)
+    if (!project || turning) return
+    const kept = history[project.id] ?? NO_HISTORY
+    const which = later(kept.done.at(-1)?.at ?? null, project.undo?.at ?? null)
+    if (which === "mine") {
+      const taken = back(kept, Date.now())
+      if (!taken) return
+      repaint(project.id, taken.change.before, taken.history, true)
+      get().say("Undid a colour")
+    } else if (which === "claudes") await turnBack(project.id, "undo")
+  },
+
+  async redo() {
+    const { activeId, projects, history } = get()
+    const project = projects.find((p) => p.id === activeId)
+    if (!project || turning) return
+    const kept = history[project.id] ?? NO_HISTORY
+    const which = later(
+      kept.undone.at(-1)?.undoneAt ?? null,
+      project.redo?.at ?? null
+    )
+    if (which === "mine") {
+      const put = forth(kept)
+      if (!put) return
+      repaint(project.id, put.change.after, put.history, true)
+      get().say("Redid a colour")
+    } else if (which === "claudes") await turnBack(project.id, "redo")
+  },
+
+  say(text) {
+    set({ saying: { text, key: ++said } })
   },
 
   setThreadOpen(threadOpen) {

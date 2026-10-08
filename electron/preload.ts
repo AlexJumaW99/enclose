@@ -32,6 +32,10 @@ const api: CadApi = {
     saveCopy: (projectId, file, name) =>
       ipcRenderer.invoke(CHANNEL.modelSaveCopy, projectId, file, name),
   },
+  changes: {
+    undo: (projectId) => ipcRenderer.invoke(CHANNEL.changesUndo, projectId),
+    redo: (projectId) => ipcRenderer.invoke(CHANNEL.changesRedo, projectId),
+  },
   thread: {
     items: (projectId, conversationId) =>
       ipcRenderer.invoke(CHANNEL.threadItems, projectId, conversationId),

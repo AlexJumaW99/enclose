@@ -28,6 +28,7 @@ import type {
 } from "../shared/api"
 import { MANIFEST_FORMAT } from "../shared/manifest-format"
 import { PALETTE_NAMES } from "../shared/palette"
+import type { Changes } from "./changes"
 import { claudeEnv } from "./claude"
 import { GIST_FROM, gistOf, plain } from "./gist"
 import type { Arrangement } from "./imports"
@@ -52,6 +53,8 @@ type Run = {
   pending: Map<string, (answer: PermissionAnswer) => void>
   /** the turn is the app's own asking, of files just opened: their model is looked over */
   lookOver: boolean
+  /** what was asked for in it, in a line: what it goes by if what it does is taken back */
+  what: string
 }
 
 /**
@@ -73,6 +76,8 @@ type Book = { conversations: Map<string, Conversation>; run: Run | null }
 export type ThreadsDeps = {
   dir: string
   projects: Projects
+  /** what each turn does to a project's files is kept there, to be taken back */
+  changes: Changes
   claude: () => ClaudeStatus
   /** where the app keeps the exporter a project copies to write its model */
   kit: string
@@ -210,6 +215,7 @@ function guide(
     "- A message may hold a <comments> block: things the user has said of parts of the model, one <comment> for each. Each names the part and gives the point on it they clicked, the way the surface faces there and which face it is, in the model's own coordinates (mm, Z up), and holds what they said. Take each as a change wanted at that place. The rest of the message, if there is any, is what they said of the model as a whole.",
     "- A click in the view picks out a whole object, not one part of it: the parts of a group that touch one another, such as a circuit board with all that is on it. A <comment> made of one has object, what the app calls it, and parts, the ids of all its parts. Its part, id and point are then only where on the object the user clicked: take what they said as said of the whole object, unless it says otherwise.",
     '- A message may hold an <objects> block: whole objects the user picked out in the view for the message to be about, one <object> for each, with what the app calls it and the ids of all its parts. What the message says, it says of those objects, each as one thing: they are what the user means by "this", "these" or "them". The user may still want only some part of one changed (the cap of a button, one chip on a board) and say so in their own words, not by its id: then find that part among the object\'s parts, by their labels, sizes and places (mcp__viewport__parts) or by looking (mcp__viewport__screenshot), and change that part alone. Ask which they mean only if it cannot be told.',
+    "- The user can take back what one of your turns did to the project's files, with Cmd+Z in the app, and put it back again: it is how they try a change and think better of it, and it costs them nothing. The next message then leads with an <undone> block that names each such turn by what was asked for in it. The project's files, and the model built from them, are as they were before that turn, whatever you remember having done in it: read a file again before you go on from it, and do not make the change again unless you are asked to. A <redone> block names turns whose changes were put back since: the files are as those turns left them.",
     "- A word in a message that begins with @ names a part of the model by its id, as the manifest and mcp__viewport__parts have it: @lid is the part whose id is lid.",
     "- A word in a message that begins with $ names one of your skills, which the user wants used for what they are asking: $pcb is the skill called pcb. Load it with the Skill tool before you start on the work, and follow it.",
     "- You can see what they see. mcp__viewport__screenshot returns the current view as an image, mcp__viewport__parts lists the parts with their groups and sizes, mcp__viewport__selection returns the current selection.",
@@ -257,17 +263,37 @@ function guide(
   return lines.join("\n")
 }
 
+/** What Claude has not been told of what was taken back of its turns, and put back. */
+export type Told = { undone: string[]; redone: string[] }
+const NOT_TOLD: Told = { undone: [], redone: [] }
+
 /**
- * The message as Claude gets it: the whole objects it is about, then what was said of
- * parts of the model, then the message. A message that is a command leads with it, or
- * Claude Code would not know it for one.
+ * The message as Claude gets it: which of its turns have had what they did taken back
+ * since it last heard, or put back; the whole objects the message is about; what was
+ * said of parts of the model; and then the message. A message that is a command leads
+ * with it, or Claude Code would not know it for one.
  */
 export function withNotes(
   text: string,
   notes: PartNote[],
-  objects: ObjectRef[] = []
+  objects: ObjectRef[] = [],
+  told: Told = NOT_TOLD
 ): string {
-  if (notes.length === 0 && objects.length === 0) return text
+  const turned = (["undone", "redone"] as const).flatMap((how) =>
+    told[how].length > 0
+      ? [
+          `<${how}>`,
+          // in one line, and nothing in it that would end the name early
+          ...told[how].map(
+            (what) =>
+              `<turn asked="${what.replace(/"/g, "'").replace(/\s+/g, " ")}" />`
+          ),
+          `</${how}>`,
+        ]
+      : []
+  )
+  if (notes.length === 0 && objects.length === 0 && turned.length === 0)
+    return text
   const at = (v: number[] | null) =>
     v ? v.map((n) => n.toFixed(2)).join(", ") : "unknown"
   const called =
@@ -293,11 +319,9 @@ export function withNotes(
           "</comments>",
         ]
       : []
-  const ahead = [
-    ...called,
-    ...(called.length > 0 && comments.length > 0 ? [""] : []),
-    ...comments,
-  ]
+  const ahead = [turned, called, comments]
+    .filter((block) => block.length > 0)
+    .flatMap((block, index) => (index > 0 ? ["", ...block] : block))
   return (text.startsWith("/") ? [text, "", ...ahead] : [...ahead, "", text])
     .join("\n")
     .trim()
@@ -617,8 +641,19 @@ export class Threads {
     manner: Manner
   ): string | null {
     return this.begin(projectId, conversationId, text, notes, objects, manner, {
-      content: withNotes(text, notes, objects),
+      content: (told) => withNotes(text, notes, objects, told),
     })
+  }
+
+  /** Whether Claude is at work in a project: nothing else is done in its folder meanwhile. */
+  working(projectId: string): boolean {
+    return this.books.get(projectId)?.run != null
+  }
+
+  /** Say something in a conversation that neither the user nor Claude said: the app did. */
+  noted(projectId: string, conversationId: string, text: string) {
+    const conversation = this.book(projectId).conversations.get(conversationId)
+    if (conversation) this.notice(projectId, conversation, "info", text)
   }
 
   /**
@@ -654,7 +689,7 @@ export class Threads {
     notes: PartNote[],
     objects: ObjectRef[],
     manner: Manner,
-    asked: { content: Content; arrange?: Arranging }
+    asked: { content: Content | ((told: Told) => Content); arrange?: Arranging }
   ): string | null {
     const project = this.deps.projects.get(projectId)
     const book = this.book(projectId)
@@ -670,7 +705,7 @@ export class Threads {
     }
 
     const now = Date.now()
-    this.put(projectId, conversation, {
+    const said: Extract<ThreadItem, { kind: "user" }> = {
       kind: "user",
       id: `user-${now}`,
       at: now,
@@ -679,7 +714,14 @@ export class Threads {
       ...(notes.length > 0 ? { notes } : {}),
       ...(objects.length > 0 ? { objects } : {}),
       ...(asked.arrange ? { lookOver: true as const } : {}),
-    })
+    }
+    this.put(projectId, conversation, said)
+    // Claude hears with the message of any of this conversation's turns that had what
+    // they did taken back, or put back, since it was last told
+    const content =
+      typeof asked.content === "function"
+        ? asked.content(this.deps.changes.toTell(projectId, conversation.id))
+        : asked.content
 
     let finish = () => {}
     const finished = new Promise<void>((resolve) => (finish = resolve))
@@ -690,10 +732,14 @@ export class Threads {
       finish,
       pending: new Map(),
       lookOver: asked.arrange !== undefined,
+      what: firstLine(wordsOf(said)),
     }
     book.run = run
     this.deps.onSummary()
-    void this.turn(projectId, project, book, run, finished, manner, asked)
+    void this.turn(projectId, project, book, run, finished, manner, {
+      content,
+      arrange: asked.arrange,
+    })
     return conversation.id
   }
 
@@ -1030,9 +1076,15 @@ export class Threads {
       }
     }
 
+    // The folder as it is now is put aside, so that what this turn does to it can be
+    // taken back. (Stopped before that was done, the turn is over before it began.)
+    const pending = await this.deps.changes
+      .before(projectId, project.path)
+      .catch(() => null)
     const claude = this.deps.claude()
     let stderr = ""
     try {
+      if (abort.signal.aborted) throw new Error("Stopped.")
       const session = query({
         prompt: input(),
         options: {
@@ -1101,6 +1153,17 @@ export class Threads {
         this.put(projectId, conversation, { ...item, streaming: false })
       for (const item of tools.values())
         this.put(projectId, conversation, { ...item, state: "failed" })
+      // What the turn did to the folder is kept as a change, before anything else can
+      // be done there: a turn that was stopped part of the way has that much to take back.
+      // (Not of a project that was taken off the list meanwhile: nothing of it is kept.)
+      if (pending && this.books.get(projectId) === book)
+        await this.deps.changes
+          .after(pending, project.path, {
+            conversationId: conversation.id,
+            what: run.what,
+          })
+          .catch(() => this.deps.changes.discard(pending))
+      else if (pending) this.deps.changes.discard(pending)
       if (book.run === run) book.run = null
       this.write(projectId, conversation)
       // Claude may have created, moved or rebuilt the model

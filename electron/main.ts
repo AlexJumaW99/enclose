@@ -20,10 +20,12 @@ import {
   type Project,
   type Seen,
   type Settings,
+  type Undone,
   type Vec3,
   type ViewportRequest,
   type ViewportResponse,
 } from "../shared/api"
+import { Changes } from "./changes"
 import {
   claudeEnv,
   findClaude,
@@ -110,6 +112,7 @@ const MIME: Record<string, string> = {
 let win: BrowserWindow | null = null
 let projects: Projects
 let threads: Threads
+let changes: Changes
 let settings: SettingsStore
 let claude: ClaudeStatus = { path: null, version: null }
 /** the Claude Code on this machine, once it has been looked for */
@@ -120,7 +123,7 @@ const KIT = path.join(app.getAppPath(), "kit", "enclose.py")
 const list = (): Project[] =>
   projects
     .list((id) => threads.summaries(id))
-    .map((project) =>
+    .map((project): Project =>
       threads.lookingOver(project.id)
         ? { ...project, lookOver: "underway" }
         : // with no Claude Code to ask, a model waits to be looked over unseen
@@ -128,6 +131,47 @@ const list = (): Project[] =>
           ? { ...project, lookOver: null }
           : project
     )
+    .map((project): Project => {
+      // what Claude last did to its files, and what of that was last taken back
+      const { undo, redo } = changes.last(project.id)
+      return {
+        ...project,
+        undo: undo && { what: undo.what, at: undo.at },
+        redo: redo && { what: redo.what, at: redo.undoneAt ?? redo.at },
+      }
+    })
+
+/**
+ * Take back what the latest turn did to a project's files, or put back what was last
+ * taken back. Not while Claude is at work there, or files are being made a model of.
+ * The conversation the turn was in says that it was done, and the view shows the model
+ * as it then is.
+ */
+async function turnBack(id: string, way: "undo" | "redo"): Promise<Undone> {
+  const project = projects.get(id)
+  if (!project) return { ok: false, why: "nothing", files: [] }
+  if (threads.working(id) || builds.has(id))
+    return { ok: false, why: "busy", files: [] }
+  // the manifest goes last: its being written is what the view loads the rest again for
+  const manifest =
+    project.manifest && path.relative(project.path, project.manifest)
+  const outcome = await changes[way](id, project.path, manifest)
+  if (!outcome.ok) return outcome
+  const { change } = outcome
+  threads.noted(
+    id,
+    change.conversationId,
+    way === "undo"
+      ? `Undid “${change.what}”: the project’s files are as they were before it.`
+      : `Redid “${change.what}”: the project’s files are as it left them.`
+  )
+  // the model may be somewhere else now, or nowhere; and if its manifest was not one of
+  // the files, nothing has said that the rest of them changed
+  projects.refresh(id)
+  if (!change.files.some((file) => file.path === manifest)) projects.changed(id)
+  broadcast()
+  return { ok: true, what: change.what }
+}
 const send = (channel: string, ...args: unknown[]) => {
   if (win && !win.isDestroyed()) win.webContents.send(channel, ...args)
 }
@@ -569,6 +613,7 @@ function wire() {
       if (response !== 0) return
     }
     threads.forget(project.id)
+    changes.forget(project.id)
     // a model still being made of its files is given up on
     builds.get(project.id)?.()
     builds.delete(project.id)
@@ -642,6 +687,12 @@ function wire() {
       lookOver(String(id), seenFrom(seen), mannerFrom(manner))
   )
   ipcMain.handle(CHANNEL.threadStop, (_, id: string) => threads.stop(id))
+  ipcMain.handle(CHANNEL.changesUndo, (_, id: string) =>
+    turnBack(String(id), "undo")
+  )
+  ipcMain.handle(CHANNEL.changesRedo, (_, id: string) =>
+    turnBack(String(id), "redo")
+  )
   ipcMain.handle(
     CHANNEL.threadRename,
     (_, id: string, conversationId: string, name: string) =>
@@ -748,9 +799,11 @@ if (!app.requestSingleInstanceLock()) {
       lookOver: true,
     })
     projects = new Projects(path.join(data, "projects.json"), broadcast)
+    changes = new Changes(path.join(data, "changes"))
     threads = new Threads({
       dir: path.join(data, "threads"),
       projects,
+      changes,
       claude: () => claude,
       kit: KIT,
       onRenamed: followRename,

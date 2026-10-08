@@ -310,6 +310,10 @@ export class Projects {
         // there is nothing to look over until there is a model
         lookOver: p.lookOver && manifest ? "wanted" : null,
         revision: this.revisions.get(p.id) ?? 0,
+        // what can be taken back is kept elsewhere (changes.ts), and said by whoever
+        // has both
+        undo: null,
+        redo: null,
         conversations: conversations(p.id),
       }
     })
@@ -493,6 +497,15 @@ export class Projects {
       this.bringing.delete(id)
       this.locate(project)
     }
+    this.onChange()
+  }
+
+  /**
+   * The files of a project's model were put as they were at some other time, without
+   * its manifest being written to: the window is to load them again all the same.
+   */
+  changed(id: string) {
+    this.bump(id)
     this.onChange()
   }
 
