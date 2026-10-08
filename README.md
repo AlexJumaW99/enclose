@@ -173,17 +173,33 @@ Down the right-hand edge:
 - **Parts** (P) lists what the model is made of: each part with a small picture of it,
   under the groups the model puts them in. Pick a part or a group and the view shows it
   on its own; pick it again and the rest comes back. Esc, or a press anywhere else, puts the
-  list away and leaves what you picked showing, and the button stays lit while it is.
+  list away and leaves what you picked showing, and the button stays lit while it is. A
+  part put out of sight with H is dim in the list, as is a group all of whose parts are,
+  and picking it there brings it back; the button stays lit while anything is out of sight.
 - **Grid** (Shift+G, as in Figma) rules the ground into squares and draws the world's
   three axes through its origin, in the colours they have in the corner of the view.
   Both go on as far as can be seen, however far out the view is taken. The squares are a
   power of ten millimetres across, whichever suits how near the view is, with every
   tenth line heavier: zoom out and they give way to squares ten times the size. It stays
   on, or off, from one model to the next.
+- **Search** (Cmd+F) finds parts and groups by name. A box comes up at the top of the
+  view, and as you type in it the whole model goes see-through but for what goes by the
+  name, which turns white the way a part does when it is picked out, wherever in the
+  model it is. Each thing found has its name on a tag beside it: a part's by the part,
+  and a group's, with the sign of the parts list on it, by the group. Where they would
+  lie over one another, the nearest to what you typed are the ones shown, and turning
+  the view makes room for others. Click a tag and what it names is shown on its own,
+  with the camera brought to it, as I does with what is picked out; Enter does the same
+  with all that was found. Esc, the cross in the box or the button again puts the box
+  away and leaves the view as it was. All of the model is looked through, whatever the
+  view was cut down to and whatever was put out of sight. While the box is up nothing is
+  picked out, and what you type goes into it wherever the pointer has been since, so the
+  view can be turned between one letter and the next; a click on a part picks it out as
+  ever, and that is the end of the search.
 
-Esc puts the parts list away if it is up. After that it gets back out of the section,
-the explode and whatever is showing on its own, one press each, starting with whichever
-you went into last.
+Esc puts the search away if it is up, and then the parts list. After that it gets back
+out of the section, the explode, whatever is showing on its own and whatever was put out
+of sight, one press each, starting with whichever you went into last.
 
 Nobody arranges the groups by hand. They come from the manifest, which the project's
 build writes, and Claude is told that grouping is its job: when it adds or removes parts
@@ -227,11 +243,15 @@ given to all of it, what you say is said of all of it (Claude is told which part
 are, and where on them you clicked), and there is no file of it to download. A click with
 Shift held picks out the one part, and while Shift is held the pointer lights up just
 that part. So does a second click on the same spot, or a click with Cmd held (Ctrl, off a
-Mac).
+Mac). With Shift held it is the second click that goes the other way: straight after the
+first, on the same spot, it takes in the whole of the object the part belongs to.
 With a part picked out, I shows it on its own and brings the camera to it, from the side
 the camera is on: the part in the middle of the view, filling it. The flat views and the
 opening view frame the part while it is alone. I again, or Esc, brings the rest back and
-puts the camera where it was. Enter keeps what you wrote for the next message: it shows as a
+puts the camera where it was. H is the other way about: it puts what is picked out, one
+part or several, out of sight and leaves the rest. Pick out more and H hides those too;
+H with nothing picked out, or Esc, brings back all that was hidden, and the list of parts
+brings them back one at a time. Enter keeps what you wrote for the next message: it shows as a
 chip on the message box and as a mark on the part, and you can go on to say things of
 other parts, which gather there. Click a chip or a mark to change what you said. Cmd+Enter
 sends at once, with everything gathered and whatever is in the message box. Each thing
@@ -243,16 +263,24 @@ touches, and its edge is dashed to say so. A box goes by the piece, as a click d
 that takes in one chip takes the board it is on and all else on that. Shift adds to what
 is picked out. With a box it adds what the box takes in; with a click it adds the one
 part clicked, or takes it back out if it was already among what is picked out, and on a
-part of an object that is picked out it picks out just that part. What a box takes in
+part of an object that is picked out it picks out just that part. A second click with
+Shift still held, straight after the first, adds all of the object the part belongs to:
+that is how one object is picked out together with another. What a box takes in
 goes right through the model, so while it is drawn the view shows what it takes in so far
 solid and everything else see-through, whatever the shading. Let go, the model is drawn
 as it was, and the parts picked out show through whatever is in front of them: veiled in
 white where each is, with a line round it. I shows them on their own, as it does one
-part. A button at the foot of the view, Add parts to chat, puts them on the message box,
-a chip for each in a row that scrolls sideways, and opens the conversation to go on from
-there; they go to Claude by name, ahead of what you write, as if you had written them
-with @. Click where there is nothing to let go of them; Esc drops a box that is still
-being drawn.
+part. A button at the foot of the view, Add to chat, puts them on the message box, in a
+row of chips that scrolls sideways, and opens the conversation to go on from there. It
+goes by the object, as picking does. A whole object among what is picked out is one
+chip, however many parts it is made of, and the button counts those as groups: Add 2
+groups to chat. It goes to Claude as one thing, with what it is called and which parts
+it is, and what you write is taken as said of it; where you mean only some part of it
+(the cap of a button), say so in your own words and Claude finds the part. The parts
+picked out for themselves are a chip each, and go to Claude by name, ahead of what you
+write, as if you had written them with @. A message that was sent shows the objects it
+was about over what it said. Click where there is nothing to let go of what is picked
+out; Esc drops a box that is still being drawn.
 
 A message can call on things by name. Write @ and a list of the model's parts comes up
 over the box: the arrow keys move through it, and Enter or Tab puts the part in, by its

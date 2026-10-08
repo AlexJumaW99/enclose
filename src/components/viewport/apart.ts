@@ -122,6 +122,49 @@ export function pieceWith<Id>(
   }
 }
 
+/**
+ * Some parts that are picked out together, as what they are to whoever picked them: the
+ * whole pieces among them, each one object with what it goes by, and the parts left
+ * over, which were picked out for themselves. A piece is here as an object when it is
+ * of more than one part and every part of it is picked out. Both are in the order the
+ * model has them.
+ */
+export function objectsOf<Id>(
+  parts: {
+    id: Id
+    label: string
+    group: string
+    piece: number
+    across: number
+  }[],
+  groups: { id: string; label: string }[],
+  ids: Id[]
+): { objects: { label: string; parts: Id[] }[]; loose: Id[] } {
+  const picked = new Set(ids)
+  const pieces = new Map<number, Id[]>()
+  for (const part of parts) {
+    const piece = pieces.get(part.piece)
+    if (piece) piece.push(part.id)
+    else pieces.set(part.piece, [part.id])
+  }
+  const objects: { label: string; parts: Id[] }[] = []
+  const loose: Id[] = []
+  const found = new Set<number>()
+  for (const part of parts) {
+    if (!picked.has(part.id)) continue
+    const all = pieces.get(part.piece) ?? []
+    if (all.length < 2 || !all.every((id) => picked.has(id))) {
+      loose.push(part.id)
+      continue
+    }
+    if (found.has(part.piece)) continue
+    found.add(part.piece)
+    const whole = pieceWith(parts, groups, part.id)
+    if (whole) objects.push(whole)
+  }
+  return { objects, loose }
+}
+
 type Axis = "x" | "y" | "z"
 const AXES: Axis[] = ["x", "y", "z"]
 /**

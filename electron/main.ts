@@ -14,6 +14,7 @@ import {
   type Commands,
   type ModelChoice,
   type ModelSource,
+  type ObjectRef,
   type PartNote,
   type PermissionAnswer,
   type Project,
@@ -428,6 +429,20 @@ function lookOver(id: string, seen: Seen, manner: Manner): string | null {
 }
 
 /** How a message is to be answered, from what the window said of it. */
+/** The whole objects a message calls on, as the window gave them: those that read as one. */
+const objectsFrom = (given: unknown): ObjectRef[] =>
+  (Array.isArray(given) ? given : []).flatMap(
+    (one: Partial<ObjectRef> | null) =>
+      typeof one?.label === "string" && Array.isArray(one.parts)
+        ? [
+            {
+              label: one.label,
+              parts: one.parts.filter((id) => typeof id === "string"),
+            },
+          ]
+        : []
+  )
+
 const mannerFrom = (manner: Partial<Manner> | null): Manner => ({
   model: typeof manner?.model === "string" ? manner.model : null,
   effort: EFFORTS.find((effort) => effort === manner?.effort) ?? null,
@@ -602,6 +617,7 @@ function wire() {
       conversationId: string | null,
       text: string,
       notes: PartNote[] | null,
+      objects: ObjectRef[] | null,
       manner: Partial<Manner> | null
     ) => {
       // answers at once, with the conversation it went into: the turn runs for as long
@@ -611,6 +627,7 @@ function wire() {
         conversationId === null ? null : String(conversationId),
         String(text),
         Array.isArray(notes) ? notes.filter((note) => note?.part?.id) : [],
+        objectsFrom(objects),
         mannerFrom(manner)
       )
       // the user has started on the project themselves: its model is theirs to have

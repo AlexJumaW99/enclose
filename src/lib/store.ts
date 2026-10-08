@@ -16,6 +16,7 @@ import {
   type Commands,
   type Effort,
   type ModelChoice,
+  type ObjectRef,
   type PartNote,
   type PartRef,
   type Project,
@@ -49,6 +50,11 @@ export type View = {
   section: Section | null
   /** what the view is cut down to; null shows everything */
   only: Only | null
+  /**
+   * The parts put out of sight, by id: what was picked out when H was pressed. They are
+   * not drawn, whatever else the view is cut down to, until they are brought back.
+   */
+  hidden: string[]
   /** whether the ground is ruled into squares, and the world's axes drawn across it */
   grid: boolean
 }
@@ -89,7 +95,7 @@ export const goesBy = (part: PartRef) => part.piece?.label ?? part.label
 /** And the parts that are, by id: the one, or all those of its piece. */
 export const allOf = (part: PartRef) => part.piece?.parts ?? [part.id]
 
-/** Stable while no parts are picked out together. */
+/** Stable while no parts are picked out together, or none are hidden. */
 const NONE: string[] = []
 
 const ACTIVE_KEY = "enclose:project"
@@ -180,7 +186,9 @@ function savedWaiting(): Pick<State, "notes" | "drafts" | "called"> {
           project,
           (Array.isArray(parts) ? parts : []).filter(
             (part: Partial<Called> | null): part is Called =>
-              typeof part?.id === "string" && typeof part.label === "string"
+              typeof part?.id === "string" &&
+              typeof part.label === "string" &&
+              (part.parts === undefined || Array.isArray(part.parts))
           ),
         ]
       )
@@ -210,11 +218,12 @@ const homeView = (): View => ({
   spread: SPREAD.min,
   section: null,
   only: null,
+  hidden: NONE,
   grid: saved(GRID_KEY) === "on",
 })
 
 /** What the view can be put into, and got back out of with Esc. */
-export type Entered = "section" | "explode" | "only"
+export type Entered = "section" | "explode" | "only" | "hidden"
 
 /** Those of them that are on, in the order they were gone into: the last is the latest. */
 function enteredNow(view: View, before: Entered[]): Entered[] {
@@ -222,6 +231,7 @@ function enteredNow(view: View, before: Entered[]): Entered[] {
     section: view.section !== null,
     explode: view.exploded,
     only: view.only !== null,
+    hidden: view.hidden.length > 0,
   }
   const still = before.filter((name) => on[name])
   const fresh = (Object.keys(on) as Entered[]).filter(
@@ -288,6 +298,13 @@ type State = {
    */
   seeking: boolean
   /**
+   * Parts and groups are being looked for by name, in the view: this is the name, as far
+   * as it has been typed. The view shows what goes by it, lit up, through all the rest,
+   * which goes see-through. Null while nothing is looked for. Nothing is picked out
+   * meanwhile: looking begins by letting go of what was, and picking something ends it.
+   */
+  finding: string | null
+  /**
    * The part picked out is shown in its own colour and not the selection's: a colour is
    * being chosen for it, or has just been, and is to be seen.
    */
@@ -305,8 +322,10 @@ type State = {
   /** what is written in each project's message box so far */
   drafts: Record<string, string>
   /**
-   * The parts called on from the view for each project's next message. They go with it
-   * by name, as if written in it with @, and until then show as chips on the message box.
+   * The parts called on from the view for each project's next message, and the whole
+   * objects. A part goes with the message by name, as if written in it with @, and an
+   * object goes as one thing, with which parts it is. Until then each shows as a chip on
+   * the message box.
    */
   called: Record<string, Called[]>
   /**
@@ -350,6 +369,8 @@ type State = {
   sweepOver(partIds: string[] | null): void
   hover(partId: string | null): void
   seek(seeking: boolean): void
+  /** Look for parts and groups by this name, as far as it is typed; or (null) stop looking. */
+  find(name: string | null): void
   showPlain(plain: boolean): void
   /**
    * Start writing of the part picked out ("new"), go back to a note already made (its
@@ -364,11 +385,11 @@ type State = {
   dropNote(id: string): void
   setDraft(text: string): void
   /**
-   * Call on parts for the open project's next message, those of them it does not name
-   * already, and bring the message up to be written in.
+   * Call on parts and whole objects for the open project's next message, those of them
+   * it does not name already, and bring the message up to be written in.
    */
   callOn(parts: Called[]): void
-  dropCalled(partId: string): void
+  dropCalled(id: string): void
   /** Give parts of the open project a colour of the app's, or (null) the model's own back. */
   setColour(partIds: string[], colour: PaletteName | null): void
   setThreadOpen(open: boolean): void
@@ -376,8 +397,9 @@ type State = {
   setPartsOpen(open: boolean): void
   setSettingsOpen(open: boolean): void
   /**
-   * What Esc does: put the parts list away if it is up, and otherwise get out of the
-   * last thing gone into. False if there was nothing to do.
+   * What Esc does: stop looking for parts by name, if they are being looked for; put the
+   * parts list away, if it is up; and otherwise get out of the last thing gone into.
+   * False if there was nothing to do.
    */
   leave(): boolean
   setAccess(access: Access): void
@@ -395,8 +417,19 @@ type State = {
 /** Something said of a part, waiting to be sent: the part and point, and the words. */
 export type Note = PartNote & { id: string }
 
-/** A part called on from the view for the next message: what it goes by, and is shown as. */
-export type Called = { id: string; label: string }
+/**
+ * Something called on from the view for the next message: what it goes by, and is shown
+ * as. A part, by its id; or a whole object, which has `parts`, the ids of all it is made
+ * of, and an id made up for it.
+ */
+export type Called = { id: string; label: string; parts?: string[] }
+
+/** A whole object as something to call on. Its parts are no other object's: one of them tells it apart. */
+export const calledAs = (object: ObjectRef): Called => ({
+  id: `object:${object.parts[0]}`,
+  label: object.label,
+  parts: object.parts,
+})
 
 /** The conversations whose items have been asked for, so that none is asked for twice. */
 const fetched = new Set<string>()
@@ -426,6 +459,7 @@ export const useStore = create<State>()((set, get) => ({
   sweep: null,
   hoveredId: null,
   seeking: false,
+  finding: null,
   plain: false,
   writing: null,
   ...savedWaiting(),
@@ -442,6 +476,7 @@ export const useStore = create<State>()((set, get) => ({
       several: NONE,
       sweep: null,
       hoveredId: null,
+      finding: null,
       writing: null,
       view: homeView(),
       entered: enteredNow(homeView(), state.entered),
@@ -510,8 +545,14 @@ export const useStore = create<State>()((set, get) => ({
   },
 
   select(selection) {
-    // picking another part, or none, is done with what was being written of the last
-    set({ selection, several: NONE, writing: null })
+    // picking another part, or none, is done with what was being written of the last:
+    // and picking one is done with looking for it
+    set({
+      selection,
+      several: NONE,
+      writing: null,
+      ...(selection && { finding: null }),
+    })
   },
 
   selectSeveral(partIds) {
@@ -519,6 +560,7 @@ export const useStore = create<State>()((set, get) => ({
       selection: null,
       several: partIds.length > 0 ? partIds : NONE,
       writing: null,
+      ...(partIds.length > 0 && { finding: null }),
     })
   },
 
@@ -532,6 +574,15 @@ export const useStore = create<State>()((set, get) => ({
 
   seek(seeking) {
     if (get().seeking !== seeking) set({ seeking })
+  },
+
+  find(finding) {
+    const was = get().finding
+    if (was === finding) return
+    // looking begins with nothing picked out: what is lit up is what is found
+    if (was === null)
+      set({ finding, selection: null, several: NONE, writing: null })
+    else set({ finding })
   },
 
   showPlain(plain) {
@@ -553,6 +604,7 @@ export const useStore = create<State>()((set, get) => ({
         selection: { part: made.part, at: null },
         several: NONE,
         writing: note,
+        finding: null,
       })
   },
 
@@ -597,14 +649,15 @@ export const useStore = create<State>()((set, get) => ({
     const { activeId, called, drafts } = get()
     if (!activeId) return
     const before = called[activeId] ?? []
-    // not those the message names as it is, in its own words or by a chip
+    // not those the message names as it is, in its own words or by a chip: an object
+    // is named only by its chip
     const unnamed = notCalledOn(
       drafts[activeId] ?? "",
-      parts.map((part) => part.id)
+      parts.flatMap((part) => (part.parts ? [] : [part.id]))
     )
     const fresh = parts.filter(
       (part) =>
-        unnamed.includes(part.id) &&
+        (part.parts !== undefined || unnamed.includes(part.id)) &&
         !before.some((other) => other.id === part.id)
     )
     set((state) => ({
@@ -617,15 +670,13 @@ export const useStore = create<State>()((set, get) => ({
     }))
   },
 
-  dropCalled(partId) {
+  dropCalled(id) {
     const { activeId, called } = get()
     if (!activeId) return
     set({
       called: {
         ...called,
-        [activeId]: (called[activeId] ?? []).filter(
-          (part) => part.id !== partId
-        ),
+        [activeId]: (called[activeId] ?? []).filter((part) => part.id !== id),
       },
     })
   },
@@ -669,8 +720,13 @@ export const useStore = create<State>()((set, get) => ({
   },
 
   leave() {
-    const { partsOpen, entered, setView } = get()
-    // the list is a thing on top of the view and goes first: what was picked in it stays
+    const { finding, partsOpen, entered, setView } = get()
+    // what is being typed goes first, and then the list: both are things on top of the
+    // view. What was picked in the list stays
+    if (finding !== null) {
+      set({ finding: null })
+      return true
+    }
     if (partsOpen) {
       set({ partsOpen: false })
       return true
@@ -679,6 +735,7 @@ export const useStore = create<State>()((set, get) => ({
     if (!last) return false
     if (last === "section") setView({ section: null })
     else if (last === "explode") setView({ exploded: false })
+    else if (last === "hidden") setView({ hidden: NONE })
     else setView({ only: null })
     return true
   },
@@ -702,13 +759,18 @@ export const useStore = create<State>()((set, get) => ({
     const { activeId, access, model, effort, models, projects, picked } = get()
     const project = projects.find((p) => p.id === activeId)
     if (!project) return
-    // the parts called on from the view go ahead of what is written, by name
+    // the parts called on from the view go ahead of what is written, by name: and the
+    // whole objects go beside it, each as one thing
+    const called = get().called[project.id] ?? []
     const message = callingOn(
       (get().drafts[project.id] ?? "").trim(),
-      (get().called[project.id] ?? []).map((part) => part.id)
+      called.flatMap((part) => (part.parts ? [] : [part.id]))
+    )
+    const objects = called.flatMap(({ label, parts }): ObjectRef[] =>
+      parts ? [{ label, parts }] : []
     )
     const notes = get().notes[project.id] ?? []
-    if (!message && notes.length === 0) return
+    if (!message && notes.length === 0 && objects.length === 0) return
     // into the conversation the panel is showing; if that is a new one, this begins it
     const { open } = stackOf(
       project.conversations,
@@ -729,6 +791,7 @@ export const useStore = create<State>()((set, get) => ({
         open?.id ?? null,
         message,
         notes.map(({ part, text }) => ({ part, text })),
+        objects,
         mannerOf(models, model, effort, access)
       )
       .then((id) => {
@@ -806,6 +869,7 @@ function reconcile(projects: Project[]) {
       activeId: null,
       selection: null,
       several: NONE,
+      finding: null,
       writing: null,
     })
 }

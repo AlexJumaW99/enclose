@@ -1,6 +1,6 @@
 import * as React from "react"
 import { cn } from "cn"
-import { ChevronRightIcon, SquareDashedIcon } from "lucide-react"
+import { ChevronRightIcon, EyeOffIcon, SquareDashedIcon } from "lucide-react"
 
 import {
   Collapsible,
@@ -29,19 +29,25 @@ const TILE =
   "size-7 shrink-0 overflow-hidden rounded-md bg-neutral-600 ring-1 ring-black/20"
 
 /** The small picture a part is known by; an empty tile until it has been drawn. */
-function Thumb({ url }: { url?: string }) {
+function Thumb({ url, dim = false }: { url?: string; dim?: boolean }) {
   return (
-    <span className={TILE}>
+    <span className={cn(TILE, dim && "opacity-45")}>
       {url && <img src={url} alt="" draggable={false} className="size-full" />}
     </span>
   )
 }
+
+/** On a part that is out of sight, or a group that all is: why it is dim in the list. */
+const HIDDEN = "ml-auto size-3.5 shrink-0 text-muted-foreground"
 
 /**
  * What the model is made of, as a list: its parts, under the groups the model puts them
  * in. Picking a part or a group shows it on its own in the view, and picking it again
  * brings the rest back. Esc or a press anywhere else puts the list away; what was picked
  * stays picked.
+ *
+ * A part that was put out of sight in the view (H) is dim here, and so is a group all
+ * of whose parts were. Picking one of those brings it back, and does no more than that.
  */
 export function PartsPanel({
   loaded,
@@ -54,6 +60,7 @@ export function PartsPanel({
   className?: string
 }) {
   const only = useStore((state) => state.view.only)
+  const hidden = useStore((state) => state.view.hidden)
   const setView = useStore((state) => state.setView)
   const hoveredId = useStore((state) => state.hoveredId)
   const hover = useStore((state) => state.hover)
@@ -63,6 +70,9 @@ export function PartsPanel({
 
   const pick = (what: Listed) =>
     setView({ only: same(only, what) ? null : what })
+  /** Bring back parts that were put out of sight. */
+  const show = (ids: string[]) =>
+    setView({ hidden: hidden.filter((id) => !ids.includes(id)) })
   // several picked out together in the view, and shown on their own, are each lit here
   const among = only?.kind === "parts" ? only.ids : NONE
 
@@ -97,6 +107,7 @@ export function PartsPanel({
           if (parts.length === 0) return null
           const whole: Listed = { kind: "group", id: group.id }
           const picked = same(only, whole)
+          const gone = parts.every((part) => hidden.includes(part.id))
           return (
             <Collapsible key={group.id} defaultOpen>
               <div
@@ -120,22 +131,30 @@ export function PartsPanel({
                   type="button"
                   role="option"
                   aria-selected={picked}
-                  className={cn(ROW, "h-full pr-2")}
-                  onClick={() => pick(whole)}
+                  title={gone ? "Hidden: click to show it again" : undefined}
+                  className={cn(ROW, "h-full gap-2 pr-2")}
+                  onClick={() =>
+                    gone ? show(parts.map((part) => part.id)) : pick(whole)
+                  }
                 >
-                  <span className="truncate">{group.label}</span>
+                  <span className={cn("truncate", gone && "opacity-45")}>
+                    {group.label}
+                  </span>
+                  {gone && <EyeOffIcon className={HIDDEN} />}
                 </button>
               </div>
               <CollapsibleContent className="flex flex-col gap-px pt-px">
                 {parts.map((part) => {
                   const one: Listed = { kind: "part", id: part.id }
                   const lit = same(only, one) || among.includes(part.id)
+                  const out = hidden.includes(part.id)
                   return (
                     <button
                       key={part.id}
                       type="button"
                       role="option"
                       aria-selected={lit}
+                      title={out ? "Hidden: click to show it again" : undefined}
                       className={cn(
                         ROW,
                         "h-9 gap-2 pr-2 pl-1",
@@ -147,10 +166,13 @@ export function PartsPanel({
                             : hoveredId === part.id && "bg-muted/60"
                       )}
                       onPointerEnter={() => hover(part.id)}
-                      onClick={() => pick(one)}
+                      onClick={() => (out ? show([part.id]) : pick(one))}
                     >
-                      <Thumb url={thumbs[part.id]} />
-                      <span className="truncate">{part.label}</span>
+                      <Thumb url={thumbs[part.id]} dim={out} />
+                      <span className={cn("truncate", out && "opacity-45")}>
+                        {part.label}
+                      </span>
+                      {out && <EyeOffIcon className={HIDDEN} />}
                     </button>
                   )
                 })}

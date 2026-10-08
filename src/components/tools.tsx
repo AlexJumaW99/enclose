@@ -6,6 +6,7 @@ import {
   Grid3x3Icon,
   MessageSquareIcon,
   RotateCcwIcon,
+  SearchIcon,
   UnfoldVerticalIcon,
 } from "lucide-react"
 
@@ -152,6 +153,8 @@ export function Tools({
   const setThreadOpen = useStore((state) => state.setThreadOpen)
   const partsOpen = useStore((state) => state.partsOpen)
   const setPartsOpen = useStore((state) => state.setPartsOpen)
+  const finding = useStore((state) => state.finding !== null)
+  const find = useStore((state) => state.find)
 
   return (
     <div className="pointer-events-none absolute inset-y-0 right-0 w-15">
@@ -227,13 +230,14 @@ export function Tools({
           >
             <UnfoldVerticalIcon />
           </Switch>
-          {/* lit while the list is up, and while something picked in it is still all
-              that is showing: pressing it brings the list back to pick again */}
+          {/* lit while the list is up, and while not all of the model is showing:
+              something picked in the list is all that is, or parts are out of sight.
+              Pressing it brings the list back, to pick again or to bring them back */}
           <Switch
             label="Parts"
             shortcut="P"
             opens="parts"
-            on={partsOpen || view.only !== null}
+            on={partsOpen || view.only !== null || view.hidden.length > 0}
             onChange={() => setPartsOpen(!partsOpen)}
           >
             <BoxesIcon />
@@ -247,6 +251,18 @@ export function Tools({
           >
             <Grid3x3Icon />
           </Switch>
+          {/* parts and groups looked for by name, in a box at the top of the view: not
+              in the cube that stands in for a model, which has none to find */}
+          {!loaded.standIn && (
+            <Switch
+              label="Search"
+              shortcut={MAC ? "⌘F" : "Ctrl F"}
+              on={finding}
+              onChange={(on) => find(on ? "" : null)}
+            >
+              <SearchIcon />
+            </Switch>
+          )}
         </Stack>
       )}
     </div>

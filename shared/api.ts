@@ -62,6 +62,12 @@ export type Project = {
   conversations: ConversationSummary[]
 }
 
+/**
+ * A whole object of the model, as the view picks one out: the parts of a group that are
+ * one thing, a circuit board with all that is on it. What it goes by, and its parts by id.
+ */
+export type ObjectRef = { label: string; parts: string[] }
+
 /** The part someone clicked, and where on it. Coordinates are the model's own, in mm. */
 export type PartRef = {
   id: string
@@ -76,7 +82,7 @@ export type PartRef = {
    * on it. What the piece goes by, and its parts by id, this one among them; the rest of
    * this is then where on the piece was clicked.
    */
-  piece?: { label: string; parts: string[] }
+  piece?: ObjectRef
 }
 
 /** Something said of a part: a change wanted at the point of it that was clicked. */
@@ -92,6 +98,11 @@ export type ThreadItem =
       part: PartRef | null
       /** what was said of parts of the model, sent along with the message */
       notes?: PartNote[]
+      /**
+       * The whole objects called on from the view for the message, which is about them:
+       * each as one thing, and not as the parts it is made of.
+       */
+      objects?: ObjectRef[]
       /**
        * Not said by the user: asked by the app itself of files just opened, that Claude
        * look their model over.
@@ -284,6 +295,7 @@ export type CadApi = {
       conversationId: string | null,
       text: string,
       notes: PartNote[],
+      objects: ObjectRef[],
       manner: Manner
     ): Promise<string | null>
     /**

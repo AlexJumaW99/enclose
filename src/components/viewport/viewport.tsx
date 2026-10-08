@@ -24,6 +24,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
+import { lookFor, type Found } from "@/lib/find"
 import { readModel } from "@/lib/model"
 import { spokenFor } from "@/lib/keys"
 import { MAC } from "@/lib/platform"
@@ -31,6 +32,7 @@ import { notCalledOn, partsOf } from "@/lib/mentions"
 import { VIEWS } from "@/lib/orient"
 import {
   allOf,
+  calledAs,
   SPREAD,
   useStore,
   type Called,
@@ -38,13 +40,14 @@ import {
   type Only,
   type Selection,
 } from "@/lib/store"
-import { pieceWith, wholeOf } from "./apart"
+import { objectsOf, pieceWith, wholeOf } from "./apart"
 import { AxisGizmo } from "./axis-gizmo"
 import { bridge } from "./bridge"
 import { ExplodeSlider } from "./explode-slider"
 import { disposeModel, loadModel, standInModel, type LoadedModel } from "./load"
 import { picturesOf } from "./pictures"
 import { appearance, Scene } from "./scene"
+import { Search } from "./search"
 import { ShadingPie } from "./shading-pie"
 import { useThumbnails } from "./thumbnails"
 import { sectionAcross, sectionFacing, SectionPlanes } from "./section-planes"
@@ -55,14 +58,21 @@ const NO_COLOURS: Record<string, string> = {}
 const NO_PARTS: string[] = []
 const NO_CALLED: Called[] = []
 
-/** The parts that I has shown on their own and gone up to: none, if nothing is. */
-function nearOf(only: Only | null): string[] {
+/**
+ * The parts that have been shown on their own and gone up to, with I or from what was
+ * found by name: none, if nothing has.
+ */
+function nearOf(only: Only | null, loaded: LoadedModel | null): string[] {
   if (!only?.near) return NO_PARTS
   return only.kind === "parts"
     ? only.ids
     : only.kind === "part"
       ? [only.id]
-      : NO_PARTS
+      : only.kind === "group"
+        ? (loaded?.model.parts ?? [])
+            .filter((part) => part.group === only.id)
+            .map((part) => part.id)
+        : NO_PARTS
 }
 
 /** The parts picked out, by id: the several, or the one, or those of the one piece. */
@@ -75,17 +85,29 @@ function pickedOut(): string[] {
       : NO_PARTS
 }
 
+/** A part as what a piece is made out from: see `listed`, in Model. */
+type Listed = Parameters<typeof objectsOf<string>>[0][number]
+
+const counted = (many: number, what: string) =>
+  `${many} ${what}${many === 1 ? "" : "s"}`
+
 /**
  * With parts picked out together, at the foot of the view: they are called on for the
  * message to Claude, where each shows as a chip, and the message is brought up to be
  * gone on with. It is there for as long as the message does not name them all, by a
  * chip or in its own words.
+ *
+ * What is picked out goes by the piece here too. A whole object among it is called on
+ * as one thing, a chip of its own, and not as the many parts it is made of: the button
+ * counts those as groups. The parts left over, picked out for themselves, go one by one.
  */
 function AddToChat({
-  loaded,
+  listed,
+  groups,
   projectId,
 }: {
-  loaded: LoadedModel
+  listed: Listed[]
+  groups: LoadedModel["model"]["groups"]
   projectId: string
 }) {
   const several = useStore((s) => s.several)
@@ -93,20 +115,30 @@ function AddToChat({
   const draft = useStore((s) => s.drafts[projectId] ?? "")
   const called = useStore((s) => s.called[projectId] ?? NO_CALLED)
   const callOn = useStore((s) => s.callOn)
-  const count = notCalledOn(draft, several).filter(
-    (id) => !called.some((part) => part.id === id)
-  ).length
-  if (count === 0 || sweeping) return null
-  const picked = loaded.parts.flatMap(({ part }) =>
-    several.includes(part.id) ? [{ id: part.id, label: part.label }] : []
+  const picked = React.useMemo(
+    () => objectsOf(listed, groups, several),
+    [listed, groups, several]
   )
+  const fresh = (one: Called) => !called.some((other) => other.id === one.id)
+  const objects = picked.objects.map(calledAs).filter(fresh)
+  const unnamed = notCalledOn(draft, picked.loose)
+  const parts = listed
+    .filter((part) => unnamed.includes(part.id))
+    .map((part): Called => ({ id: part.id, label: part.label }))
+    .filter(fresh)
+  if (objects.length + parts.length === 0 || sweeping) return null
   return (
     <Button
       // room either side of the words, a little less of it past the sign
       className="pointer-events-auto animate-in gap-2 pl-5 shadow-md duration-150 fade-in slide-in-from-bottom-2 has-data-[icon=inline-end]:pr-4"
-      onClick={() => callOn(picked)}
+      onClick={() => callOn([...objects, ...parts])}
     >
-      Add {count} {count === 1 ? "part" : "parts"} to chat
+      Add{" "}
+      {[
+        ...(objects.length > 0 ? [counted(objects.length, "group")] : []),
+        ...(parts.length > 0 ? [counted(parts.length, "part")] : []),
+      ].join(" and ")}{" "}
+      to chat
       <PlusIcon data-icon="inline-end" />
     </Button>
   )
@@ -324,6 +356,7 @@ function Model({ project }: { project: Project }) {
   const sweep = useStore((s) => s.sweep)
   const hoveredId = useStore((s) => s.hoveredId)
   const seeking = useStore((s) => s.seeking)
+  const finding = useStore((s) => s.finding)
   const plain = useStore((s) => s.plain)
   const hover = useStore((s) => s.hover)
   const homeRequests = useStore((s) => s.homeRequests)
@@ -380,6 +413,41 @@ function Model({ project }: { project: Project }) {
     looked.current = lookingOver
   }, [lookingOver, goHome])
 
+  // Parts and groups are looked for by name (Cmd+F): what goes by the name so far is lit
+  // up in the view, through all the rest. There is nothing to look through in the cube
+  // that stands in for a model, or while the view is Claude's.
+  const searched = lookingOver ? null : real
+  const finds = React.useMemo(
+    () =>
+      searched && finding !== null ? lookFor(searched.model, finding) : null,
+    [searched, finding]
+  )
+  // What was found is shown on its own, and the camera brought to it, the way I does
+  // with what is picked out: the one thing whose name was pressed, or all of it. That is
+  // the end of looking. A part of it that had been put out of sight is back in sight.
+  const showFound = React.useCallback((things: Found[]) => {
+    const { view, setView, find } = useStore.getState()
+    const ids = [...new Set(things.flatMap((thing) => thing.parts))]
+    if (ids.length === 0) return
+    const [one] = things
+    setView({
+      only:
+        things.length === 1 && one.kind === "group"
+          ? { kind: "group", id: one.id, near: true }
+          : ids.length === 1
+            ? { kind: "part", id: ids[0], near: true }
+            : { kind: "parts", ids, near: true },
+      ...(view.hidden.some((id) => ids.includes(id)) && {
+        hidden: view.hidden.filter((id) => !ids.includes(id)),
+      }),
+    })
+    find(null)
+  }, [])
+  const showOne = React.useCallback(
+    (thing: Found) => showFound([thing]),
+    [showFound]
+  )
+
   // Nothing to see yet: how far along it is, in the middle of the view, from the files
   // being read to their model being loaded, as one thing. (A model built again comes in
   // behind the one on screen, and takes its place when it is all there: nothing is said
@@ -432,6 +500,11 @@ function Model({ project }: { project: Project }) {
   // click goes by the part, and is how the one part is got at: it picks out the part
   // itself, adds it to what is picked out, or takes it back out. So does a second
   // click, or a click with Cmd held, which pick out the part and nothing else.
+  //
+  // A second click works the other way about with Shift held. The first has gone by the
+  // part, and the second, coming straight after it on the same spot, takes in the whole
+  // of the piece the part is of: added to what is picked out, which is how one object is
+  // picked out together with another.
   /** The parts, as what a piece is made out from. */
   const listed = React.useMemo(
     () =>
@@ -480,6 +553,14 @@ function Model({ project }: { project: Project }) {
       if (!selection) return
       const { id } = selection.part
       const had = pickedOut()
+      // The second click of two: all of the part's piece is picked out, with whatever
+      // else is. Where nothing else is, it is picked out as a click on it alone would.
+      if (!alone) {
+        const all = whole([id])
+        if (had.every((other) => all.includes(other)))
+          return select({ ...selection, part: asPiece(selection.part) })
+        return selectSeveral(withPicked(all))
+      }
       // With nothing picked out, the part is picked out as a click on it alone would:
       // and so is a part of the piece that is picked out, which is the part meant.
       if (had.length === 0 || (was?.part.piece && had.includes(id)))
@@ -490,7 +571,7 @@ function Model({ project }: { project: Project }) {
           : withPicked([id])
       )
     },
-    [asPiece, withPicked]
+    [asPiece, whole, withPicked]
   )
   const sweepTo = React.useCallback(
     (ids: string[] | null, add: boolean) =>
@@ -539,11 +620,15 @@ function Model({ project }: { project: Project }) {
   // Cmd+1 is the view the model opened with; Cmd+2 to 7 are the six flat ones. S cuts
   // the model open and E pulls it apart, both again to undo. I shows what is picked
   // out, one part or several, on its own and close to, and again brings the rest back.
-  // P brings up the list of parts, and puts it away. While the model is cut open, X and
-  // Y choose the axis the cut goes across (and Z, which the shading menu passes on). Esc
-  // puts the parts list away, and then gets out of the section, the explode or what was
-  // shown on its own, whichever was gone into last. Shift+G rules the ground and draws
-  // the world's axes, as it brings up the grid in Figma, and again takes them away.
+  // H is the other way about: it puts what is picked out, one part or several, out of
+  // sight, and with nothing picked out brings back all that was. P brings up the list
+  // of parts, and puts it away. While the model is cut open, X and Y choose the axis
+  // the cut goes across (and Z, which the shading menu passes on). Esc stops looking
+  // for parts by name, puts the parts list away, and then gets out of the section, the
+  // explode, what was shown on its own or what was put out of sight, whichever was gone
+  // into last. Shift+G rules the ground and draws the world's axes, as it brings up the
+  // grid in Figma, and again takes them away. (Cmd+F, which looks for parts by name, is
+  // listened for where the name is typed: see Search.)
   React.useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.altKey || lookingOver) return
@@ -587,7 +672,7 @@ function Model({ project }: { project: Project }) {
         setView({ exploded: !view.exploded, spread: SPREAD.min })
       else if (letter === "i") {
         const wanted = pickedOut()
-        const near = nearOf(view.only)
+        const near = nearOf(view.only, loaded)
         const there =
           wanted.length === near.length &&
           wanted.every((id) => near.includes(id))
@@ -599,6 +684,15 @@ function Model({ project }: { project: Project }) {
                 : { kind: "part", id: wanted[0], near: true },
           })
         else if (near.length > 0) setView({ only: null })
+        else return
+      } else if (letter === "h") {
+        // what is picked out goes out of sight, with whatever is out of sight already,
+        // and is picked out no longer; with nothing picked out, all of it comes back
+        const wanted = pickedOut()
+        if (wanted.length > 0) {
+          useStore.getState().select(null)
+          setView({ hidden: [...new Set([...view.hidden, ...wanted])] })
+        } else if (view.hidden.length > 0) setView({ hidden: NO_PARTS })
         else return
       } else if (letter === "p") {
         const { partsOpen, setPartsOpen } = useStore.getState()
@@ -615,7 +709,10 @@ function Model({ project }: { project: Project }) {
   // The camera goes to what I shows on its own, one part or several together, and
   // follows it if it is pulled out from the rest; and goes back when that is no longer
   // what is shown.
-  const near = React.useMemo(() => nearOf(view.only), [view.only])
+  const near = React.useMemo(
+    () => nearOf(view.only, loaded),
+    [view.only, loaded]
+  )
   const explode = view.exploded ? view.spread : 0
   React.useEffect(() => {
     const boxes = (loaded?.parts ?? [])
@@ -659,6 +756,24 @@ function Model({ project }: { project: Project }) {
             : keepouts.length > 0
     if (!there) setView({ only: null })
   }, [loaded, setView])
+  // Nor is a part it takes away out of sight any longer: there is none to bring back.
+  React.useEffect(() => {
+    const { hidden } = useStore.getState().view
+    if (!loaded || hidden.length === 0) return
+    const still = hidden.filter((id) =>
+      loaded.parts.some((part) => part.part.id === id)
+    )
+    if (still.length < hidden.length) setView({ hidden: still })
+  }, [loaded, setView])
+  // What is picked out is there to be seen. A part that was put out of sight and is
+  // picked out again, by going back to what was said of it, is brought back.
+  React.useEffect(() => {
+    if (!selection) return
+    const { hidden } = useStore.getState().view
+    const picked = allOf(selection.part)
+    if (hidden.some((id) => picked.includes(id)))
+      setView({ hidden: hidden.filter((id) => !picked.includes(id)) })
+  }, [selection, setView])
   // And of the parts picked out together, the ones it takes away are no longer.
   React.useEffect(() => {
     if (!loaded) return
@@ -737,6 +852,7 @@ function Model({ project }: { project: Project }) {
           hoveredId={hoveredId}
           hoveredWith={hoveredWith}
           seeking={seeking && !loaded.standIn}
+          found={finds}
           plain={plain}
           // the first model made takes the cube's place, and is framed afresh
           homeKey={`${project.id}:${loaded.standIn ? "cube" : "model"}:${homeRequests}`}
@@ -745,6 +861,7 @@ function Model({ project }: { project: Project }) {
           onSweep={loaded.standIn ? nothing : sweepTo}
           onTake={loaded.standIn ? nothing : take}
           onHover={loaded.standIn ? nothing : hoverOver}
+          onShow={showOne}
           onSection={moveSection}
         />
       )}
@@ -784,6 +901,7 @@ function Model({ project }: { project: Project }) {
         </div>
       )}
 
+      {searched && <Search finds={finds} onShow={showFound} />}
       <Tools loaded={loaded} projectId={project.id} locked={lookingOver} />
       {loaded && partsOpen && !lookingOver && (
         <PartsPanel
@@ -801,7 +919,11 @@ function Model({ project }: { project: Project }) {
       {loaded && (
         <div className="pointer-events-none absolute inset-x-0 bottom-5 flex flex-col items-center gap-2.5">
           {lookingOver && <LookingOver project={project} />}
-          <AddToChat loaded={loaded} projectId={project.id} />
+          <AddToChat
+            listed={listed}
+            groups={loaded.model.groups}
+            projectId={project.id}
+          />
           {view.exploded && <ExplodeSlider />}
         </div>
       )}

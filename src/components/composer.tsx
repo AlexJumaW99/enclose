@@ -2,6 +2,7 @@ import * as React from "react"
 import { cn } from "cn"
 import {
   ArrowUpIcon,
+  BoxesIcon,
   CheckIcon,
   ChevronDownIcon,
   GaugeIcon,
@@ -307,8 +308,9 @@ const OFF =
  * What is waiting to go with the next message: the parts called on from the view, and
  * what has been said of parts. A chip for each, in one row that scrolls sideways when
  * there are more than fit, so that however many there are the box is no taller for
- * them. A part called on is a chip of its name. What was said of a part is a chip that
- * says which part and how it begins; pressed, it opens that again beside the part.
+ * them. A part called on is a chip of its name, and so is a whole object, which is one
+ * chip however many parts it is made of. What was said of a part is a chip that says
+ * which part and how it begins; pressed, it opens that again beside the part.
  */
 function Waiting({ called, notes }: { called: Called[]; notes: Note[] }) {
   const write = useStore((state) => state.write)
@@ -323,9 +325,15 @@ function Waiting({ called, notes }: { called: Called[]; notes: Note[] }) {
             key={part.id}
             data-called={part.id}
             variant="secondary"
-            title={`@${part.id}`}
+            title={
+              part.parts
+                ? `The whole of it: ${part.parts.length} parts`
+                : `@${part.id}`
+            }
             className="h-6 max-w-44 shrink-0 gap-1 pr-1"
           >
+            {/* a whole object has the sign the list of parts has */}
+            {part.parts && <BoxesIcon className="shrink-0" />}
             <span className="truncate">{part.label}</span>
             <button
               type="button"

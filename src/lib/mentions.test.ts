@@ -215,6 +215,18 @@ describe("partsOf", () => {
     ).toEqual(["chip", "pcb", "socket", "lid"])
   })
 
+  it("takes in every part of a whole object the message calls on", () => {
+    expect(
+      partsOf({
+        ...message("@lid make these taller"),
+        objects: [
+          { label: "Power button", parts: ["power_cap", "power_switch"] },
+          { label: "Record button", parts: ["record_cap"] },
+        ],
+      })
+    ).toEqual(["power_cap", "power_switch", "record_cap", "lid"])
+  })
+
   it("takes in the part a message was about, when it could be about only one", () => {
     expect(partsOf({ ...message("taller"), part: part("base") })).toEqual([
       "base",

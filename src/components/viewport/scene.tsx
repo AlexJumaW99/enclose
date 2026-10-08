@@ -9,11 +9,13 @@ import { acceleratedRaycast } from "three-mesh-bvh"
 
 import type { PartRef, Vec3 } from "@shared/api"
 import { useThemeColors, type ThemeColors } from "@/lib/css-color"
+import type { Finds, Found } from "@/lib/find"
 import type { Keepout } from "@/lib/model"
 import type { Turn } from "@/lib/orient"
 import { MAC } from "@/lib/platform"
 import type { Note, Section, Selection, View } from "@/lib/store"
 import { bridge } from "./bridge"
+import { FoundTags, namesOf, Place, type Named } from "./found-tags"
 import { Ground } from "./ground"
 import type { LoadedModel, LoadedPart } from "./load"
 import { DRAG_FROM, Marquee } from "./marquee"
@@ -33,6 +35,7 @@ const ONE = new THREE.Vector3(1, 1, 1)
 const WHITE = new THREE.Color("#ffffff")
 const NOT_PICKED = () => {}
 const NOT_HINTED: string[] = []
+const NOT_NAMED: Named[] = []
 /** A shell part smaller than this share of the model stays solid in glass mode: buttons, feet. */
 const GLASS_FROM = 0.25
 // drawn in this order, so what is behind glass is tinted by it and the glass keeps its outline
@@ -354,13 +357,15 @@ export function appearance(
   model: LoadedModel,
   view: View
 ): { shown: boolean; look: Look } {
-  // with something picked out to be shown on its own, only that is drawn
-  const { only } = view
+  // with something picked out to be shown on its own, only that is drawn: and nothing
+  // that has been put out of sight
+  const { only, hidden } = view
   const shown =
-    !only ||
-    (only.kind === "part" && only.id === loaded.part.id) ||
-    (only.kind === "parts" && only.ids.includes(loaded.part.id)) ||
-    (only.kind === "group" && only.id === loaded.part.group)
+    !hidden.includes(loaded.part.id) &&
+    (!only ||
+      (only.kind === "part" && only.id === loaded.part.id) ||
+      (only.kind === "parts" && only.ids.includes(loaded.part.id)) ||
+      (only.kind === "group" && only.id === loaded.part.group))
   if (view.mode === "wireframe") return { shown, look: "wire" }
   if (view.mode === "outline") return { shown, look: "outline" }
   if (view.mode === "solid") return { shown, look: "solid" }
@@ -1242,7 +1247,9 @@ function Picker({
   /**
    * A part was clicked, or nothing was: with Shift held, to add the part to what is
    * picked out, or take it back out; and clicked twice, or with Cmd held (Ctrl, off a
-   * Mac), for the part by itself and not the piece it is of.
+   * Mac), for the part by itself and not the piece it is of. With Shift held a click
+   * is for the part by itself as it is, and it is the second of two that is for all of
+   * the piece.
    */
   onPick: (selection: Selection | null, add: boolean, alone: boolean) => void
 }) {
@@ -1347,7 +1354,7 @@ function Picker({
       onPick(
         part ? { part, at: { x: event.clientX, y: event.clientY } } : null,
         event.shiftKey,
-        event.detail > 1 || alone(event)
+        event.shiftKey ? event.detail < 2 : event.detail > 1 || alone(event)
       )
     }
 
@@ -1442,6 +1449,7 @@ export function Scene({
   hoveredId,
   hoveredWith,
   seeking,
+  found,
   plain,
   notes,
   colours,
@@ -1450,6 +1458,7 @@ export function Scene({
   onSweep,
   onTake,
   onHover,
+  onShow,
   onSection,
 }: {
   loaded: LoadedModel
@@ -1487,6 +1496,13 @@ export function Scene({
   hoveredWith: string[]
   /** a part is being looked for by name: the one lit up is shown through all the rest */
   seeking: boolean
+  /**
+   * What has been found, while parts and groups are looked for by name from the view;
+   * null while none are. All of the model is on show to be looked through, see-through
+   * but for what was found: that is drawn as what is picked out is, each thing with its
+   * name beside it.
+   */
+  found: Finds | null
   /** the part picked out is to be seen in its own colour: one is being chosen for it */
   plain: boolean
   /** changes when the camera should go back to its home view */
@@ -1497,6 +1513,8 @@ export function Scene({
   /** the box was let go, having taken these in */
   onTake: (partIds: string[], add: boolean) => void
   onHover: (partId: string | null, alone: boolean) => void
+  /** the name beside something found was pressed: it is to be shown on its own */
+  onShow: (thing: Found) => void
   /** the section's handle was dragged */
   onSection: (moved: { position: Vec3; turn: Turn }) => void
 }) {
@@ -1508,23 +1526,45 @@ export function Scene({
   )
   const radius = loaded.box.getSize(new THREE.Vector3()).length() / 2
   const explode = view.exploded ? view.spread : 0
-  // What is lit as picked out: the one part or piece, or the several; or, while a box is
-  // being drawn across the view, what it takes in so far.
+  // What is lit as picked out: the one part or piece, or the several; or, while parts
+  // are looked for by name, what was found; or, while a box is being drawn across the
+  // view, what it takes in so far.
   const sweeping = sweep !== null
+  const finding = found !== null
   const lit = React.useMemo(
-    () => new Set(sweep ?? (several.length > 0 ? several : selectedWith)),
-    [sweep, several, selectedWith]
+    () =>
+      new Set(
+        sweep ?? found?.parts ?? (several.length > 0 ? several : selectedWith)
+      ),
+    [sweep, found, several, selectedWith]
   )
   const under = React.useMemo(() => new Set(hoveredWith), [hoveredWith])
+  const named = React.useMemo(
+    () => (found ? namesOf(loaded, found.things) : NOT_NAMED),
+    [loaded, found]
+  )
+  /** The names of what was found, by the part that carries each. */
+  const carried = React.useMemo(() => {
+    const by = new Map<string, Named[]>()
+    for (const name of named)
+      by.set(name.on, [...(by.get(name.on) ?? []), name])
+    return by
+  }, [named])
   const looks = loaded.parts.map((part): ReturnType<typeof appearance> => {
-    const seen = appearance(part, loaded, view)
+    // looked for by name, a part is looked for in all of the model: what the view was
+    // cut down to is on show again meanwhile, and what was put out of sight
+    const seen = finding
+      ? { ...appearance(part, loaded, view), shown: true }
+      : appearance(part, loaded, view)
     // While a part is looked for, it alone is solid and all the rest is see-through,
     // whatever the shading: it is found wherever it is, inside another part or behind.
     // It is the same while a box is drawn: what it takes in so far is seen through all
     // the rest, since it takes in what is inside other parts as readily as what is not.
     if (seeking)
       return { ...seen, look: part.part.id === hoveredId ? "solid" : "glass" }
-    if (sweeping)
+    // And while parts are looked for by name from the view: what is found is solid,
+    // and seen through all the rest wherever it is.
+    if (sweeping || finding)
       return { ...seen, look: lit.has(part.part.id) ? "solid" : "glass" }
     return seen
   })
@@ -1599,6 +1639,7 @@ export function Scene({
         />
       )}
       <Rig box={loaded.box} homeKey={homeKey} circling={reading} />
+      {named.length > 0 && <FoundTags named={named} onShow={onShow} />}
       <Cut plane={plane} section={view.section} />
       <Picker
         root={root}
@@ -1617,6 +1658,7 @@ export function Scene({
       <Camera />
       <Redraw on={view} />
       <Redraw on={changed} />
+      <Redraw on={found} />
       <group ref={root} rotation={MODEL_TO_WORLD}>
         {view.grid && <Ground colors={colors} order={ORDER.ground} />}
         {loaded.parts.map((part, index) => {
@@ -1660,6 +1702,7 @@ export function Scene({
                   loaded={part}
                   model={loaded.model}
                   projectId={projectId}
+                  onPick={onPick}
                   shown={`#${skinColour(part, part.skins[0], colors.dark, colours[part.part.id]).getHexString()}`}
                 />
               )}
@@ -1669,6 +1712,9 @@ export function Scene({
                     <NoteMark key={note.id} loaded={part} note={note} />
                   )
               )}
+              {carried.get(part.part.id)?.map(({ key, at }) => (
+                <Place key={key} name={key} at={at} />
+              ))}
             </PartModel>
           )
         })}

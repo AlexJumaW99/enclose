@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/tooltip"
 import type { Model } from "@/lib/model"
 import { MAC } from "@/lib/platform"
-import { goesBy, useStore, type Note } from "@/lib/store"
+import { goesBy, useStore, type Note, type Selection } from "@/lib/store"
 import type { LoadedPart } from "./load"
 
 /** Over the view, under whatever of the window floats over it. */
@@ -344,12 +344,15 @@ export function PartMarks({
   model,
   projectId,
   shown,
+  onPick,
 }: {
   loaded: LoadedPart
   model: Model
   projectId: string
   /** the colour the part is drawn in, "#rrggbb" */
   shown: string
+  /** a click that fell on these was one on the part under them (see the view's own) */
+  onPick: (selection: Selection | null, add: boolean, alone: boolean) => void
 }) {
   const { part } = loaded
   const writing = useStore((state) => state.writing)
@@ -434,16 +437,18 @@ export function PartMarks({
           onPointerDown={held}
           // The second click of two on a part falls here, on what the first put under
           // the pointer. It is not a press of any of these: it is for the part by
-          // itself, where the first picked out the piece it is of.
+          // itself, where the first picked out the piece it is of; or, with Shift
+          // held, for all of the piece, where the first picked out the part.
           onClickCapture={(event) => {
             if (event.detail < 2) return
             event.stopPropagation()
-            const { selection, select } = useStore.getState()
-            if (selection?.part.piece)
-              select({
-                ...selection,
-                part: { ...selection.part, piece: undefined },
-              })
+            const { selection } = useStore.getState()
+            if (!selection || (!event.shiftKey && !selection.part.piece)) return
+            onPick(
+              { ...selection, part: { ...selection.part, piece: undefined } },
+              event.shiftKey,
+              !event.shiftKey
+            )
           }}
           className="relative flex -translate-1/2 gap-1.5"
         >

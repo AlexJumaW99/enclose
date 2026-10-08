@@ -1,7 +1,7 @@
 import * as THREE from "three"
 import { describe, expect, it } from "vitest"
 
-import { piecesOf, pieceWith, waysOut, wholeOf } from "./apart"
+import { objectsOf, piecesOf, pieceWith, waysOut, wholeOf } from "./apart"
 
 /** A part in a group, in a box from one corner to the other. */
 const part = (
@@ -177,6 +177,62 @@ describe("pieceWith", () => {
 
   it("goes by its widest part where the model does not say what its group is called", () => {
     expect(pieceWith(parts, [], "socket")?.label).toBe("pcb and 2 more")
+  })
+
+  describe("objectsOf", () => {
+    it("takes the pieces that are all picked out as objects, each once", () => {
+      expect(
+        objectsOf(parts, GROUPS, [
+          "record_switch",
+          "record_cap",
+          "power_switch",
+          "power_cap",
+        ])
+      ).toEqual({
+        objects: [
+          {
+            label: "power switch and 1 more",
+            parts: ["power_cap", "power_switch"],
+          },
+          {
+            label: "record cap and 1 more",
+            parts: ["record_cap", "record_switch"],
+          },
+        ],
+        loose: [],
+      })
+    })
+
+    it("leaves the parts of a piece that is not all picked out as parts", () => {
+      expect(
+        objectsOf(parts, GROUPS, ["chip", "pcb", "power_cap", "power_switch"])
+      ).toEqual({
+        objects: [
+          {
+            label: "power switch and 1 more",
+            parts: ["power_cap", "power_switch"],
+          },
+        ],
+        loose: ["pcb", "chip"],
+      })
+    })
+
+    it("has a part that is a piece by itself as a part", () => {
+      expect(
+        objectsOf(parts, GROUPS, ["lid", "pcb", "chip", "socket"])
+      ).toEqual({
+        objects: [{ label: "Main board", parts: ["pcb", "chip", "socket"] }],
+        loose: ["lid"],
+      })
+    })
+
+    it("is nothing of nothing, and takes no account of parts the model has not", () => {
+      expect(objectsOf(parts, GROUPS, [])).toEqual({ objects: [], loose: [] })
+      expect(objectsOf(parts, GROUPS, ["gone"])).toEqual({
+        objects: [],
+        loose: [],
+      })
+    })
   })
 })
 

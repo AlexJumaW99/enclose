@@ -1,6 +1,7 @@
 import * as React from "react"
 import { cn } from "cn"
 import {
+  BoxesIcon,
   BoxIcon,
   PanelRightCloseIcon,
   PlusIcon,
@@ -57,6 +58,21 @@ function UserMessage({ item }: { item: Of<"user"> }) {
           <BoxIcon data-icon="inline-start" />
           {goesBy(item.part)}
         </Badge>
+      )}
+      {/* the whole objects it is about, each by what it goes by */}
+      {item.objects && item.objects.length > 0 && (
+        <div className="flex max-w-[85%] flex-wrap justify-end gap-1.5">
+          {item.objects.map((one, index) => (
+            <Badge
+              key={index}
+              variant="outline"
+              title={`The whole of it: ${one.parts.length} parts`}
+            >
+              <BoxesIcon data-icon="inline-start" />
+              {one.label}
+            </Badge>
+          ))}
+        </div>
       )}
       {/* what was said of parts, each under the name of its part */}
       {item.notes?.map((note, index) => (

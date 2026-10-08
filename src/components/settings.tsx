@@ -340,9 +340,14 @@ const KEYS: { title: string; rows: [string, string[]][] }[] = [
       ["Cut across an axis, while sectioned", ["X", "Y", "Z"]],
       ["Explode", ["E"]],
       ["Show what is picked out on its own, close to", ["I"]],
+      ["Hide what is picked out, or bring back what is hidden", ["H"]],
       ["Parts", ["P"]],
       ["Grid: the ground and the world's axes", [SHIFT, "G"]],
-      ["Put away the list, then leave the last thing gone into", ["Esc"]],
+      ["Search: find parts and groups by name", [CMD, "F"]],
+      [
+        "Put away the search or the list, then leave the last thing gone into",
+        ["Esc"],
+      ],
     ],
   },
   {
@@ -379,11 +384,12 @@ function Shortcuts() {
         what is on it. A click with {SHIFT} held picks out the one part: on its
         own, or added to what is picked out, or taken back out of it. A second
         click, or a click with {CMD} held, picks out the one part and nothing
-        else. A drag draws a box that picks out several: from left to right the
-        parts wholly inside it, from right to left every part it touches, and an
-        object goes whole with any part of it; with {SHIFT} held it adds to what
-        is picked out. Parts picked out together show through whatever is in
-        front of them.
+        else. With {SHIFT} held, a second click straight after the first adds
+        the whole of the part's object instead. A drag draws a box that picks
+        out several: from left to right the parts wholly inside it, from right
+        to left every part it touches, and an object goes whole with any part of
+        it; with {SHIFT} held it adds to what is picked out. Parts picked out
+        together show through whatever is in front of them.
       </p>
     </>
   )

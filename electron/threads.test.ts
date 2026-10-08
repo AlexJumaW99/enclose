@@ -95,6 +95,48 @@ describe("withNotes", () => {
     )
   })
 
+  const buttons = [
+    { label: "Power button", parts: ["power_cap", "power_switch"] },
+    { label: "Record button", parts: ["record_cap", "record_switch"] },
+  ]
+
+  it("puts the whole objects a message is about ahead of it, each with its parts", () => {
+    expect(withNotes("Make these 2 mm taller", [], buttons)).toBe(
+      [
+        "<objects>",
+        '<object name="Power button" parts="power_cap power_switch" />',
+        '<object name="Record button" parts="record_cap record_switch" />',
+        "</objects>",
+        "",
+        "Make these 2 mm taller",
+      ].join("\n")
+    )
+  })
+
+  it("puts them ahead of what was said of parts, and both after a command", () => {
+    const said = withNotes(
+      "and tidy up",
+      [{ part: chip, text: "Smaller" }],
+      [buttons[0]]
+    )
+    expect(said.indexOf("<objects>")).toBe(0)
+    expect(said.indexOf("</objects>")).toBeLessThan(said.indexOf("<comments>"))
+    expect(said.endsWith("\n\nand tidy up")).toBe(true)
+    expect(withNotes("/compact", [], buttons).startsWith("/compact\n\n")).toBe(
+      true
+    )
+  })
+
+  it("is the objects alone, where nothing is said of them", () => {
+    expect(withNotes("", [], [buttons[0]])).toBe(
+      [
+        "<objects>",
+        '<object name="Power button" parts="power_cap power_switch" />',
+        "</objects>",
+      ].join("\n")
+    )
+  })
+
   it("says which object, and all its parts, where one was picked out whole", () => {
     const board = {
       ...chip,

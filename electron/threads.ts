@@ -19,6 +19,7 @@ import type {
   ClaudeStatus,
   ConversationSummary,
   Manner,
+  ObjectRef,
   PartNote,
   PermissionAnswer,
   Seen,
@@ -208,6 +209,7 @@ function guide(
     "- Keep to the model and the project. Say nothing about tools, connectors or settings of the user's that are no part of this app (an MCP server that wants signing in to, say) unless they ask.",
     "- A message may hold a <comments> block: things the user has said of parts of the model, one <comment> for each. Each names the part and gives the point on it they clicked, the way the surface faces there and which face it is, in the model's own coordinates (mm, Z up), and holds what they said. Take each as a change wanted at that place. The rest of the message, if there is any, is what they said of the model as a whole.",
     "- A click in the view picks out a whole object, not one part of it: the parts of a group that touch one another, such as a circuit board with all that is on it. A <comment> made of one has object, what the app calls it, and parts, the ids of all its parts. Its part, id and point are then only where on the object the user clicked: take what they said as said of the whole object, unless it says otherwise.",
+    '- A message may hold an <objects> block: whole objects the user picked out in the view for the message to be about, one <object> for each, with what the app calls it and the ids of all its parts. What the message says, it says of those objects, each as one thing: they are what the user means by "this", "these" or "them". The user may still want only some part of one changed (the cap of a button, one chip on a board) and say so in their own words, not by its id: then find that part among the object\'s parts, by their labels, sizes and places (mcp__viewport__parts) or by looking (mcp__viewport__screenshot), and change that part alone. Ask which they mean only if it cannot be told.',
     "- A word in a message that begins with @ names a part of the model by its id, as the manifest and mcp__viewport__parts have it: @lid is the part whose id is lid.",
     "- A word in a message that begins with $ names one of your skills, which the user wants used for what they are asking: $pcb is the skill called pcb. Load it with the Skill tool before you start on the work, and follow it.",
     "- You can see what they see. mcp__viewport__screenshot returns the current view as an image, mcp__viewport__parts lists the parts with their groups and sizes, mcp__viewport__selection returns the current selection.",
@@ -256,25 +258,47 @@ function guide(
 }
 
 /**
- * The message as Claude gets it: what was said of parts of the model, then the message.
- * A message that is a command leads with it, or Claude Code would not know it for one.
+ * The message as Claude gets it: the whole objects it is about, then what was said of
+ * parts of the model, then the message. A message that is a command leads with it, or
+ * Claude Code would not know it for one.
  */
-export function withNotes(text: string, notes: PartNote[]): string {
-  if (notes.length === 0) return text
+export function withNotes(
+  text: string,
+  notes: PartNote[],
+  objects: ObjectRef[] = []
+): string {
+  if (notes.length === 0 && objects.length === 0) return text
   const at = (v: number[] | null) =>
     v ? v.map((n) => n.toFixed(2)).join(", ") : "unknown"
-  const comments = [
-    "<comments>",
-    ...notes.flatMap(({ part, text: said }) => [
-      `<comment${part.piece ? ` object="${part.piece.label}" parts="${part.piece.parts.join(" ")}"` : ""} part="${part.label}" id="${part.id}" point="${at(part.point)}" normal="${at(part.normal)}"${part.face === null ? "" : ` face="${part.face}"`}>`,
-      said,
-      "</comment>",
-    ]),
-    "</comments>",
+  const called =
+    objects.length > 0
+      ? [
+          "<objects>",
+          ...objects.map(
+            ({ label, parts }) =>
+              `<object name="${label}" parts="${parts.join(" ")}" />`
+          ),
+          "</objects>",
+        ]
+      : []
+  const comments =
+    notes.length > 0
+      ? [
+          "<comments>",
+          ...notes.flatMap(({ part, text: said }) => [
+            `<comment${part.piece ? ` object="${part.piece.label}" parts="${part.piece.parts.join(" ")}"` : ""} part="${part.label}" id="${part.id}" point="${at(part.point)}" normal="${at(part.normal)}"${part.face === null ? "" : ` face="${part.face}"`}>`,
+            said,
+            "</comment>",
+          ]),
+          "</comments>",
+        ]
+      : []
+  const ahead = [
+    ...called,
+    ...(called.length > 0 && comments.length > 0 ? [""] : []),
+    ...comments,
   ]
-  return (
-    text.startsWith("/") ? [text, "", ...comments] : [...comments, "", text]
-  )
+  return (text.startsWith("/") ? [text, "", ...ahead] : [...ahead, "", text])
     .join("\n")
     .trim()
 }
@@ -365,8 +389,11 @@ const printed = (text: string) =>
 /** What a user's message says, for the places that show it in a line. */
 function wordsOf(item: Extract<ThreadItem, { kind: "user" | "assistant" }>) {
   if (item.kind === "assistant" || item.text) return item.text
-  // nothing but what was said of parts
-  return (item.notes ?? []).map((note) => note.text).join(" · ")
+  // nothing but what was said of parts: or, with nothing said at all, what it is about
+  const said = (item.notes ?? []).map((note) => note.text)
+  return (
+    said.length > 0 ? said : (item.objects ?? []).map((one) => one.label)
+  ).join(" · ")
 }
 
 /**
@@ -586,10 +613,11 @@ export class Threads {
     conversationId: string | null,
     text: string,
     notes: PartNote[],
+    objects: ObjectRef[],
     manner: Manner
   ): string | null {
-    return this.begin(projectId, conversationId, text, notes, manner, {
-      content: withNotes(text, notes),
+    return this.begin(projectId, conversationId, text, notes, objects, manner, {
+      content: withNotes(text, notes, objects),
     })
   }
 
@@ -607,7 +635,7 @@ export class Threads {
     arrange: Arranging
   ): string | null {
     if (!this.deps.claude().path) return null
-    return this.begin(projectId, null, LOOK_OVER, [], manner, {
+    return this.begin(projectId, null, LOOK_OVER, [], [], manner, {
       content: lookOverAsked(seen, files),
       arrange,
     })
@@ -624,6 +652,7 @@ export class Threads {
     conversationId: string | null,
     text: string,
     notes: PartNote[],
+    objects: ObjectRef[],
     manner: Manner,
     asked: { content: Content; arrange?: Arranging }
   ): string | null {
@@ -648,6 +677,7 @@ export class Threads {
       text,
       part: null,
       ...(notes.length > 0 ? { notes } : {}),
+      ...(objects.length > 0 ? { objects } : {}),
       ...(asked.arrange ? { lookOver: true as const } : {}),
     })
 
