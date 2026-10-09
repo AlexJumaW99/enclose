@@ -319,6 +319,7 @@ const KEYS: { title: string; rows: [string, string[]][] }[] = [
       ["Front, back", [CMD, "2", "3"]],
       ["Top, bottom", [CMD, "4", "5"]],
       ["Right, left", [CMD, "6", "7"]],
+      ["Focus on the selection", ["Space"]],
     ],
   },
   {

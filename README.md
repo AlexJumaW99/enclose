@@ -160,6 +160,7 @@ is turning, never while it is still.
 | Cmd+2, Cmd+3 | Front, back |
 | Cmd+4, Cmd+5 | Top, bottom |
 | Cmd+6, Cmd+7 | Right, left |
+| Space | What is picked out, close to, from the side the camera is on |
 
 From above and from below alike, the model's back is at the top of the view: the bottom
 view turns the model over sideways, not end over end.
@@ -169,14 +170,21 @@ light under it comes up as the camera goes below the level: from straight below,
 faces down is as light as what faces up is from straight above. From above nothing is
 changed by it.
 
-**Shading** is on Z, the way it is in Blender: the key brings solid, glass, wireframe and
-outline up round the pointer. Hold it, flick towards one and let go; or tap it, and click
-one. A choice is pointed at by direction, so the pointer need not reach it. Esc, Z again
-or a right-click puts the menu away. Glass makes the outside see-through (the groups a
-manifest marks as `shell`, or everything if it marks none). Wireframe draws the model's
-lines and nothing of its surfaces, which still hide the lines behind them; outline draws
-every line, the hidden ones too. In all three a curved face is given the line where it
-turns out of sight, which is no edge of the model's and moves as the model is turned.
+**Shading** is on Z, the way it is in Blender: the key brings solid, glass, pattern,
+wireframe and outline up in a circle round the pointer. Hold it, flick towards one and let
+go; or tap it, and click one. A choice is pointed at by direction, so the pointer need not
+reach it. Esc, Z again or a right-click puts the menu away. Glass makes the outside
+see-through (the groups a manifest marks as `shell`, or everything if it marks none).
+Wireframe draws the model's lines and nothing of its surfaces, which still hide the lines
+behind them; outline draws every line, the hidden ones too. In all of these but solid a
+curved face is given the line where it turns out of sight, which is no edge of the model's
+and moves as the model is turned.
+
+Pattern is wireframe with every face ruled into squares, in three of the colours parts
+are drawn in: one for the lines across each of the part's axes. Each face is ruled into
+about as many squares as any other, so a small face is ruled finely and a large one
+coarsely. Lines that would crowd one another on the screen are thinned out, every other
+one at a time, so a model seen from far off is not a blur of them.
 
 Down the right-hand edge:
 
@@ -407,7 +415,9 @@ first, on the same spot, it takes in the whole of the object the part belongs to
 With a part picked out, I shows it on its own and brings the camera to it, from the side
 the camera is on: the part in the middle of the view, filling it. The flat views and the
 opening view frame the part while it is alone. I again, or Esc, brings the rest back and
-puts the camera where it was. H is the other way about: it puts what is picked out, one
+puts the camera where it was. Space brings the camera to what is picked out in the same
+way, one part or several, and changes nothing else: the rest stays on show, and Cmd+1 is
+all of the model again. H is the other way about from I: it puts what is picked out, one
 part or several, out of sight and leaves the rest. Pick out more and H hides those too;
 H with nothing picked out, or Esc, brings back all that was hidden, and the list of parts
 brings them back one at a time. Enter keeps what you wrote for the next message: it shows as a

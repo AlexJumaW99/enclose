@@ -51,8 +51,10 @@ import type { Turn } from "@/lib/orient"
 /**
  * solid: as built. glass: the outside goes see-through. wireframe: lines only, as far as
  * the model itself does not hide them. outline: every line, the hidden ones too.
+ * pattern: as wireframe, with every face ruled into squares.
  */
-export type DisplayMode = "solid" | "glass" | "wireframe" | "outline"
+export type DisplayMode =
+  "solid" | "glass" | "wireframe" | "outline" | "pattern"
 
 /** A flat cut through the model, with one side of it hidden. */
 export type Section = {
@@ -169,7 +171,10 @@ const saved = (key: string) =>
 
 const savedMode = (): DisplayMode => {
   const mode = saved(MODE_KEY)
-  return mode === "glass" || mode === "wireframe" || mode === "outline"
+  return mode === "glass" ||
+    mode === "wireframe" ||
+    mode === "outline" ||
+    mode === "pattern"
     ? mode
     : "solid"
 }

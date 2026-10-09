@@ -1,5 +1,5 @@
-// How the model is drawn - solid, glass, wireframe or outline - chosen the way Blender has it
-// chosen. Z brings the choices up round the pointer. Held, a flick towards one and letting
+// How the model is drawn - solid, glass, pattern, wireframe or outline - chosen the way
+// Blender has it chosen. Z brings the choices up round the pointer. Held, a flick towards one and letting
 // go of the key takes it; tapped, they stay up to be clicked. A choice is pointed at by
 // direction, not by getting the pointer onto it.
 import * as React from "react"
@@ -8,38 +8,46 @@ import { cn } from "cn"
 import {
   GlassIcon,
   OutlineIcon,
+  PatternIcon,
   SolidIcon,
   WireframeIcon,
 } from "@/components/icons"
 import { spokenFor } from "@/lib/keys"
 import { useStore, type DisplayMode } from "@/lib/store"
 
-// where each choice sits, in degrees anticlockwise from the right: the ones that are all
-// lines to the left and solid to the right, as Blender has them
+// where each choice sits, in degrees anticlockwise from the right: evenly, all the way
+// round, with solid at the top
 const CHOICES: {
   mode: DisplayMode
   label: string
   icon: React.ReactNode
   at: number
 }[] = [
-  { mode: "outline", label: "Outline", icon: <OutlineIcon />, at: 171 },
-  { mode: "wireframe", label: "Wireframe", icon: <WireframeIcon />, at: 117 },
-  { mode: "glass", label: "Glass", icon: <GlassIcon />, at: 63 },
-  { mode: "solid", label: "Solid", icon: <SolidIcon />, at: 9 },
+  { mode: "solid", label: "Solid", icon: <SolidIcon />, at: 90 },
+  { mode: "glass", label: "Glass", icon: <GlassIcon />, at: 18 },
+  { mode: "pattern", label: "Pattern", icon: <PatternIcon />, at: -54 },
+  { mode: "outline", label: "Outline", icon: <OutlineIcon />, at: 234 },
+  { mode: "wireframe", label: "Wireframe", icon: <WireframeIcon />, at: 162 },
 ]
 
-/** How far the choices sit from the pointer, in pixels. */
+/** How far the choices sit from the pointer, in pixels, and how big each is across. */
 const RADIUS = 62
+const SIZE = 48
 /** How far the pointer has to go, in pixels, before it points at anything. */
 const THRESHOLD = 12
-/** How far off a choice's own direction, in degrees, still points at it. */
-const REACH = 54
 /** A press shorter than this, in ms, is a tap. */
 const TAP = 200
 /** The ring the pointer starts in, and the arc on it that shows which way it has gone. */
 const RING = { radius: 23, width: 4, arc: 64 }
+/** How far under the pointer the name of a choice is: clear of the lowest of them. */
+const NAMED =
+  Math.max(
+    ...CHOICES.map(({ at }) => -RADIUS * Math.sin((at * Math.PI) / 180))
+  ) +
+  SIZE / 2 +
+  10
 /** How near the edges of the window the menu may be drawn: it has to fit. */
-const ROOM = { side: 90, above: 100, below: 60 }
+const ROOM = { side: 90, above: 100, below: NAMED + 28 }
 
 type Point = { x: number; y: number }
 
@@ -47,14 +55,16 @@ type Point = { x: number; y: number }
 const bearing = (from: Point, to: Point) =>
   (Math.atan2(from.y - to.y, to.x - from.x) * 180) / Math.PI
 
-/** The choice a pointer that started at `from` and is now at `to` points at. */
+/**
+ * The choice a pointer that started at `from` and is now at `to` points at: the nearest
+ * round the circle, whichever way it has gone.
+ */
 function pointedAt(from: Point, to: Point): DisplayMode | null {
   if (Math.hypot(to.x - from.x, to.y - from.y) < THRESHOLD) return null
   const way = bearing(from, to)
   // how far round from each choice, the short way
   const off = (at: number) => Math.abs(((way - at + 540) % 360) - 180)
-  const nearest = CHOICES.reduce((a, b) => (off(b.at) < off(a.at) ? b : a))
-  return off(nearest.at) <= REACH ? nearest.mode : null
+  return CHOICES.reduce((a, b) => (off(b.at) < off(a.at) ? b : a)).mode
 }
 
 type Shown = {
@@ -165,7 +175,7 @@ export function ShadingPie({
       }
       const mode = pointedAt(up.from, last)
       if (mode) choose(mode)
-      // a tap leaves it up to be clicked; a hold that points at nothing takes nothing
+      // a tap leaves it up to be clicked; a hold that has gone nowhere takes nothing
       else if (held < TAP) down = null
       else close()
     }
@@ -262,13 +272,15 @@ export function ShadingPie({
             aria-label={label}
             data-shading={mode}
             className={cn(
-              "glass absolute flex size-12 -translate-1/2 items-center justify-center rounded-full bg-background/60 shadow-sm ring-1 ring-foreground/10 transition-[background-color,box-shadow,scale] [&_svg]:size-5",
+              "glass absolute flex -translate-1/2 items-center justify-center rounded-full bg-background/60 shadow-sm ring-1 ring-foreground/10 transition-[background-color,box-shadow,scale] [&_svg]:size-5",
               // the one in use is lit like a button that is on
               mode === current && "bg-primary text-primary-foreground",
               mode === pointed && "scale-105 ring-2 ring-foreground/70",
               mode === pointed && mode !== current && "bg-foreground/15"
             )}
             style={{
+              width: SIZE,
+              height: SIZE,
               left: RADIUS * Math.cos((at * Math.PI) / 180),
               top: -RADIUS * Math.sin((at * Math.PI) / 180),
             }}
@@ -280,9 +292,10 @@ export function ShadingPie({
             otherwise the one in use */}
         <span
           className={cn(
-            "glass absolute top-9 -translate-x-1/2 rounded-full bg-background/70 px-2 py-0.5 text-xs font-medium whitespace-nowrap ring-1 ring-foreground/10",
+            "glass absolute -translate-x-1/2 rounded-full bg-background/70 px-2 py-0.5 text-xs font-medium whitespace-nowrap ring-1 ring-foreground/10",
             pointed ? "text-foreground" : "text-muted-foreground"
           )}
+          style={{ top: NAMED }}
         >
           {named?.label}
         </span>

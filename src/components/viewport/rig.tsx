@@ -307,6 +307,41 @@ function direct(stage: {
     else void controls.dollyTo(distance * narrowing, true)
   }
 
+  /**
+   * Bring the camera to what fills a box, from the side it is on already: it goes to the
+   * middle of the view and fills it. `covered` is how much of the view's right side, in
+   * pixels, something lies over: it goes to the middle of what is left, and fills that.
+   */
+  const bringTo = (box: THREE.Box3, covered: number) => {
+    const { theta, phi } = heading()
+    const { width, height } = stage.size()
+    // too little left of the view to show a part in: it has all of it after all
+    const over = width - covered < LEAST_CLEAR ? 0 : Math.max(0, covered)
+    const { target, distance, scale } = fitting(
+      box,
+      theta,
+      phi,
+      (width - over) / height,
+      MARGIN
+    )
+    const flatly = mode === "flat" || tie?.kind === "closing"
+    if (over > 0) {
+      // The camera looks at a point to the right of the part, by half of what is
+      // covered: that puts the part as far to the left of the middle of the view.
+      // Right is as the picture has it, which may be turned on the way it looks.
+      const toward = new THREE.Vector3().setFromSphericalCoords(1, phi, theta)
+      const right = new THREE.Vector3(Math.cos(theta), 0, -Math.sin(theta))
+      const up = toward.cross(right)
+      const shown = flatly ? scale : height / (2 * distance * HALF_FOV)
+      target
+        .addScaledVector(right, (Math.cos(rollTo) * over) / 2 / shown)
+        .addScaledVector(up, (Math.sin(rollTo) * over) / 2 / shown)
+    }
+    void controls.moveTo(target.x, target.y, target.z, true)
+    if (flatly) scaleTo(scale)
+    else void controls.dollyTo(distance * narrowing, true)
+  }
+
   /** How far the user may zoom, either way. */
   const limits = () => {
     const r = reach()
@@ -605,32 +640,19 @@ function direct(stage: {
       }
       subject = box.clone()
       atHome = false
-      const { width, height } = stage.size()
-      // too little left of the view to show a part in: it has all of it after all
-      const over = width - covered < LEAST_CLEAR ? 0 : Math.max(0, covered)
-      const { target, distance, scale } = fitting(
-        box,
-        theta,
-        phi,
-        (width - over) / height,
-        MARGIN
-      )
-      const flatly = mode === "flat" || tie?.kind === "closing"
-      if (over > 0) {
-        // The camera looks at a point to the right of the part, by half of what is
-        // covered: that puts the part as far to the left of the middle of the view.
-        // Right is as the picture has it, which may be turned on the way it looks.
-        const toward = new THREE.Vector3().setFromSphericalCoords(1, phi, theta)
-        const right = new THREE.Vector3(Math.cos(theta), 0, -Math.sin(theta))
-        const up = toward.cross(right)
-        const shown = flatly ? scale : height / (2 * distance * HALF_FOV)
-        target
-          .addScaledVector(right, (Math.cos(rollTo) * over) / 2 / shown)
-          .addScaledVector(up, (Math.sin(rollTo) * over) / 2 / shown)
-      }
-      void controls.moveTo(target.x, target.y, target.z, true)
-      if (flatly) scaleTo(scale)
-      else void controls.dollyTo(distance * narrowing, true)
+      bringTo(box, covered)
+      stage.redraw()
+    },
+
+    /**
+     * Bring the camera to what fills a box of the model as `focus` does, but for this
+     * once: the set views go on framing what they did, and there is nothing to go back
+     * to. Asked again of the same box, it goes there again, from wherever it was taken.
+     */
+    goTo(box: THREE.Box3, covered = 0) {
+      controls.smoothTime = SMOOTH.turn
+      atHome = false
+      bringTo(box, covered)
       stage.redraw()
     },
 
@@ -959,6 +981,7 @@ export function Rig({
     bridge.eye = () => made.eye()
     bridge.flat = () => made.isFlat()
     bridge.focus = (box, covered) => made.focus(box, covered)
+    bridge.goTo = (box, covered) => made.goTo(box, covered)
     // lets a script see what the camera is doing when the app is checked without a person
     if (import.meta.env.DEV) Object.assign(window, { __camera: made.probe })
     return () => {
@@ -966,7 +989,7 @@ export function Rig({
       impl.rotate = rotate
       director.current = null
       bridge.lookFrom = bridge.orbit = bridge.eye = bridge.flat = null
-      bridge.focus = null
+      bridge.focus = bridge.goTo = null
     }
   }, [lens, flat, get, set, invalidate])
 

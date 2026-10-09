@@ -32,6 +32,9 @@ const LEFT = "M12 12v10l-8.7-5V7Z"
 const RIGHT = "M12 12l8.7-5v10L12 22Z"
 const NEAR_EDGES = "m3.3 7 8.7 5 8.7-5M12 22V12"
 const FAR_EDGES = "M12 12V2.5M12 12l-8.7 5M12 12l8.7 5"
+// a line each way across the middle of each of the three faces
+const RULED =
+  "m7.65 9.5 8.7-5m-8.7 0 8.7 5M7.65 9.5v10M3.3 12l8.7 5m4.35-7.5v10M12 17l8.7-5"
 
 /** Parts drawn as they are: opaque. */
 export function SolidIcon(props: IconProps) {
@@ -67,6 +70,17 @@ export function WireframeIcon(props: IconProps) {
     <Icon {...props}>
       <path d={CUBE} />
       <path d={NEAR_EDGES} />
+    </Icon>
+  )
+}
+
+/** Edges, and every face ruled into squares. */
+export function PatternIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d={CUBE} />
+      <path d={NEAR_EDGES} />
+      <path d={RULED} strokeWidth="1" />
     </Icon>
   )
 }

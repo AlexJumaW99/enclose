@@ -8,6 +8,7 @@ import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js
 import { acceleratedRaycast } from "three-mesh-bvh"
 
 import type { PartRef, Vec3 } from "@shared/api"
+import { PALETTE, type PaletteName } from "@shared/palette"
 import { useThemeColors, type ThemeColors } from "@/lib/css-color"
 import type { Finds, Found } from "@/lib/find"
 import { hasFigure } from "@/lib/reference"
@@ -19,7 +20,7 @@ import { bridge } from "./bridge"
 import { FoundTags, namesOf, Place, type Named } from "./found-tags"
 import { Ground } from "./ground"
 import { UNDER_FROM, underlit } from "./light"
-import type { LoadedModel, LoadedPart } from "./load"
+import { rule, type LoadedModel, type LoadedPart } from "./load"
 import { DRAG_FROM, Marquee } from "./marquee"
 import { EDGE, finish, skinColour } from "./paint"
 import { NoteMark, PartMarks } from "./part-marks"
@@ -48,6 +49,8 @@ const ORDER = {
   // the lines of a scene the model is set in: under the ground's, and the model's own
   scene: 0.8,
   ground: 0.9,
+  // the lines a face is ruled with: under its edges, which end them
+  ruled: 0.95,
   edges: 1,
   glass: 2,
   glassEdges: 3,
@@ -63,8 +66,9 @@ const ORDER = {
 /**
  * solid: opaque. glass: see-through. wire: its lines, and its surfaces not seen but
  * hiding what is behind them. outline: its lines and nothing else, so all of them show.
+ * pattern: as wire, with its faces ruled into squares.
  */
-type Look = "solid" | "glass" | "wire" | "outline"
+type Look = "solid" | "glass" | "wire" | "outline" | "pattern"
 
 // Glass is not drawn into the picture with everything else: its layers are added up on
 // their own and laid over the picture afterwards (see Glass). Each thing is drawn on the
@@ -348,6 +352,121 @@ function inTheLight(shader: {
       gl_FragColor.a = min(1.0, gl_FragColor.a * mix(1.0, mix(${LINE_LIT.away}, ${LINE_LIT.in}, pow(lightAt, 2.0)), lightOn));`
     )
 }
+/**
+ * The colours the faces of a part are ruled in, in the pattern look: three of the
+ * colours parts are drawn in, one to each of the part's axes, for the lines across it.
+ */
+const RULED_IN: PaletteName[] = ["blue", "orange", "pink"]
+/**
+ * A colour of the palette as it is drawn on a light ground, where as it is it would be
+ * too pale to see: the same colour, deeper.
+ */
+function deepened(name: PaletteName): THREE.Color {
+  const colour = new THREE.Color(PALETTE[name])
+  const { h, s } = colour.getHSL({ h: 0, s: 0, l: 0 }, THREE.SRGBColorSpace)
+  return colour.setHSL(h, Math.min(s, 0.7), 0.5, THREE.SRGBColorSpace)
+}
+/**
+ * The lines a face is ruled with: their colours on a dark ground, and on a light.
+ * `width` is how wide a line is, in pixels, and `room` how near two may come: nearer
+ * than that, every other one is left out. `plain` is how strongly they are drawn, and
+ * `hovered` with the pointer on the part.
+ */
+const RULING = {
+  dark: RULED_IN.map((name) => new THREE.Color(PALETTE[name])),
+  light: RULED_IN.map(deepened),
+  width: 1,
+  room: 7,
+  plain: 0.85,
+  hovered: 1,
+}
+
+/**
+ * What rules a part's faces into squares: drawn over its surfaces, which are there
+ * already as far as hiding what is behind them goes. Where on its face each corner is,
+ * and how many squares across that face is, the part has been told (see ruled.ts).
+ */
+function ruling(plane: THREE.Plane) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      inks: { value: RULING.dark },
+      opacity: { value: RULING.plain },
+      // how many of the screen's own pixels there are to one of ours
+      ratio: { value: 1 },
+    },
+    vertexShader: `
+      attribute vec3 ruledAt;
+      attribute vec3 ruledAcross;
+      varying vec3 at;
+      varying vec3 across;
+      varying vec3 facing;
+      #include <clipping_planes_pars_vertex>
+      void main() {
+        at = ruledAt;
+        across = ruledAcross;
+        facing = normal;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_Position = projectionMatrix * mvPosition;
+        #include <clipping_planes_vertex>
+      }`,
+    fragmentShader: `
+      uniform vec3 inks[3];
+      uniform float opacity;
+      uniform float ratio;
+      varying vec3 at;
+      varying vec3 across;
+      varying vec3 facing;
+      #include <clipping_planes_pars_fragment>
+
+      // How much of a line there is here, of those across one axis. 'per' is how many
+      // squares there are to a pixel of the screen.
+      float ruled(float at, float across, float per) {
+        // Lines that would come too near one another are thinned: every other one is
+        // left out, and every other one of those, as often as it takes. Between one
+        // such step and the next the ones about to go fade, so none goes at a stroke.
+        float thinned = max(0.0, log2(per * ratio * ${RULING.room.toFixed(1)}));
+        float steps = floor(thinned);
+        float apart = exp2(steps);
+        float nearest = floor(at / apart + 0.5);
+        float reach = 0.5 * ratio * ${RULING.width.toFixed(1)};
+        float line = 1.0 - smoothstep(reach - 0.5, reach + 0.5, abs(at - nearest * apart) / per);
+        line *= 1.0 - (thinned - steps) * mod(nearest, 2.0);
+        // none at either end of the face: its edges are there
+        float which = nearest * apart;
+        return line * step(0.5, which) * step(which, across - 0.5);
+      }
+
+      void main() {
+        #include <clipping_planes_fragment>
+        vec3 per = max(fwidth(at), 1e-6);
+        vec3 lines = vec3(
+          ruled(at.x, across.x, per.x),
+          ruled(at.y, across.y, per.y),
+          ruled(at.z, across.z, per.z)
+        );
+        // a face that lies along the planes across an axis is not cut by them
+        lines *= 1.0 - smoothstep(0.8, 0.95, abs(normalize(facing)));
+        float most = max(lines.x, max(lines.y, lines.z));
+        if (most < 0.004) discard;
+        vec3 ink = (inks[0] * lines.x + inks[1] * lines.y + inks[2] * lines.z)
+          / (lines.x + lines.y + lines.z);
+        gl_FragColor = vec4(ink, most * opacity);
+        #include <colorspace_fragment>
+      }`,
+    transparent: true,
+    depthWrite: false,
+    // the colours are seen as they are: the view's lens would grey them
+    toneMapped: false,
+    side: THREE.DoubleSide,
+    clipping: true,
+    clippingPlanes: [plane],
+    // a hair nearer than the surfaces they are on, and still behind the edges
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
+    polygonOffsetUnits: 1,
+  })
+}
+
 /** Both, for the lines that are drawn only where a surface turns from the eye. */
 function turningInTheLight(
   shader: Parameters<typeof inTheLight>[0] & {
@@ -383,6 +502,7 @@ export function appearance(
 ): { shown: boolean; look: Look } {
   const shown = onShow(loaded, view)
   if (view.mode === "wireframe") return { shown, look: "wire" }
+  if (view.mode === "pattern") return { shown, look: "pattern" }
   if (view.mode === "outline") return { shown, look: "outline" }
   if (view.mode === "solid") return { shown, look: "solid" }
   // Glass is for seeing inside: only the outside goes see-through. A model that does
@@ -442,9 +562,13 @@ const PartModel = React.memo(function PartModel({
   const { part } = loaded
   const group = React.useRef<THREE.Group>(null)
   const invalidate = useThree((state) => state.invalidate)
+  const ratio = useThree((state) => state.viewport.dpr)
   const glass = look === "glass"
+  const patterned = look === "pattern"
+  // its surfaces are not seen, but hide what is behind them
+  const wire = look === "wire" || patterned
   // drawn by its lines alone, which then have to show against the background
-  const lined = look === "wire" || look === "outline"
+  const lined = wire || look === "outline"
 
   const home = React.useMemo(() => {
     const position = new THREE.Vector3()
@@ -492,6 +616,14 @@ const PartModel = React.memo(function PartModel({
     },
     [lines]
   )
+
+  // what its faces are ruled into squares with
+  const ruled = React.useMemo(() => {
+    if (!patterned) return null
+    rule(loaded)
+    return ruling(plane)
+  }, [patterned, loaded, plane])
+  React.useEffect(() => () => ruled?.dispose(), [ruled])
 
   // what it is drawn with to be counted, as it is and drawn in a little
   const counted = cut !== null
@@ -592,7 +724,7 @@ const PartModel = React.memo(function PartModel({
   // part drawn by its lines has them in the text colour instead. Picked out, a part
   // has heavier lines, drawn in full: dark ones wherever its surfaces are seen, which
   // they are in wireframe too, once it has turned the selection's colour.
-  const bodied = !lined || (look === "wire" && filled)
+  const bodied = !lined || (wire && filled)
   const line = {
     color: bodied ? EDGE : colors.foreground,
     opacity: selected ? 1 : glass ? 0.28 : look === "outline" ? 0.6 : 0.85,
@@ -629,7 +761,7 @@ const PartModel = React.memo(function PartModel({
                 if (material) paint(material, index)
               }}
               visible={look !== "outline"}
-              colorWrite={look !== "wire" || filled}
+              colorWrite={!wire || filled}
               // the selection's colour is seen as it is: the view's lens would grey it
               toneMapped={!filled}
               {...finish(loaded)}
@@ -651,6 +783,22 @@ const PartModel = React.memo(function PartModel({
               }
             />
           </mesh>
+          {ruled && (
+            <mesh
+              geometry={skin.geometry}
+              material={ruled}
+              // picked out, its surfaces are seen, and are light
+              material-uniforms-inks-value={
+                colors.dark && !filled ? RULING.dark : RULING.light
+              }
+              material-uniforms-opacity-value={
+                hovered || selected ? RULING.hovered : RULING.plain
+              }
+              material-uniforms-ratio-value={ratio}
+              renderOrder={ORDER.ruled}
+              raycast={NOT_PICKED}
+            />
+          )}
           {cut !== null &&
             counts.map(({ step, material }, count) => (
               <mesh

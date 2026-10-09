@@ -42,7 +42,7 @@ import {
 } from "@/lib/arrange"
 import { lookFor, type Found } from "@/lib/find"
 import { readModel } from "@/lib/model"
-import { spokenFor } from "@/lib/keys"
+import { spaceTaken, spokenFor } from "@/lib/keys"
 import { MAC } from "@/lib/platform"
 import { notCalledOn, partsOf } from "@/lib/mentions"
 import { VIEWS } from "@/lib/orient"
@@ -118,6 +118,31 @@ function pickedOut(): string[] {
     : selection
       ? allOf(selection.part)
       : NO_PARTS
+}
+
+/**
+ * The box round these parts of the model, where they are with it pulled this far apart:
+ * null, where it has none of them.
+ */
+function boxRound(loaded: LoadedModel | null, ids: string[], explode: number) {
+  const boxes = (loaded?.parts ?? [])
+    .filter((part) => ids.includes(part.part.id))
+    .map((part) =>
+      part.box
+        .clone()
+        .applyMatrix4(part.home)
+        .translate(part.away.clone().multiplyScalar(explode))
+    )
+  return boxes.length > 0 ? boxes.reduce((all, box) => all.union(box)) : null
+}
+
+/** How much of the view's right side the list of parts lies over, in pixels. */
+function underList(): number {
+  const list = document.querySelector<HTMLElement>("[data-parts-list]")
+  const within = list?.offsetParent?.getBoundingClientRect()
+  return list && within
+    ? within.right - list.getBoundingClientRect().left + LIST_GAP
+    : 0
 }
 
 /** A part as what a piece is made out from: see `listed`, in Model. */
@@ -919,15 +944,17 @@ function Model({ project }: { project: Project }) {
   // the model open and E pulls it apart, both again to undo. B is the model's blueprint,
   // in place of the view of it, and again is the view back. I shows what is picked
   // out, one part or several, on its own and close to, and again brings the rest back.
-  // H is the other way about: it puts what is picked out, one part or several, out of
-  // sight, and with nothing picked out brings back all that was. P brings up the list
-  // of parts, and puts it away. While the model is cut open, X and Y choose the axis
-  // the cut goes across (and Z, which the shading menu passes on). Esc stops looking
-  // for parts by name, puts the parts list away, and then gets out of the section, the
-  // explode, what was shown on its own or what was put out of sight, whichever was gone
-  // into last. Shift+G rules the ground and draws the world's axes, as it brings up the
-  // grid in Figma, and again takes them away. (Cmd+F, which looks for parts by name, is
-  // listened for where the name is typed: see Search.)
+  // Space brings the camera to what is picked out and changes nothing else: the rest
+  // stays on show, and the camera is not kept there. H is the other way about from I:
+  // it puts what is picked out, one part or several, out of sight, and with nothing
+  // picked out brings back all that was. P brings up the list of parts, and puts it
+  // away. While the model is cut open, X and Y choose the axis the cut goes across (and
+  // Z, which the shading menu passes on). Esc stops looking for parts by name, puts the
+  // parts list away, and then gets out of the section, the explode, what was shown on
+  // its own or what was put out of sight, whichever was gone into last. Shift+G rules
+  // the ground and draws the world's axes, as it brings up the grid in Figma, and again
+  // takes them away. (Cmd+F, which looks for parts by name, is listened for where the
+  // name is typed: see Search.)
   //
   // Cmd+G makes a group of the parts picked out, and Shift+Cmd+G takes them out of
   // their groups (see above). Cmd+/ sets the model in the reference scene that suits
@@ -1055,6 +1082,16 @@ function Model({ project }: { project: Project }) {
       } else if (letter === "p") {
         const { partsOpen, setPartsOpen } = useStore.getState()
         setPartsOpen(!partsOpen)
+      } else if (letter === " ") {
+        // the camera is the view's: a blueprint has none to bring anywhere
+        if (view.blueprint || spaceTaken(event)) return
+        const box = boxRound(
+          loaded,
+          pickedOut(),
+          view.exploded ? view.spread : 0
+        )
+        if (!box) return
+        bridge.goTo?.(box, underList())
       } else if (view.section && (letter === "x" || letter === "y"))
         setView({ section: sectionAcross(letter, middle) })
       else return
@@ -1096,22 +1133,7 @@ function Model({ project }: { project: Project }) {
   )
 
   React.useEffect(() => {
-    const boxes = (loaded?.parts ?? [])
-      .filter((part) => near.includes(part.part.id))
-      .map((part) =>
-        part.box
-          .clone()
-          .applyMatrix4(part.home)
-          .translate(part.away.clone().multiplyScalar(explode))
-      )
-    const list = document.querySelector<HTMLElement>("[data-parts-list]")
-    const within = list?.offsetParent?.getBoundingClientRect()
-    bridge.focus?.(
-      boxes.length > 0 ? boxes.reduce((all, box) => all.union(box)) : null,
-      list && within
-        ? within.right - list.getBoundingClientRect().left + LIST_GAP
-        : 0
-    )
+    bridge.focus?.(boxRound(loaded, near, explode), underList())
   }, [loaded, near, explode])
 
   // Z is the shading menu's key. While the model is cut open a tap of it still chooses

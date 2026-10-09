@@ -26,6 +26,11 @@ export const bridge: {
    */
   focus: ((box: THREE.Box3 | null, covered?: number) => void) | null
   /**
+   * bring the camera to what fills this box of the model for this once, with `covered`
+   * as above: it is not kept to it, and there is nowhere for it to be taken back to
+   */
+  goTo: ((box: THREE.Box3, covered?: number) => void) | null
+  /**
    * true while a handle in the view is being dragged, or a box drawn across it: not the
    * moment to pick the part under the pointer
    */
@@ -38,6 +43,7 @@ export const bridge: {
   eye: null,
   flat: null,
   focus: null,
+  goTo: null,
   handling: false,
 }
 
