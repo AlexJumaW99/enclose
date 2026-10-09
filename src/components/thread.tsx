@@ -1,14 +1,22 @@
 import * as React from "react"
 import { cn } from "cn"
 import {
+  ArrowUpIcon,
   BoxesIcon,
   BoxIcon,
+  ClockIcon,
   PanelRightCloseIcon,
   PlusIcon,
   TriangleAlertIcon,
+  XIcon,
 } from "lucide-react"
 
-import type { ConversationSummary, Project, ThreadItem } from "@shared/api"
+import type {
+  ConversationSummary,
+  Project,
+  Said,
+  ThreadItem,
+} from "@shared/api"
 import { Composer } from "@/components/composer"
 import { ReferenceIcon } from "@/components/icons"
 import { Thumb } from "@/components/picture"
@@ -46,17 +54,80 @@ import { atPictures, pictureName, pictureUrl } from "@shared/pictures"
 
 type Of<Kind extends ThreadItem["kind"]> = Extract<ThreadItem, { kind: Kind }>
 
+/**
+ * Something the user said, in its bubble. Lines made about as long as each other leave
+ * the box they were set in wider than they are, so the bubble is drawn in to the longest
+ * of them. One that waits to be said is only outlined.
+ */
+function Bubble({
+  of,
+  waiting,
+  className,
+  children,
+}: {
+  /** what is said in it: it is fitted again when that changes */
+  of: string
+  waiting?: boolean
+  className?: string
+  children: React.ReactNode
+}) {
+  const box = React.useRef<HTMLDivElement>(null)
+  React.useLayoutEffect(() => {
+    const at = box.current
+    const within = at?.parentElement
+    if (!at || !within) return
+    const fit = () => {
+      at.style.width = ""
+      const range = document.createRange()
+      range.selectNodeContents(at)
+      const lines = [...range.getClientRects()].filter((line) => line.width > 0)
+      if (lines.length === 0) return
+      const style = getComputedStyle(at)
+      const around =
+        parseFloat(style.paddingLeft) +
+        parseFloat(style.paddingRight) +
+        parseFloat(style.borderLeftWidth) +
+        parseFloat(style.borderRightWidth)
+      const wide =
+        Math.max(...lines.map((line) => line.right)) -
+        Math.min(...lines.map((line) => line.left))
+      at.style.width = `${Math.ceil(wide + around)}px`
+    }
+    // (looked at once to begin with, and again whenever there is more or less room)
+    const watching = new ResizeObserver(fit)
+    watching.observe(within)
+    // the letters may not have been in their own font yet
+    void document.fonts.ready.then(fit)
+    return () => watching.disconnect()
+  }, [of])
+  return (
+    <div
+      ref={box}
+      className={cn(
+        "max-w-[85%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap",
+        waiting
+          ? "border border-dashed border-foreground/25 text-muted-foreground"
+          : "bg-muted",
+        className
+      )}
+    >
+      {children}
+    </div>
+  )
+}
+
 function UserMessage({
   item,
   project,
+  waiting,
 }: {
   item: Of<"user">
   project: Project
+  /** it is yet to be said: it waits for the turn under way to be over */
+  waiting?: boolean
 }) {
   const pictures = item.pictures ?? []
   const numbers = pictures.map((picture) => picture.number)
-  const SAID =
-    "max-w-[85%] rounded-2xl bg-muted px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap"
   // asked by the app itself, and so not shown as something the user said
   if (item.lookOver)
     return (
@@ -109,19 +180,21 @@ function UserMessage({
       )}
       {/* what was said of parts, each under the name of its part */}
       {item.notes?.map((note, index) => (
-        <div
+        <Bubble
           key={index}
-          className={cn(SAID, "flex flex-col items-start gap-1")}
+          of={note.text}
+          waiting={waiting}
+          className="flex flex-col items-start gap-1"
         >
           <Badge variant="outline">
             <BoxIcon data-icon="inline-start" />
             {goesBy(note.part)}
           </Badge>
           {note.text}
-        </div>
+        </Bubble>
       ))}
       {item.text && (
-        <div className={SAID}>
+        <Bubble of={item.text} waiting={waiting}>
           {/* the names in it that call on something are set off from the rest */}
           {stretches(item.text).map((stretch, index) =>
             stretch.kind ? (
@@ -156,8 +229,77 @@ function UserMessage({
               })
             )
           )}
-        </div>
+        </Bubble>
       )}
+    </div>
+  )
+}
+
+/**
+ * Something said while the conversation was being answered, which waits its turn: as it
+ * will be said, with a way to say it at once, and one to take it back.
+ */
+function Queued({
+  item,
+  project,
+  elsewhere,
+}: {
+  item: Said
+  project: Project
+  /** another of the project's conversations is being answered: this cannot be said yet */
+  elsewhere: boolean
+}) {
+  return (
+    // (as wide as the conversation, as anything said in it is: a bubble is sized by that)
+    <div className="flex flex-col gap-1">
+      <UserMessage item={item} project={project} waiting />
+      {/* the cross ends where the bubble does, and not the room round it */}
+      <div className="-mr-1.5 flex items-center gap-1 self-end text-xs text-muted-foreground">
+        <ClockIcon
+          size={12}
+          absoluteStrokeWidth
+          strokeWidth={1}
+          className="shrink-0"
+        />
+        <span className="mr-1">Queued</span>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="hover:text-foreground"
+                disabled={elsewhere}
+                onClick={() =>
+                  void window.cad.thread.sendNow(project.id, item.id)
+                }
+              />
+            }
+          >
+            <ArrowUpIcon />
+            <span className="sr-only">Send now</span>
+          </TooltipTrigger>
+          <TooltipContent>Send now</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="hover:text-foreground"
+                onClick={() =>
+                  void window.cad.thread.unqueue(project.id, item.id)
+                }
+              />
+            }
+          >
+            <XIcon />
+            <span className="sr-only">Remove</span>
+          </TooltipTrigger>
+          <TooltipContent>Remove</TooltipContent>
+        </Tooltip>
+      </div>
     </div>
   )
 }
@@ -226,7 +368,7 @@ function Item({
       return item.tone === "error" ? (
         <Alert variant="destructive">
           <TriangleAlertIcon />
-          <AlertDescription className="whitespace-pre-wrap">
+          <AlertDescription className="whitespace-pre-wrap md:text-balance">
             {item.text}
           </AlertDescription>
         </Alert>
@@ -305,6 +447,9 @@ function Name({
     />
   )
 }
+
+/** Stable when a conversation has nothing waiting to be said. */
+const NOTHING_QUEUED: Said[] = []
 
 /** How far an arrow key moves the conversation's edge, px. */
 const NUDGE = 16
@@ -420,12 +565,15 @@ export function Thread({ project }: { project: Project }) {
     if (openId) load(project.id, openId)
   }, [project.id, openId, load])
 
+  // what was said here while it was being answered, and waits its turn
+  const queued = open?.queued ?? NOTHING_QUEUED
+
   // follow the conversation as it grows
   const last = items?.at(-1)
   const tail = last && "text" in last ? last.text.length : 0
   React.useEffect(() => {
     end.current?.scrollIntoView({ block: "end" })
-  }, [items?.length, tail])
+  }, [items?.length, tail, queued.length])
 
   const blocks = React.useMemo(() => inBlocks(items ?? []), [items])
   const working = open?.status === "working"
@@ -492,8 +640,8 @@ export function Thread({ project }: { project: Project }) {
 
       {items?.length ? (
         <ScrollArea className="min-h-0 flex-1">
-          {/* everything said here breaks its lines so that none ends on a word alone */}
-          <div className="flex flex-col gap-4 px-8 pt-2 pb-6 text-pretty">
+          {/* everything said here breaks into lines of about one length */}
+          <div className="flex flex-col gap-4 px-8 pt-2 pb-6 text-balance">
             {blocks.map((block) =>
               block.kind === "steps" ? (
                 <Steps
@@ -513,6 +661,14 @@ export function Thread({ project }: { project: Project }) {
                 </span>
               </div>
             )}
+            {queued.map((item) => (
+              <Queued
+                key={item.id}
+                item={item}
+                project={project}
+                elsewhere={elsewhere}
+              />
+            ))}
             <div ref={end} />
           </div>
         </ScrollArea>
@@ -566,7 +722,7 @@ export function Thread({ project }: { project: Project }) {
         />
         {/* said only when a message cannot be sent, and why */}
         {(elsewhere || (agent && !agent.checking && !usable(agent))) && (
-          <p className="px-1.5 text-xs text-muted-foreground">
+          <p className="px-1.5 text-xs text-balance text-muted-foreground">
             {elsewhere
               ? "Another of this project's conversations is still being answered."
               : agent?.status?.path

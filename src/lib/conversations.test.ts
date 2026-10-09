@@ -21,6 +21,7 @@ const left = (
   gist: null,
   failed: false,
   updatedAt: NOW - days * DAY,
+  queued: [],
 })
 
 /** A layout by its ids: the card, what is under it, and what the panel shows. */

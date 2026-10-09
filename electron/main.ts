@@ -944,6 +944,14 @@ function wire() {
       lookOver(String(id), seenFrom(seen), mannerFrom(manner))
   )
   ipcMain.handle(CHANNEL.threadStop, (_, id: string) => threads.stop(id))
+  ipcMain.handle(CHANNEL.threadSendNow, (_, id: string, queued: string) =>
+    threads.sendNow(String(id), String(queued))
+  )
+  ipcMain.handle(CHANNEL.threadUnqueue, (_, id: string, queued: string) => {
+    // the pictures that were to go with it are no conversation's: they are not kept
+    for (const picture of threads.unqueue(String(id), String(queued)))
+      pictures.drop(String(id), picture.id)
+  })
   ipcMain.handle(CHANNEL.changesUndo, (_, id: string) =>
     turnBack(String(id), "undo")
   )

@@ -85,6 +85,10 @@ const api: CadApi = {
     lookOver: (projectId, seen, manner) =>
       ipcRenderer.invoke(CHANNEL.threadLookOver, projectId, seen, manner),
     stop: (projectId) => ipcRenderer.invoke(CHANNEL.threadStop, projectId),
+    sendNow: (projectId, queuedId) =>
+      ipcRenderer.invoke(CHANNEL.threadSendNow, projectId, queuedId),
+    unqueue: (projectId, queuedId) =>
+      ipcRenderer.invoke(CHANNEL.threadUnqueue, projectId, queuedId),
     rename: (projectId, conversationId, name) =>
       ipcRenderer.invoke(CHANNEL.threadRename, projectId, conversationId, name),
     answer: (projectId, permissionId, answer) =>

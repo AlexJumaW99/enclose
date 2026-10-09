@@ -25,6 +25,7 @@ import type {
   PermissionAnswer,
   ProviderId,
   Question,
+  Said,
   Seen,
   ThreadItem,
   ViewportAsked,
@@ -78,6 +79,30 @@ type Run = {
   lookOver: boolean
   /** what was asked for in it, in a line: what it goes by if what it does is taken back */
   what: string
+  /** it was stopped to make way for what waits in its conversation, which is said at once */
+  makingWay: boolean
+}
+
+/** What a turn is begun with, besides the words of what was said. */
+type Asked = {
+  content: Content | ((told: Told, provider: ProviderId) => Content)
+  arrange?: Arranging
+  /** what the reference scene the message is about goes by, if it is about one */
+  reference?: string
+  /** the pictures that go with the message */
+  pictures?: Shown[]
+}
+
+/**
+ * Something said in a conversation while it was being answered. It waits for the turn
+ * before it to be over, and is then said as it would have been.
+ */
+type Waiting = {
+  conversation: Conversation
+  /** it as the conversation shows it meanwhile */
+  item: Said
+  manner: Manner
+  asked: Asked
 }
 
 /**
@@ -91,7 +116,12 @@ export type Arranging = (
 ) => Promise<string>
 
 /** What has been said about one project, and what is being said now. */
-type Book = { conversations: Map<string, Conversation>; run: Run | null }
+type Book = {
+  conversations: Map<string, Conversation>
+  run: Run | null
+  /** what waits to be said, the first to go first: kept for as long as the app is open */
+  waiting: Waiting[]
+}
 
 export type ThreadsDeps = {
   dir: string
@@ -771,6 +801,43 @@ function said(conversation: Conversation, working: boolean) {
   )
 }
 
+/** What the user said, as a conversation keeps it. */
+function saidOf(
+  id: string,
+  at: number,
+  text: string,
+  notes: PartNote[],
+  objects: ObjectRef[],
+  asked: Asked
+): Said {
+  const pictures = asked.pictures ?? []
+  return {
+    kind: "user",
+    id,
+    at,
+    text,
+    part: null,
+    ...(notes.length > 0 ? { notes } : {}),
+    ...(objects.length > 0 ? { objects } : {}),
+    ...(asked.reference ? { reference: asked.reference } : {}),
+    ...(pictures.length > 0
+      ? {
+          // what is in each is kept in its file, and not with what was said
+          pictures: pictures.map(
+            ({ id, name, mimeType, bytes, number }): Attached => ({
+              id,
+              name,
+              mimeType,
+              bytes,
+              number,
+            })
+          ),
+        }
+      : {}),
+    ...(asked.arrange ? { lookOver: true as const } : {}),
+  }
+}
+
 function firstLine(text: string): string {
   const line = text.trim().split("\n")[0] ?? ""
   return line.length > 140 ? `${line.slice(0, 140)}…` : line
@@ -806,6 +873,7 @@ export class Threads {
       book = {
         conversations: new Map(read.map((c) => [c.id, c])),
         run: null,
+        waiting: [],
       }
       this.books.set(projectId, book)
     }
@@ -864,7 +932,7 @@ export class Threads {
 
   /** A project's conversations as the sidebar shows them, the latest first. */
   summaries(projectId: string): ConversationSummary[] {
-    const { conversations, run } = this.book(projectId)
+    const { conversations, run, waiting } = this.book(projectId)
     return [...conversations.values()]
       .sort((a, b) => lastAt(b) - lastAt(a))
       .map((conversation) => {
@@ -891,6 +959,9 @@ export class Threads {
               : null,
           failed: latest?.kind === "notice" && latest.tone === "error",
           updatedAt: lastAt(conversation),
+          queued: waiting
+            .filter((one) => one.conversation === conversation)
+            .map((one) => one.item),
         }
       })
   }
@@ -948,6 +1019,65 @@ export class Threads {
     this.book(projectId).run?.abort.abort()
   }
 
+  /**
+   * Say at once something that is waiting its turn. What is being done in its
+   * conversation is stopped for it; a turn of another conversation is left to finish.
+   */
+  sendNow(projectId: string, queuedId: string) {
+    const book = this.book(projectId)
+    const index = book.waiting.findIndex((one) => one.item.id === queuedId)
+    const { run } = book
+    if (
+      index < 0 ||
+      (run && run.conversation !== book.waiting[index].conversation)
+    )
+      return
+    // ahead of whatever else waits there
+    const [one] = book.waiting.splice(index, 1)
+    book.waiting.unshift(one)
+    if (!run) return void this.next(projectId, book, one.conversation)
+    run.makingWay = true
+    run.abort.abort()
+    this.deps.onSummary()
+  }
+
+  /**
+   * Take back something that is waiting its turn, before it is said. Returns the
+   * pictures that were to go with it, which are now nothing's.
+   */
+  unqueue(projectId: string, queuedId: string): Attached[] {
+    const book = this.book(projectId)
+    const index = book.waiting.findIndex((one) => one.item.id === queuedId)
+    if (index < 0) return []
+    const [{ item }] = book.waiting.splice(index, 1)
+    this.deps.onSummary()
+    return item.pictures ?? []
+  }
+
+  /** Say the first thing that waits in a conversation, which is free. Whether it was said. */
+  private next(
+    projectId: string,
+    book: Book,
+    conversation: Conversation
+  ): boolean {
+    const index = book.waiting.findIndex(
+      (one) => one.conversation === conversation
+    )
+    if (index < 0) return false
+    const [{ item, manner, asked }] = book.waiting.splice(index, 1)
+    return (
+      this.begin(
+        projectId,
+        conversation.id,
+        item.text,
+        item.notes ?? [],
+        item.objects ?? [],
+        manner,
+        asked
+      ) !== null
+    )
+  }
+
   /** Call a conversation something. Called nothing, it goes by what was first said in it. */
   rename(projectId: string, conversationId: string, name: string) {
     const conversation = this.book(projectId).conversations.get(conversationId)
@@ -972,8 +1102,9 @@ export class Threads {
 
   /**
    * Say something in one of a project's conversations, or begin a new one with it
-   * (null), and set Claude to work on it. Returns the conversation it went into, or null
-   * if it could not be said: one thing at a time is done in a project's folder.
+   * (null), and set Claude to work on it. Said in the conversation Claude is at work in,
+   * it waits for that turn to be over. Returns the conversation it went into, or null if
+   * it could not be said: one thing at a time is done in a project's folder.
    */
   send(
     projectId: string,
@@ -987,7 +1118,7 @@ export class Threads {
     /** the pictures that go with it */
     pictures: Shown[] = []
   ): string | null {
-    return this.begin(projectId, conversationId, text, notes, objects, manner, {
+    const asked: Asked = {
       content: (told, provider) =>
         pictured(
           withNotes(text, notes, objects, told, reference),
@@ -996,7 +1127,35 @@ export class Threads {
         ),
       reference: reference?.name,
       pictures,
+    }
+    const book = this.book(projectId)
+    const conversation = book.run?.conversation
+    if (!conversation || conversation.id !== conversationId)
+      return this.begin(
+        projectId,
+        conversationId,
+        text,
+        notes,
+        objects,
+        manner,
+        asked
+      )
+    const now = Date.now()
+    book.waiting.push({
+      conversation,
+      item: saidOf(
+        `queued-${++this.counter}-${now}`,
+        now,
+        text,
+        notes,
+        objects,
+        asked
+      ),
+      manner,
+      asked,
     })
+    this.deps.onSummary()
+    return conversation.id
   }
 
   /** Whether Claude is at work in a project: nothing else is done in its folder meanwhile. */
@@ -1048,14 +1207,7 @@ export class Threads {
     notes: PartNote[],
     objects: ObjectRef[],
     manner: Manner,
-    asked: {
-      content: Content | ((told: Told, provider: ProviderId) => Content)
-      arrange?: Arranging
-      /** what the reference scene the message is about goes by, if it is about one */
-      reference?: string
-      /** the pictures that go with the message */
-      pictures?: Shown[]
-    }
+    asked: Asked
   ): string | null {
     const project = this.deps.projects.get(projectId)
     const book = this.book(projectId)
@@ -1081,31 +1233,15 @@ export class Threads {
 
     const now = Date.now()
     const pictures = asked.pictures ?? []
-    const said: Extract<ThreadItem, { kind: "user" }> = {
-      kind: "user",
-      id: `user-${now}`,
-      at: now,
+    // (one said the moment another was stopped for it can begin in the same millisecond)
+    const said = saidOf(
+      `user-${++this.counter}-${now}`,
+      now,
       text,
-      part: null,
-      ...(notes.length > 0 ? { notes } : {}),
-      ...(objects.length > 0 ? { objects } : {}),
-      ...(asked.reference ? { reference: asked.reference } : {}),
-      ...(pictures.length > 0
-        ? {
-            // what is in each is kept in its file, and not with what was said
-            pictures: pictures.map(
-              ({ id, name, mimeType, bytes, number }): Attached => ({
-                id,
-                name,
-                mimeType,
-                bytes,
-                number,
-              })
-            ),
-          }
-        : {}),
-      ...(asked.arrange ? { lookOver: true as const } : {}),
-    }
+      notes,
+      objects,
+      asked
+    )
     this.put(projectId, conversation, said)
     // the user is not left to think an agent saw what it cannot be shown
     if (pictures.length > 0 && !TAKES_PICTURES[conversation.provider])
@@ -1136,6 +1272,7 @@ export class Threads {
       asked: new Map(),
       lookOver: asked.arrange !== undefined,
       what: firstLine(wordsOf(said)),
+      makingWay: false,
     }
     book.run = run
     this.deps.onSummary()
@@ -1304,13 +1441,23 @@ export class Threads {
           })
           .catch(() => this.deps.changes.discard(pending))
       else if (pending) this.deps.changes.discard(pending)
-      if (book.run === run) book.run = null
-      this.write(projectId, conversation)
       // the agent may have created, moved or rebuilt the model
       this.deps.projects.refresh(projectId)
+      if (book.run === run) book.run = null
+      this.write(projectId, conversation)
+      // What was said here meanwhile is said now, if the turn got through, or was stopped
+      // to make way for it. After one that was stopped, or went wrong, it waits to be
+      // sent by hand: what was wanted next may no longer be.
+      const latest = conversation.items.at(-1)
+      const failed = latest?.kind === "notice" && latest.tone === "error"
+      const goesOn =
+        this.books.get(projectId) === book &&
+        book.run === null &&
+        (run.makingWay || !(abort.signal.aborted || failed)) &&
+        this.next(projectId, book, conversation)
       // and with nothing at work in the folder any more, a project that has just been
       // given its shape can take its name
-      this.deps.projects.christen(projectId, this.deps.onRenamed)
+      if (!goesOn) this.deps.projects.christen(projectId, this.deps.onRenamed)
       this.deps.onSummary()
     }
   }

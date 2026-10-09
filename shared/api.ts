@@ -30,6 +30,12 @@ export type ConversationSummary = {
   failed: boolean
   /** when something was last said or done in it (ms) */
   updatedAt: number
+  /**
+   * What was said in it while it was being answered, in the order it was said: each
+   * waits for the turn before it to be over. One left waiting by a turn that was stopped,
+   * or did not get through, waits to be sent by hand.
+   */
+  queued: Said[]
 }
 
 /**
@@ -153,6 +159,9 @@ export type Question = {
   /** more than one of them can be chosen */
   several: boolean
 }
+
+/** Something the user said in a conversation. */
+export type Said = Extract<ThreadItem, { kind: "user" }>
 
 export type ThreadItem =
   | {
@@ -563,6 +572,13 @@ export type CadApi = {
     ): Promise<string | null>
     /** stop whatever Claude is doing in the project */
     stop(projectId: string): Promise<void>
+    /**
+     * Say at once something that is waiting its turn: what is being done in its
+     * conversation is stopped for it.
+     */
+    sendNow(projectId: string, queuedId: string): Promise<void>
+    /** take back something that is waiting its turn, before it is said */
+    unqueue(projectId: string, queuedId: string): Promise<void>
     /** give a conversation a name to go by; given none, it goes by what was first said */
     rename(
       projectId: string,
@@ -646,6 +662,8 @@ export const CHANNEL = {
   threadSend: "thread:send",
   threadLookOver: "thread:look-over",
   threadStop: "thread:stop",
+  threadSendNow: "thread:send-now",
+  threadUnqueue: "thread:unqueue",
   threadRename: "thread:rename",
   threadAnswer: "thread:answer",
   threadTell: "thread:tell",

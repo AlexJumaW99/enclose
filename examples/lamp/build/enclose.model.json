@@ -1,0 +1,723 @@
+{
+ "title": "Clip lamp on a shelf",
+ "reference": "room",
+ "groups": [
+  {
+   "id": "shelf",
+   "label": "Shelf"
+  },
+  {
+   "id": "clamp",
+   "label": "Clamp"
+  },
+  {
+   "id": "shade",
+   "label": "Shade",
+   "shell": true
+  },
+  {
+   "id": "light",
+   "label": "Light"
+  },
+  {
+   "id": "wire",
+   "label": "Wire"
+  }
+ ],
+ "parts": [
+  {
+   "id": "ladder-left",
+   "label": "Ladder, left",
+   "group": "shelf",
+   "color": "white",
+   "explode": [
+    -80.0,
+    0.0,
+    0.0
+   ],
+   "file": "ladder-left.glb",
+   "edges": "ladder-left.edges.bin"
+  },
+  {
+   "id": "foot-left",
+   "label": "Foot, left",
+   "group": "shelf",
+   "color": "white",
+   "explode": [
+    -80.0,
+    0.0,
+    -30.0
+   ],
+   "file": "foot-left.glb",
+   "edges": "foot-left.edges.bin"
+  },
+  {
+   "id": "wall-screw-left",
+   "label": "Wall screw, left, M4 \u00d7 25",
+   "group": "shelf",
+   "finish": "metal",
+   "explode": [
+    -80.0,
+    -40.0,
+    0.0
+   ],
+   "file": "wall-screw-left.glb",
+   "edges": "wall-screw-left.edges.bin"
+  },
+  {
+   "id": "ladder-right",
+   "label": "Ladder, right",
+   "group": "shelf",
+   "color": "white",
+   "explode": [
+    80.0,
+    0.0,
+    0.0
+   ],
+   "file": "ladder-right.glb",
+   "edges": "ladder-right.edges.bin"
+  },
+  {
+   "id": "foot-right",
+   "label": "Foot, right",
+   "group": "shelf",
+   "color": "white",
+   "explode": [
+    80.0,
+    0.0,
+    -30.0
+   ],
+   "file": "foot-right.glb",
+   "edges": "foot-right.edges.bin"
+  },
+  {
+   "id": "wall-screw-right",
+   "label": "Wall screw, right, M4 \u00d7 25",
+   "group": "shelf",
+   "finish": "metal",
+   "explode": [
+    80.0,
+    -40.0,
+    0.0
+   ],
+   "file": "wall-screw-right.glb",
+   "edges": "wall-screw-right.edges.bin"
+  },
+  {
+   "id": "shelf-6",
+   "label": "Shelf 6",
+   "group": "shelf",
+   "color": "white",
+   "explode": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "file": "shelf-6.glb",
+   "edges": "shelf-6.edges.bin"
+  },
+  {
+   "id": "shelf-5",
+   "label": "Shelf 5",
+   "group": "shelf",
+   "color": "white",
+   "explode": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "file": "shelf-5.glb",
+   "edges": "shelf-5.edges.bin"
+  },
+  {
+   "id": "shelf-4",
+   "label": "Shelf 4",
+   "group": "shelf",
+   "color": "white",
+   "explode": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "file": "shelf-4.glb",
+   "edges": "shelf-4.edges.bin"
+  },
+  {
+   "id": "shelf-3",
+   "label": "Shelf 3",
+   "group": "shelf",
+   "color": "white",
+   "explode": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "file": "shelf-3.glb",
+   "edges": "shelf-3.edges.bin"
+  },
+  {
+   "id": "shelf-2",
+   "label": "Shelf 2",
+   "group": "shelf",
+   "color": "white",
+   "explode": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "file": "shelf-2.glb",
+   "edges": "shelf-2.edges.bin"
+  },
+  {
+   "id": "shelf-1",
+   "label": "Shelf 1",
+   "group": "shelf",
+   "color": "white",
+   "explode": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "file": "shelf-1.glb",
+   "edges": "shelf-1.edges.bin"
+  },
+  {
+   "id": "clips",
+   "label": "Shelf clips",
+   "group": "shelf",
+   "color": "yellow",
+   "explode": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "file": "clips.glb",
+   "edges": "clips.edges.bin"
+  },
+  {
+   "id": "clip-screws",
+   "label": "Clip screws, M3 \u00d7 10",
+   "group": "shelf",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    0.0,
+    -30.0
+   ],
+   "file": "clip-screws.glb",
+   "edges": "clip-screws.edges.bin"
+  },
+  {
+   "id": "frame",
+   "label": "Clamp",
+   "group": "clamp",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    -80.0,
+    0.0
+   ],
+   "file": "frame.glb",
+   "edges": "frame.edges.bin"
+  },
+  {
+   "id": "clamp-screw",
+   "label": "Clamping screw, M8",
+   "group": "clamp",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    -80.0,
+    -40.0
+   ],
+   "file": "clamp-screw.glb",
+   "edges": "clamp-screw.edges.bin"
+  },
+  {
+   "id": "ring",
+   "label": "Ring",
+   "group": "clamp",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    -80.0,
+    -62.0
+   ],
+   "file": "ring.glb",
+   "edges": "ring.edges.bin"
+  },
+  {
+   "id": "pad",
+   "label": "Pad",
+   "group": "clamp",
+   "color": "grey",
+   "explode": [
+    0.0,
+    -80.0,
+    -12.0
+   ],
+   "file": "pad.glb",
+   "edges": "pad.edges.bin"
+  },
+  {
+   "id": "pinch-screw",
+   "label": "Pinch screw, M4 \u00d7 8",
+   "group": "clamp",
+   "finish": "metal",
+   "explode": [
+    35.0,
+    -80.0,
+    0.0
+   ],
+   "file": "pinch-screw.glb",
+   "edges": "pinch-screw.edges.bin"
+  },
+  {
+   "id": "shade",
+   "label": "Shade",
+   "group": "shade",
+   "color": "blue",
+   "explode": [
+    0.0,
+    -150.0,
+    62.0
+   ],
+   "file": "shade.glb",
+   "edges": "shade.edges.bin"
+  },
+  {
+   "id": "cup",
+   "label": "Cup",
+   "group": "shade",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    -80.0,
+    62.0
+   ],
+   "file": "cup.glb",
+   "edges": "cup.edges.bin"
+  },
+  {
+   "id": "stem",
+   "label": "Stem",
+   "group": "light",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    -80.0,
+    25.0
+   ],
+   "file": "stem.glb",
+   "edges": "stem.edges.bin"
+  },
+  {
+   "id": "stem-nut",
+   "label": "Stem nut, M10",
+   "group": "light",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    -80.0,
+    42.0
+   ],
+   "file": "stem-nut.glb",
+   "edges": "stem-nut.edges.bin"
+  },
+  {
+   "id": "stud-nuts",
+   "label": "Shade nuts, M3",
+   "group": "light",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    -62.0,
+    62.0
+   ],
+   "file": "stud-nuts.glb",
+   "edges": "stud-nuts.edges.bin"
+  },
+  {
+   "id": "holder",
+   "label": "Lamp holder, E27",
+   "group": "light",
+   "color": "grey",
+   "explode": [
+    0.0,
+    -80.0,
+    95.0
+   ],
+   "file": "holder.glb",
+   "edges": "holder.edges.bin"
+  },
+  {
+   "id": "bulb-cap",
+   "label": "Bulb cap",
+   "group": "light",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    -80.0,
+    128.0
+   ],
+   "file": "bulb-cap.glb",
+   "edges": "bulb-cap.edges.bin"
+  },
+  {
+   "id": "bulb",
+   "label": "Bulb",
+   "group": "light",
+   "color": "white",
+   "finish": "glass",
+   "explode": [
+    0.0,
+    -80.0,
+    128.0
+   ],
+   "file": "bulb.glb",
+   "edges": "bulb.edges.bin"
+  },
+  {
+   "id": "bush",
+   "label": "Bush",
+   "group": "wire",
+   "color": "grey",
+   "explode": [
+    0.0,
+    -80.0,
+    -10.0
+   ],
+   "file": "bush.glb",
+   "edges": "bush.edges.bin"
+  },
+  {
+   "id": "wire",
+   "label": "Wire",
+   "group": "wire",
+   "color": "grey",
+   "explode": [
+    0.0,
+    -80.0,
+    0.0
+   ],
+   "file": "wire.glb",
+   "edges": "wire.edges.bin"
+  },
+  {
+   "id": "switch",
+   "label": "Switch",
+   "group": "wire",
+   "color": "grey",
+   "explode": [
+    0.0,
+    -80.0,
+    0.0
+   ],
+   "file": "switch.glb",
+   "edges": "switch.edges.bin"
+  },
+  {
+   "id": "plug",
+   "label": "Plug",
+   "group": "wire",
+   "color": "grey",
+   "explode": [
+    -30.0,
+    -80.0,
+    0.0
+   ],
+   "file": "plug.glb",
+   "edges": "plug.edges.bin"
+  }
+ ],
+ "keepouts": [],
+ "downloads": [
+  {
+   "file": "step/clip_lamp_on_a_shelf.step",
+   "name": "clip_lamp_on_a_shelf.step",
+   "label": "Clip lamp on a shelf",
+   "detail": "every part, in place",
+   "kind": "full",
+   "bytes": 15553094
+  },
+  {
+   "file": "step/ladder-left.step",
+   "name": "ladder-left.step",
+   "label": "Ladder, left",
+   "detail": "",
+   "kind": "part",
+   "part": "ladder-left",
+   "bytes": 2166483
+  },
+  {
+   "file": "step/foot-left.step",
+   "name": "foot-left.step",
+   "label": "Foot, left",
+   "detail": "",
+   "kind": "part",
+   "part": "foot-left",
+   "bytes": 9558
+  },
+  {
+   "file": "step/wall-screw-left.step",
+   "name": "wall-screw-left.step",
+   "label": "Wall screw, left, M4 \u00d7 25",
+   "detail": "",
+   "kind": "part",
+   "part": "wall-screw-left",
+   "bytes": 465143
+  },
+  {
+   "file": "step/ladder-right.step",
+   "name": "ladder-right.step",
+   "label": "Ladder, right",
+   "detail": "",
+   "kind": "part",
+   "part": "ladder-right",
+   "bytes": 2168974
+  },
+  {
+   "file": "step/foot-right.step",
+   "name": "foot-right.step",
+   "label": "Foot, right",
+   "detail": "",
+   "kind": "part",
+   "part": "foot-right",
+   "bytes": 9543
+  },
+  {
+   "file": "step/wall-screw-right.step",
+   "name": "wall-screw-right.step",
+   "label": "Wall screw, right, M4 \u00d7 25",
+   "detail": "",
+   "kind": "part",
+   "part": "wall-screw-right",
+   "bytes": 465141
+  },
+  {
+   "file": "step/shelf-6.step",
+   "name": "shelf-6.step",
+   "label": "Shelf 6",
+   "detail": "",
+   "kind": "part",
+   "part": "shelf-6",
+   "bytes": 82592
+  },
+  {
+   "file": "step/shelf-5.step",
+   "name": "shelf-5.step",
+   "label": "Shelf 5",
+   "detail": "",
+   "kind": "part",
+   "part": "shelf-5",
+   "bytes": 82636
+  },
+  {
+   "file": "step/shelf-4.step",
+   "name": "shelf-4.step",
+   "label": "Shelf 4",
+   "detail": "",
+   "kind": "part",
+   "part": "shelf-4",
+   "bytes": 82592
+  },
+  {
+   "file": "step/shelf-3.step",
+   "name": "shelf-3.step",
+   "label": "Shelf 3",
+   "detail": "",
+   "kind": "part",
+   "part": "shelf-3",
+   "bytes": 82006
+  },
+  {
+   "file": "step/shelf-2.step",
+   "name": "shelf-2.step",
+   "label": "Shelf 2",
+   "detail": "",
+   "kind": "part",
+   "part": "shelf-2",
+   "bytes": 81909
+  },
+  {
+   "file": "step/shelf-1.step",
+   "name": "shelf-1.step",
+   "label": "Shelf 1",
+   "detail": "",
+   "kind": "part",
+   "part": "shelf-1",
+   "bytes": 81997
+  },
+  {
+   "file": "step/clips.step",
+   "name": "clips.step",
+   "label": "Shelf clips",
+   "detail": "",
+   "kind": "part",
+   "part": "clips",
+   "bytes": 1028050
+  },
+  {
+   "file": "step/clip-screws.step",
+   "name": "clip-screws.step",
+   "label": "Clip screws, M3 \u00d7 10",
+   "detail": "",
+   "kind": "part",
+   "part": "clip-screws",
+   "bytes": 281353
+  },
+  {
+   "file": "step/frame.step",
+   "name": "frame.step",
+   "label": "Clamp",
+   "detail": "",
+   "kind": "part",
+   "part": "frame",
+   "bytes": 78279
+  },
+  {
+   "file": "step/clamp-screw.step",
+   "name": "clamp-screw.step",
+   "label": "Clamping screw, M8",
+   "detail": "",
+   "kind": "part",
+   "part": "clamp-screw",
+   "bytes": 560004
+  },
+  {
+   "file": "step/ring.step",
+   "name": "ring.step",
+   "label": "Ring",
+   "detail": "",
+   "kind": "part",
+   "part": "ring",
+   "bytes": 5630
+  },
+  {
+   "file": "step/pad.step",
+   "name": "pad.step",
+   "label": "Pad",
+   "detail": "",
+   "kind": "part",
+   "part": "pad",
+   "bytes": 11092
+  },
+  {
+   "file": "step/pinch-screw.step",
+   "name": "pinch-screw.step",
+   "label": "Pinch screw, M4 \u00d7 8",
+   "detail": "",
+   "kind": "part",
+   "part": "pinch-screw",
+   "bytes": 189145
+  },
+  {
+   "file": "step/shade.step",
+   "name": "shade.step",
+   "label": "Shade",
+   "detail": "",
+   "kind": "part",
+   "part": "shade",
+   "bytes": 84419
+  },
+  {
+   "file": "step/cup.step",
+   "name": "cup.step",
+   "label": "Cup",
+   "detail": "",
+   "kind": "part",
+   "part": "cup",
+   "bytes": 66546
+  },
+  {
+   "file": "step/stem.step",
+   "name": "stem.step",
+   "label": "Stem",
+   "detail": "",
+   "kind": "part",
+   "part": "stem",
+   "bytes": 10847
+  },
+  {
+   "file": "step/stem-nut.step",
+   "name": "stem-nut.step",
+   "label": "Stem nut, M10",
+   "detail": "",
+   "kind": "part",
+   "part": "stem-nut",
+   "bytes": 139795
+  },
+  {
+   "file": "step/stud-nuts.step",
+   "name": "stud-nuts.step",
+   "label": "Shade nuts, M3",
+   "detail": "",
+   "kind": "part",
+   "part": "stud-nuts",
+   "bytes": 136635
+  },
+  {
+   "file": "step/holder.step",
+   "name": "holder.step",
+   "label": "Lamp holder, E27",
+   "detail": "",
+   "kind": "part",
+   "part": "holder",
+   "bytes": 22766
+  },
+  {
+   "file": "step/bulb-cap.step",
+   "name": "bulb-cap.step",
+   "label": "Bulb cap",
+   "detail": "",
+   "kind": "part",
+   "part": "bulb-cap",
+   "bytes": 11094
+  },
+  {
+   "file": "step/bulb.step",
+   "name": "bulb.step",
+   "label": "Bulb",
+   "detail": "",
+   "kind": "part",
+   "part": "bulb",
+   "bytes": 8558
+  },
+  {
+   "file": "step/bush.step",
+   "name": "bush.step",
+   "label": "Bush",
+   "detail": "",
+   "kind": "part",
+   "part": "bush",
+   "bytes": 14711
+  },
+  {
+   "file": "step/wire.step",
+   "name": "wire.step",
+   "label": "Wire",
+   "detail": "",
+   "kind": "part",
+   "part": "wire",
+   "bytes": 70624
+  },
+  {
+   "file": "step/switch.step",
+   "name": "switch.step",
+   "label": "Switch",
+   "detail": "",
+   "kind": "part",
+   "part": "switch",
+   "bytes": 117011
+  },
+  {
+   "file": "step/plug.step",
+   "name": "plug.step",
+   "label": "Plug",
+   "detail": "",
+   "kind": "part",
+   "part": "plug",
+   "bytes": 90462
+  }
+ ]
+}

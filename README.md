@@ -581,8 +581,9 @@ and a list of every shortcut.
 
 ```
 electron/    the app's own process: window, project list, the line to Claude
-examples/    projects to open and try things on: a table clock, with a tool, and a
-             counter stool, to see beside a person
+examples/    projects to open and try things on: a table clock, with a tool, a
+             counter stool, to see beside a person, and a clip lamp on a wall shelf,
+             with its wire
 icons/       the app's icon, in the sizes each system asks for
 kit/         the exporter a project copies in to write its model (Python), the
              screws it can put in one, the app's own reference scenes, each drawn in

@@ -779,9 +779,10 @@ export function Composer({
     return () => hover(null)
   }, [lit, hover])
   // one thing at a time is done in a project's folder: Claude is at work in the
-  // conversation this writes to, which can be stopped, or in another of the project's
+  // conversation this writes to, which can be stopped, and where what is said meanwhile
+  // waits its turn; or in another of the project's
   const running = project?.conversations.find((c) => c.status !== "idle")
-  const busy = !project || (running !== undefined && running.id === open?.id)
+  const busy = running !== undefined && running.id === open?.id
   const elsewhere = running !== undefined && !busy
 
   const something =
@@ -790,7 +791,7 @@ export function Composer({
     called.length > 0 ||
     pictures.length > 0
   const submit = () => {
-    if (!busy && !elsewhere && something) send()
+    if (project && !elsewhere && something) send()
   }
 
   return (
@@ -936,26 +937,31 @@ export function Composer({
           <PaperclipIcon />
           <span className="sr-only">Attach an image</span>
         </InputGroupButton>
-        {busy && project ? (
-          <InputGroupButton
-            variant="secondary"
-            size="icon-xs"
-            className="shrink-0"
-            onClick={() => void window.cad.thread.stop(project.id)}
-          >
-            <SquareIcon className="fill-current" />
-            <span className="sr-only">Stop</span>
-          </InputGroupButton>
-        ) : (
+        {/* Claude at work here can be stopped: with nothing written, that is all there
+            is to do, and it is where sending would be */}
+        {busy && project && (
           <InputGroupButton
             variant="default"
             size="icon-xs"
+            title="Stop"
+            className="shrink-0 bg-destructive text-white hover:bg-destructive/80"
+            onClick={() => void window.cad.thread.stop(project.id)}
+          >
+            <SquareIcon className="size-2.5 fill-current" />
+            <span className="sr-only">Stop</span>
+          </InputGroupButton>
+        )}
+        {(!busy || something) && (
+          <InputGroupButton
+            variant="default"
+            size="icon-xs"
+            title={busy ? "Queue" : undefined}
             className="shrink-0"
-            disabled={!something || elsewhere}
+            disabled={!project || !something || elsewhere}
             onClick={submit}
           >
             <ArrowUpIcon />
-            <span className="sr-only">Send</span>
+            <span className="sr-only">{busy ? "Queue" : "Send"}</span>
           </InputGroupButton>
         )}
       </InputGroupAddon>

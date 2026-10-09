@@ -3,6 +3,7 @@ import { cn } from "cn"
 import {
   ChevronDownIcon,
   CornerLeftUpIcon,
+  GitBranchIcon,
   PlusIcon,
   XIcon,
 } from "lucide-react"
@@ -116,7 +117,8 @@ function When({
 
 /**
  * What a card says under its name: the last of its conversation, in the two lines there
- * is room for.
+ * is room for. It has the room of two lines whether it fills them or not, so that one
+ * card is as tall as the next.
  */
 function Said({
   conversation,
@@ -127,7 +129,9 @@ function Said({
   otherwise: string
 }) {
   return (
-    <span className={cn(SMALL, "line-clamp-2 text-muted-foreground")}>
+    <span
+      className={cn(SMALL, "line-clamp-2 min-h-[2lh] text-muted-foreground")}
+    >
       {conversation
         ? (conversation.gist ?? conversation.lastMessage)
         : otherwise}
@@ -302,17 +306,26 @@ function ProjectCard({ project, now }: { project: Project; now: number }) {
                 under.length > 0 ? "Start a new session" : "No messages yet"
               }
             />
-            {/* the branch, for a folder that is kept in git */}
-            {project.branch && (
-              <span
-                className={cn(
-                  SMALL,
-                  "mt-1.5 truncate text-muted-foreground/70"
-                )}
-              >
-                {project.branch}
-              </span>
-            )}
+            {/* the branch, for a folder that is kept in git: a card has the line for
+                it either way, and is as tall for a folder that is not */}
+            <span
+              className={cn(
+                SMALL,
+                "mt-1.5 flex h-[1lh] items-center gap-1 text-muted-foreground/70"
+              )}
+            >
+              {project.branch && (
+                <>
+                  <GitBranchIcon
+                    size={11}
+                    absoluteStrokeWidth
+                    strokeWidth={1}
+                    className="shrink-0"
+                  />
+                  <span className="truncate">{project.branch}</span>
+                </>
+              )}
+            </span>
           </Written>
         </ProjectMenu>
         <Button

@@ -1,6 +1,11 @@
-import { describe, expect, it } from "vitest"
+import fs from "node:fs"
+import os from "node:os"
+import path from "node:path"
+
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
 import type { Seen } from "../shared/api"
+import { fakeAgent, until } from "./testing"
 import {
   answersTo,
   fastening,
@@ -10,7 +15,9 @@ import {
   pictured,
   picturing,
   questionsOf,
+  Threads,
   withNotes,
+  type ThreadsDeps,
 } from "./threads"
 
 const part = (id: string, label = id): Seen["parts"][number] => ({
@@ -433,5 +440,178 @@ describe("keeping", () => {
     const told = keeping("/app/kit/enclose.py").join("\n")
     expect(told).toContain("do not attempt it")
     expect(told).toContain("fork it and change their own copy")
+  })
+})
+
+describe("what is said while a conversation is being answered", () => {
+  let dir: string
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "enclose-threads-"))
+  })
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  const manner = {
+    provider: "codex",
+    model: null,
+    effort: null,
+    access: "full",
+  } as const
+  const ID = "project"
+
+  /**
+   * A project's conversations, had with a Codex that answers "Done." to whatever it is
+   * asked: but not before `go` is called, unless it is stopped.
+   */
+  function talking() {
+    const flag = path.join(dir, "go")
+    const file = fakeAgent(
+      dir,
+      false,
+      `
+import fs from "node:fs"
+let ticking = null
+on("initialize", () => ({}))
+on("thread/start", () => ({ thread: { id: "thread-1" } }))
+on("thread/resume", () => ({ thread: { id: "thread-1" } }))
+on("turn/start", () => {
+  ticking = setInterval(() => {
+    if (!fs.existsSync(${JSON.stringify(flag)})) return
+    clearInterval(ticking)
+    tell("item/completed", { threadId: "thread-1", item: { type: "agentMessage", id: "m" + Date.now(), text: "Done." } })
+    tell("turn/completed", { threadId: "thread-1", turn: { id: "turn-1", status: "completed" } })
+  }, 5)
+  return { turn: { id: "turn-1" } }
+})
+on("turn/interrupt", () => {
+  clearInterval(ticking)
+  tell("turn/completed", { threadId: "thread-1", turn: { id: "turn-1", status: "interrupted" } })
+  return {}
+})
+`
+    )
+    const threads = new Threads({
+      dir: path.join(dir, "conversations"),
+      projects: {
+        get: () => ({ path: dir, manifest: null, build: null, name: "Box" }),
+        takeSession: () => null,
+        refresh: () => {},
+        christen: () => {},
+      } as unknown as ThreadsDeps["projects"],
+      changes: {
+        before: async () => null,
+        toTell: () => ({ undone: [], redone: [] }),
+      } as unknown as ThreadsDeps["changes"],
+      launch: () => ({ path: file, args: [], env: process.env }),
+      tools: {
+        serve: async () => ({ urls: {}, stop: () => {} }),
+      } as unknown as ThreadsDeps["tools"],
+      kit: dir,
+      scenes: [],
+      onRenamed: () => {},
+      viewport: async () => null,
+      onItem: () => {},
+      onSummary: () => {},
+    })
+    const now = () => threads.summaries(ID)[0]
+    return {
+      threads,
+      now,
+      say: (text: string, into: string | null) =>
+        threads.send(ID, into, text, [], [], manner),
+      /** what was said in it by the user, and in what order */
+      said: (conversation: string) =>
+        threads
+          .items(ID, conversation)
+          .flatMap((item) => (item.kind === "user" ? [item.text] : [])),
+      go: () => fs.writeFileSync(flag, ""),
+      hold: () => fs.rmSync(flag, { force: true }),
+      idle: () => until(() => now().status === "idle"),
+    }
+  }
+
+  it("waits its turn, and is said when the turn before it is over", async () => {
+    const { threads, now, say, said, go, idle } = talking()
+    const into = say("Make a box", null) as string
+    expect(say("And a lid", into)).toBe(into)
+    expect(say("In red", into)).toBe(into)
+    expect(now()).toMatchObject({
+      status: "working",
+      queued: [{ text: "And a lid" }, { text: "In red" }],
+    })
+    // it is no part of the conversation until then
+    expect(said(into)).toEqual(["Make a box"])
+    go()
+    await until(() => said(into).length === 3)
+    await idle()
+    expect(said(into)).toEqual(["Make a box", "And a lid", "In red"])
+    expect(now().queued).toEqual([])
+    expect(threads.items(ID, into).map((item) => item.kind)).toEqual([
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+    ])
+  })
+
+  it("is not said after a turn that was stopped, until it is sent by hand", async () => {
+    const { threads, now, say, said, go, idle } = talking()
+    const into = say("Make a box", null) as string
+    say("And a lid", into)
+    threads.stop(ID)
+    await idle()
+    expect(said(into)).toEqual(["Make a box"])
+    const [waiting] = now().queued
+    expect(waiting).toMatchObject({ text: "And a lid" })
+    threads.sendNow(ID, waiting.id)
+    expect(now()).toMatchObject({ status: "working", queued: [] })
+    go()
+    await idle()
+    expect(said(into)).toEqual(["Make a box", "And a lid"])
+    expect(threads.items(ID, into).map((item) => item.kind)).toEqual([
+      "user",
+      "notice",
+      "user",
+      "assistant",
+    ])
+  })
+
+  it("stops what is under way for one that is to be said at once", async () => {
+    const { threads, now, say, said, go, idle } = talking()
+    const into = say("Make a box", null) as string
+    say("And a lid", into)
+    say("No, a tray", into)
+    threads.sendNow(ID, now().queued[1].id)
+    await until(() => said(into).length === 2)
+    expect(said(into)).toEqual(["Make a box", "No, a tray"])
+    expect(now().queued).toMatchObject([{ text: "And a lid" }])
+    // and the rest go on after it
+    go()
+    await until(() => said(into).length === 3)
+    await idle()
+    expect(said(into)).toEqual(["Make a box", "No, a tray", "And a lid"])
+  })
+
+  it("can be taken back before it is said", async () => {
+    const { threads, now, say, said, go, idle } = talking()
+    const into = say("Make a box", null) as string
+    say("And a lid", into)
+    expect(threads.unqueue(ID, now().queued[0].id)).toEqual([])
+    expect(now().queued).toEqual([])
+    go()
+    await idle()
+    expect(said(into)).toEqual(["Make a box"])
+  })
+
+  it("does not wait on another conversation: that one cannot be said", async () => {
+    const { now, say, go, idle } = talking()
+    say("Make a box", null)
+    expect(say("Something else", null)).toBeNull()
+    expect(now().queued).toEqual([])
+    go()
+    await idle()
   })
 })
