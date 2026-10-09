@@ -10,7 +10,7 @@ import {
 
 import type { ConversationSummary, Project, ThreadItem } from "@shared/api"
 import { Composer } from "@/components/composer"
-import { Markdown } from "@/components/markdown"
+import { Reply } from "@/components/reply"
 import { Steps } from "@/components/steps"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -163,7 +163,7 @@ function Item({
     case "user":
       return <UserMessage item={item} />
     case "assistant":
-      return <Markdown>{item.text}</Markdown>
+      return <Reply item={item} />
     case "permission":
       return <PermissionCard item={item} project={project} />
     case "notice":

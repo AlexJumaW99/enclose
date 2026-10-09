@@ -333,6 +333,11 @@ export type CadApi = {
       files: { file: string; name: string }[],
       folder: string
     ): Promise<boolean>
+    /**
+     * save a drawing the app has made of a model, an SVG, somewhere the user picks:
+     * `name` is what the file is called unless they call it something else
+     */
+    saveDrawing(name: string, svg: string): Promise<boolean>
   }
   thread: {
     items(projectId: string, conversationId: string): Promise<ThreadItem[]>
@@ -412,6 +417,7 @@ export const CHANNEL = {
   modelRead: "model:read",
   modelSaveCopy: "model:save-copy",
   modelSaveCopies: "model:save-copies",
+  modelSaveDrawing: "model:save-drawing",
   modelNameGroup: "model:name-group",
   threadItems: "thread:items",
   threadSend: "thread:send",

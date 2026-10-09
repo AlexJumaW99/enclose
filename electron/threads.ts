@@ -28,6 +28,7 @@ import type {
 } from "../shared/api"
 import { MANIFEST_FORMAT } from "../shared/manifest-format"
 import { PALETTE_NAMES } from "../shared/palette"
+import { replyOf } from "../shared/reply"
 import type { Changes } from "./changes"
 import { claudeEnv } from "./claude"
 import { GIST_FROM, gistOf, plain } from "./gist"
@@ -187,6 +188,19 @@ function question(toolName: string): string {
   return `Let Claude use ${toolName.replace(/^mcp__/, "").replaceAll("__", " ")}?`
 }
 
+/**
+ * How Claude is to answer. The user has the model in front of them, and sees what was
+ * done to it before they read a word: so what is said outright is short, and the rest
+ * goes in a block the conversation keeps behind a button (shared/reply.ts).
+ */
+const ANSWERING = [
+  '- How you answer matters here. The user is watching the model, not reading: what you change shows in the view beside this conversation as soon as it is built, so they have seen it before they read a word of yours. End a turn with a short reply they can take in at a glance: one or two plain sentences, said as you would say them to someone at the next desk, with no headings, no lists and no bold. Where a change went as asked, that is no more than that it is done and what to look at: "Done, the plug sits in the board\'s socket now. See if the leads look right to you." Do not describe to them what they can see.',
+  "- The short reply also says, in a few words, what they need to know and could not tell by looking: something asked for that you could not do, or that is not right yet; a guess of yours that decided what they got; a question you need answered. Those are said there, never only in the details.",
+  "- Whatever else is worth keeping comes after the short reply, in a <details> block: how you went about it, sizes and clearances, the way a thing is routed, what you checked, what you assumed. Write <details> on a line of its own, then the rest in Markdown as you would have written it, then </details> on a line of its own, and nothing after that. The app keeps the block folded away under a Details button, for when they want it. Give it no <summary>, do not say again in it what the short reply said, and do not speak of the block or the button. Leave it out when there is nothing more worth saying.",
+  "- When the user asked a question and not for a change, the answer is the reply: give it outright, at the length it needs, and keep a <details> block for what only backs it up.",
+  "- What you say before the turn is over, between one step and the next, is no part of your answer. The app shows it while you are at work and then folds it away with the steps, where few will look. Keep it to a few words on what you are about to do or have just found, or say nothing; and leave nothing there that the user needs: that goes in the reply at the end, which has to stand without it.",
+]
+
 /** What Claude is told about where it is, on top of Claude Code's own instructions. */
 function guide(
   root: string,
@@ -212,6 +226,7 @@ function guide(
         ]
       : []),
     "- Keep to the model and the project. Say nothing about tools, connectors or settings of the user's that are no part of this app (an MCP server that wants signing in to, say) unless they ask.",
+    ...ANSWERING,
     "- A message may hold a <comments> block: things the user has said of parts of the model, one <comment> for each. Each names the part and gives the point on it they clicked, the way the surface faces there and which face it is, in the model's own coordinates (mm, Z up), and holds what they said. Take each as a change wanted at that place. The rest of the message, if there is any, is what they said of the model as a whole.",
     "- A click in the view picks out a whole object, not one part of it: the parts of a group that touch one another, such as a circuit board with all that is on it. A <comment> made of one has object, what the app calls it, and parts, the ids of all its parts. Its part, id and point are then only where on the object the user clicked: take what they said as said of the whole object, unless it says otherwise.",
     '- A message may hold an <objects> block: whole objects the user picked out in the view for the message to be about, one <object> for each, with what the app calls it and the ids of all its parts. What the message says, it says of those objects, each as one thing: they are what the user means by "this", "these" or "them". The user may still want only some part of one changed (the cap of a button, one chip on a board) and say so in their own words, not by its id: then find that part among the object\'s parts, by their labels, sizes and places (mcp__viewport__parts) or by looking (mcp__viewport__screenshot), and change that part alone. Ask which they mean only if it cannot be told.',
@@ -413,7 +428,9 @@ const printed = (text: string) =>
 
 /** What a user's message says, for the places that show it in a line. */
 function wordsOf(item: Extract<ThreadItem, { kind: "user" | "assistant" }>) {
-  if (item.kind === "assistant" || item.text) return item.text
+  // of what Claude said, the part it said outright: the rest is for whoever asks
+  if (item.kind === "assistant") return replyOf(item.text).said
+  if (item.text) return item.text
   // nothing but what was said of parts: or, with nothing said at all, what it is about
   const said = (item.notes ?? []).map((note) => note.text)
   return (

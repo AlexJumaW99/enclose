@@ -35,6 +35,8 @@ const api: CadApi = {
       ipcRenderer.invoke(CHANNEL.modelNameGroup, projectId, group),
     saveCopies: (projectId, files, folder) =>
       ipcRenderer.invoke(CHANNEL.modelSaveCopies, projectId, files, folder),
+    saveDrawing: (name, svg) =>
+      ipcRenderer.invoke(CHANNEL.modelSaveDrawing, name, svg),
   },
   changes: {
     undo: (projectId) => ipcRenderer.invoke(CHANNEL.changesUndo, projectId),

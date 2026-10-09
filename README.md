@@ -213,6 +213,39 @@ Down the right-hand edge:
   power of ten millimetres across, whichever suits how near the view is, with every
   tenth line heavier: zoom out and they give way to squares ten times the size. It stays
   on, or off, from one model to the next.
+- **Blueprint** (B) puts the model's drawings where the view was: the model drawn flat,
+  from four of its corners and then from each of its six sides, each on an A4 sheet of
+  its own. A corner shows three sides at once, all turned equally from the eye (an
+  isometric drawing): the top or the bottom, with the front and the left side or the
+  front and the right. The sheets stand in a row
+  that is gone along sideways, and a wheel that only turns up and down goes along it too.
+  There is nothing on a sheet but the drawing, in the middle of it: no border and no
+  title block. The lines are the model's edges and the outlines of its curved
+  faces, with whatever is behind something left out. That is worked out from the model
+  and not from a picture of it, so a line stops exactly where it goes behind another
+  part, however closely the drawing is looked at afterwards. A drawing is life size
+  where the model fits the sheet; where it does not, the six sides are all to the one
+  scale, the least reduction that fits (1:2, 1:5, 1:10 and so on), and the four corners,
+  which take more room, to one of their own. The lines are a point and a half wide. The
+  arrow over a sheet saves it
+  as an SVG, A4 and in millimetres, with nothing in it but the lines: those of each part
+  together under the part's name, and the parts of each group under the group's, so that
+  a program that draws (Illustrator, Figma, Inkscape) opens it with the model's own
+  layers. Its tooltip says the scale. What is drawn is what the view had on show: pick
+  parts in the list and the sheets are of those, put some out of sight with H and they
+  are left out, pull the model apart and it is drawn pulled apart. The cut and the
+  ground are the view's, and their buttons wait until it is back. So do the cards of the
+  other projects, which close up out of the sheets' way and leave the open project's
+  card at the top. B again, the button or Esc brings the view back, as it was left.
+
+  At the foot of the sheets are two switches. **Exploded** draws the model pulled
+  apart, as E does, and brings up beside it the slider that pulls it further.
+  **Dimensions** has the sheets say how big the model is: its width, height and depth,
+  each as a thin line with an arrowhead at either end and the figure over it. A side
+  shows the two it can, across its top and down its left, and a corner all three. They
+  are of what is drawn, so of the parts on show, and are saved with a sheet, in a group
+  of their own. Beside the switch, while it is on, is what they are in: millimetres or
+  inches, which the settings have too (General, Blueprints).
 - **Search** (Cmd+F) finds parts and groups by name. A box comes up at the top of the
   view, and as you type in it the whole model goes see-through but for what goes by the
   name, which turns white the way a part does when it is picked out, wherever in the
@@ -250,8 +283,20 @@ One thing at a time is done in a project's folder, so only one of them runs at o
 A conversation goes by the first thing said in it, until it is given a name: click the
 name at the top of the conversation and write another.
 
+What Claude says at the end of a turn is short: a sentence or two, since what it did is
+already there in the view. It says what you could not tell by looking (something it could
+not do, a guess that decided what you got, a question for you) and keeps the rest, how it
+went about it and the sizes and clearances, under a Details line beneath the reply, which
+opens as the steps above it do. A question is answered outright, at the length it needs.
+What Claude says on the way, between one step and the next, is not its answer: it shows
+while Claude is at work and is then kept with the steps, under the line that says how
+long it worked.
+Claude is told to answer so, and sets the rest off in a `<details>` block for the app to
+fold away; a reply with nothing set off is shown whole, as every earlier one is.
+
 A card says the last of its conversation in two lines: what was asked, while Claude is at
-work on it, and otherwise what was last said. A message too long for that is summed up
+work on it, and otherwise what was last said, which of a reply of Claude's is the short
+part. A message too long for that is summed up
 in a few words by the quickest of your Claude Code's models, which is given the message
 and nothing else. If Claude is at work in a conversation under the card, the edge of the
 card says so.

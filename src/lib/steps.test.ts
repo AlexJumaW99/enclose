@@ -56,9 +56,47 @@ describe("inBlocks", () => {
     ).toEqual(["user", "a+b+c", "assistant"])
   })
 
-  it("starts again after anything said", () => {
-    const blocks = inBlocks([step("a"), says("s"), step("b"), step("c")])
-    expect(blocks.map((block) => block.id)).toEqual(["a", "s", "b"])
+  it("keeps with the steps what was said on the way to the next of them", () => {
+    expect(
+      shape([user("u"), step("a"), says("s"), step("b"), step("c"), says("t")])
+    ).toEqual(["user", "a+s+b+c", "assistant"])
+    // said before the first of them, too: and the stretch then goes by that
+    expect(shape([user("u"), says("s"), step("a"), says("t")])).toEqual([
+      "user",
+      "s+a",
+      "assistant",
+    ])
+    expect(shape([says("s"), says("t"), step("a")])).toEqual(["s+t+a"])
+  })
+
+  it("takes what was said last for the answer, until a step follows it", () => {
+    expect(shape([user("u"), step("a"), says("s")])).toEqual([
+      "user",
+      "a",
+      "assistant",
+    ])
+    expect(shape([user("u"), step("a"), says("s"), says("t")])).toEqual([
+      "user",
+      "a",
+      "assistant",
+      "assistant",
+    ])
+    // the next turn's steps are no part of this one
+    expect(shape([step("a"), says("s"), user("u"), step("b")])).toEqual([
+      "a",
+      "assistant",
+      "user",
+      "b",
+    ])
+  })
+
+  it("shows what was said before a question, while it waits on an answer", () => {
+    expect(
+      shape([says("s"), asked("q", "pending"), step("a", "running")])
+    ).toEqual(["assistant", "permission", "a"])
+    expect(shape([says("s"), asked("q", "allowed"), step("a")])).toEqual([
+      "s+a",
+    ])
   })
 
   it("keeps a stretch its name as it grows", () => {
@@ -101,10 +139,22 @@ describe("inBlocks", () => {
     expect(blocks[1]).toMatchObject({ kind: "steps", took: 30_000 })
   })
 
-  it("times it from its first step when something was said before it", () => {
+  it("times it likewise when something was said on the way", () => {
     const blocks = inBlocks([
       user("u", 1_000),
       says("s", 2_000),
+      step("a", "done", 5_000),
+      says("t", 6_000),
+      step("b", "done", 8_000),
+      says("v", 12_000),
+    ])
+    expect(blocks[1]).toMatchObject({ kind: "steps", took: 11_000 })
+  })
+
+  it("times it from its first step when it does not come straight after the asking", () => {
+    const blocks = inBlocks([
+      user("u", 1_000),
+      asked("q", "denied"),
       step("a", "done", 5_000),
       step("b", "done", 6_000),
       says("t", 12_000),

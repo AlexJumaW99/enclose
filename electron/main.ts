@@ -722,6 +722,22 @@ function wire() {
       return true
     }
   )
+  ipcMain.handle(
+    CHANNEL.modelSaveDrawing,
+    async (_, name: unknown, svg: unknown) => {
+      if (!win || typeof svg !== "string") return false
+      const picked = await dialog.showSaveDialog(win, {
+        defaultPath: path.join(
+          app.getPath("downloads"),
+          path.basename(String(name))
+        ),
+        filters: [{ name: "SVG", extensions: ["svg"] }],
+      })
+      if (picked.canceled || !picked.filePath) return false
+      await fs.promises.writeFile(picked.filePath, svg, "utf8")
+      return true
+    }
+  )
 
   ipcMain.handle(CHANNEL.threadItems, (_, id: string, conversationId: string) =>
     threads.items(String(id), String(conversationId))

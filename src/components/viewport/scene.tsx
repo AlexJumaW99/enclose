@@ -352,21 +352,30 @@ function turningInTheLight(
   inTheLight(shader)
 }
 
+/**
+ * Whether a part is on show: with something picked out to be shown on its own, only that
+ * is, and nothing that has been put out of sight.
+ */
+export function onShow(
+  { part }: LoadedPart,
+  { only, hidden }: Pick<View, "only" | "hidden">
+): boolean {
+  return (
+    !hidden.includes(part.id) &&
+    (!only ||
+      (only.kind === "part" && only.id === part.id) ||
+      (only.kind === "parts" && only.ids.includes(part.id)) ||
+      (only.kind === "group" && only.id === part.group))
+  )
+}
+
 /** Whether a part is drawn at all, and how, under the current view. */
 export function appearance(
   loaded: LoadedPart,
   model: LoadedModel,
   view: View
 ): { shown: boolean; look: Look } {
-  // with something picked out to be shown on its own, only that is drawn: and nothing
-  // that has been put out of sight
-  const { only, hidden } = view
-  const shown =
-    !hidden.includes(loaded.part.id) &&
-    (!only ||
-      (only.kind === "part" && only.id === loaded.part.id) ||
-      (only.kind === "parts" && only.ids.includes(loaded.part.id)) ||
-      (only.kind === "group" && only.id === loaded.part.group))
+  const shown = onShow(loaded, view)
   if (view.mode === "wireframe") return { shown, look: "wire" }
   if (view.mode === "outline") return { shown, look: "outline" }
   if (view.mode === "solid") return { shown, look: "solid" }

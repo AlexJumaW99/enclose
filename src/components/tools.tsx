@@ -4,6 +4,7 @@ import {
   FlipHorizontal2Icon,
   BoxesIcon,
   DownloadIcon,
+  DraftingCompassIcon,
   Grid3x3Icon,
   MessageSquareIcon,
   RotateCcwIcon,
@@ -94,9 +95,12 @@ function Switch({
   side = "left",
   on,
   onChange,
+  disabled,
   children,
 }: {
   label: string
+  /** there is nothing for it to do, as things are: it is there, and is not to be pressed */
+  disabled?: boolean
   /** what the button brings up, for that thing to know its own button by */
   opens?: string
   /** the key that does the same, shown beside the name */
@@ -114,6 +118,7 @@ function Switch({
           <Toggle
             pressed={on}
             onPressedChange={onChange}
+            disabled={disabled}
             data-opens={opens}
             aria-keyshortcuts={shortcut
               ?.replace("⌘", "Meta+")
@@ -141,6 +146,9 @@ function Switch({
 /**
  * The buttons down the right-hand edge. At the top, what leaves the view: the
  * conversation, and the model as a file. In the middle, how the model is looked at.
+ *
+ * While it is the model's blueprint that is looked at, the ones that are only for the
+ * view of the model itself, the cut and the ground, are there and not to be pressed.
  */
 export function Tools({
   loaded,
@@ -153,7 +161,9 @@ export function Tools({
   locked?: boolean
 }) {
   const view = useStore((state) => state.view)
-  const { section } = view
+  const { blueprint } = view
+  // a blueprint is of the model whole: the cut is the view's, and comes back with it
+  const section = blueprint ? null : view.section
   const setView = useStore((state) => state.setView)
   const cutOpen = useStore((state) => state.cutOpen)
   const threadOpen = useStore((state) => state.threadOpen)
@@ -226,6 +236,7 @@ export function Tools({
               // its neighbours have the left
               side={section ? "top" : "left"}
               on={section !== null}
+              disabled={blueprint}
               // cut open again, it is as it was left
               onChange={(on) =>
                 on
@@ -261,10 +272,24 @@ export function Tools({
             label="Grid"
             shortcut={MAC ? "⇧G" : "Shift G"}
             on={view.grid}
+            disabled={blueprint}
             onChange={(grid) => setView({ grid })}
           >
             <Grid3x3Icon />
           </Switch>
+          {/* the model drawn flat, from each of its sides and from its corners, on
+              sheets that take the view's place: there is nothing to draw of the cube
+              that stands in for one */}
+          {!loaded.standIn && (
+            <Switch
+              label="Blueprint"
+              shortcut="B"
+              on={blueprint}
+              onChange={(blueprint) => setView({ blueprint })}
+            >
+              <DraftingCompassIcon />
+            </Switch>
+          )}
           {/* parts and groups looked for by name, in a box at the top of the view: not
               in the cube that stands in for a model, which has none to find */}
           {!loaded.standIn && (

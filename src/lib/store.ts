@@ -75,6 +75,13 @@ export type View = {
   hidden: string[]
   /** whether the ground is ruled into squares, and the world's axes drawn across it */
   grid: boolean
+  /**
+   * Whether it is the model's blueprint that is looked at, and not the model: the sheets
+   * it is drawn on, one to each side, in place of the view of it.
+   */
+  blueprint: boolean
+  /** whether a blueprint says how big the model is: its width, height and depth */
+  dimensions: boolean
 }
 
 /**
@@ -122,6 +129,7 @@ const MODEL_KEY = "enclose:model"
 const EFFORT_KEY = "enclose:effort"
 const MODE_KEY = "enclose:mode"
 const GRID_KEY = "enclose:grid"
+const DIMENSIONS_KEY = "enclose:dimensions"
 const THREAD_WIDTH_KEY = "enclose:thread-width"
 const CUTS_KEY = "enclose:cuts"
 const FINISHED_KEY = "enclose:finished"
@@ -280,7 +288,8 @@ const savedFinished = (): string[] => {
 }
 /**
  * How a model is looked at when it opens: whole, assembled, in the mode last used, and
- * on the grid if that was last left on.
+ * on the grid if that was last left on. (So with its blueprint, when that is brought up:
+ * saying how big the model is, if it last did.)
  */
 const homeView = (): View => ({
   mode: savedMode(),
@@ -290,10 +299,12 @@ const homeView = (): View => ({
   only: null,
   hidden: NONE,
   grid: saved(GRID_KEY) === "on",
+  blueprint: false,
+  dimensions: saved(DIMENSIONS_KEY) === "on",
 })
 
 /** What the view can be put into, and got back out of with Esc. */
-export type Entered = "section" | "explode" | "only" | "hidden"
+export type Entered = "section" | "explode" | "only" | "hidden" | "blueprint"
 
 /** Those of them that are on, in the order they were gone into: the last is the latest. */
 function enteredNow(view: View, before: Entered[]): Entered[] {
@@ -302,6 +313,7 @@ function enteredNow(view: View, before: Entered[]): Entered[] {
     explode: view.exploded,
     only: view.only !== null,
     hidden: view.hidden.length > 0,
+    blueprint: view.blueprint,
   }
   const still = before.filter((name) => on[name])
   const fresh = (Object.keys(on) as Entered[]).filter(
@@ -508,7 +520,8 @@ type State = {
   setSettingsOpen(open: boolean): void
   /**
    * What Esc does: stop looking for parts by name, if they are being looked for; put the
-   * parts list away, if it is up; and otherwise get out of the last thing gone into.
+   * parts list away, if it is up; and otherwise get out of the last thing gone into, the
+   * blueprint among them.
    * False if there was nothing to do.
    */
   leave(): boolean
@@ -701,6 +714,8 @@ export const useStore = create<State>()((set, get) => ({
     if (patch.mode) localStorage.setItem(MODE_KEY, patch.mode)
     if (patch.grid !== undefined)
       localStorage.setItem(GRID_KEY, patch.grid ? "on" : "off")
+    if (patch.dimensions !== undefined)
+      localStorage.setItem(DIMENSIONS_KEY, patch.dimensions ? "on" : "off")
     // a cut is kept as it is left, for the next time its project is cut open
     const { activeId, cuts } = get()
     const kept =
@@ -708,7 +723,20 @@ export const useStore = create<State>()((set, get) => ({
     if (kept !== cuts) localStorage.setItem(CUTS_KEY, JSON.stringify(kept))
     set((state) => {
       const view = { ...state.view, ...patch }
-      return { view, cuts: kept, entered: enteredNow(view, state.entered) }
+      return {
+        view,
+        cuts: kept,
+        entered: enteredNow(view, state.entered),
+        // nothing is picked out of a blueprint: what was, in the view, is let go of
+        ...(patch.blueprint &&
+          !state.view.blueprint && {
+            selection: null,
+            several: NONE,
+            sweep: null,
+            hoveredId: null,
+            writing: null,
+          }),
+      }
     })
   },
 
@@ -986,6 +1014,7 @@ export const useStore = create<State>()((set, get) => ({
     if (last === "section") setView({ section: null })
     else if (last === "explode") setView({ exploded: false })
     else if (last === "hidden") setView({ hidden: NONE })
+    else if (last === "blueprint") setView({ blueprint: false })
     else setView({ only: null })
     return true
   },

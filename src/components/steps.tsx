@@ -22,13 +22,40 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
-import type { Step } from "@/lib/steps"
+import { Markdown } from "@/components/markdown"
+import type { Aside, Step } from "@/lib/steps"
 import { duration } from "@/lib/time"
 
-/** A line of the steps, whichever one. */
-const LINE = "flex h-5 items-center gap-2 text-xs text-muted-foreground"
+/** A line of the steps, whichever one; and of anything else that opens as they do. */
+export const LINE = "flex h-5 items-center gap-2 text-xs text-muted-foreground"
 /** Words for what is still going on: a light passes along them, over and over. */
-const LIVE = "shimmer shimmer-color-foreground"
+export const LIVE = "shimmer shimmer-color-foreground"
+/** How long such a line takes to open into what is under it, ms. */
+const OPENING = 200
+
+/**
+ * Keeps in view something that opens downwards, while it opens: at the foot of the
+ * conversation what is in it would come out below the edge, where nobody is looking.
+ * The ref is for the whole of it, the line and what the line opens into.
+ */
+export function useKeptInView<Whole extends HTMLElement>(open: boolean) {
+  const whole = React.useRef<Whole>(null)
+  React.useEffect(() => {
+    const element = whole.current
+    if (!open || !element) return
+    const watch = new ResizeObserver(() =>
+      element.scrollIntoView({ block: "nearest" })
+    )
+    watch.observe(element)
+    // and let go of once it has opened, so that the conversation scrolls freely again
+    const opened = setTimeout(() => watch.disconnect(), OPENING * 2)
+    return () => {
+      watch.disconnect()
+      clearTimeout(opened)
+    }
+  }, [open])
+  return whole
+}
 
 /** The picture for each kind of step; any other is a tool of some sort. */
 const ICONS: Record<string, LucideIcon> = {
@@ -91,23 +118,26 @@ function StepLine({
 }
 
 /**
- * What Claude did between saying things, as one line. While it is at it, the line is
- * the step it is on; afterwards, how long it was at them. It opens into all of them.
+ * What Claude did before it answered, as one line. While it is at it, the line is the
+ * step it is on; afterwards, how long it was at them. It opens into all of them, with
+ * what Claude said on the way between one and the next.
  */
 export function Steps({
   steps,
   took,
   working,
 }: {
-  steps: Step[]
+  steps: (Step | Aside)[]
   /** how long Claude was at them, in ms, if they are over and that is known */
   took: number | null
   /** Claude is still on the turn these are the latest of, and may add to them */
   working: boolean
 }) {
   const [open, setOpen] = React.useState(false)
+  const whole = useKeptInView<HTMLDivElement>(open)
+  const taken = steps.filter((step) => step.kind === "tool")
   const current =
-    steps.findLast((step) => step.state === "running") ?? steps.at(-1)
+    taken.findLast((step) => step.state === "running") ?? taken.at(-1)
   if (!current) return null
   const busy = working || current.state === "running"
 
@@ -120,7 +150,12 @@ export function Steps({
     )
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
+    <Collapsible
+      ref={whole}
+      open={open}
+      onOpenChange={setOpen}
+      className="scroll-my-6"
+    >
       <CollapsibleTrigger
         className={cn(
           LINE,
@@ -133,7 +168,9 @@ export function Steps({
             <StepLine step={current} live />
           </span>
         ) : busy || took === null ? (
-          <span className={cn(busy && LIVE)}>{steps.length} steps</span>
+          <span className={cn(busy && LIVE)}>
+            {taken.length === 1 ? "1 step" : `${taken.length} steps`}
+          </span>
         ) : (
           <span>Worked for {duration(took)}</span>
         )}
@@ -141,11 +178,21 @@ export function Steps({
       </CollapsibleTrigger>
       <CollapsibleContent className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0">
         <ol className="mt-1.5 ml-0.5 flex flex-col gap-1.5 border-l pl-3">
-          {steps.map((step) => (
-            <li key={step.id} className={LINE}>
-              <StepLine step={step} />
-            </li>
-          ))}
+          {steps.map((step) =>
+            step.kind === "tool" ? (
+              <li key={step.id} className={LINE}>
+                <StepLine step={step} />
+              </li>
+            ) : (
+              // said on the way: in full, since here is the one place it is kept,
+              // and as words alone among the steps
+              <li key={step.id}>
+                <Markdown className="gap-1.5 text-xs leading-5 text-muted-foreground">
+                  {step.text}
+                </Markdown>
+              </li>
+            )
+          )}
         </ol>
       </CollapsibleContent>
     </Collapsible>

@@ -1,10 +1,23 @@
+import { cn } from "cn"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 
 /** Claude's answers are Markdown. Raw HTML in them is shown as text, never run. */
-export function Markdown({ children }: { children: string }) {
+export function Markdown({
+  children,
+  className,
+}: {
+  children: string
+  /** for where it is not an answer, and is set smaller or quieter than one */
+  className?: string
+}) {
   return (
-    <div className="flex flex-col gap-3 text-sm leading-relaxed text-foreground/85 [&_li>p]:inline">
+    <div
+      className={cn(
+        "flex flex-col gap-3 text-sm leading-relaxed text-foreground/85 [&_li>p]:inline",
+        className
+      )}
+    >
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{

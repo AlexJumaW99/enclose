@@ -8,6 +8,8 @@ import {
 } from "lucide-react"
 
 import type { PartRef, Project } from "@shared/api"
+import { Blueprint } from "@/components/blueprint/blueprint"
+import { Options } from "@/components/blueprint/options"
 import { Mark } from "@/components/mark"
 import { RESTING_WIDTH } from "@/lib/mark"
 import { atWork } from "@/lib/steps"
@@ -63,7 +65,7 @@ import {
   type LoadedModel,
 } from "./load"
 import { picturesOf } from "./pictures"
-import { appearance, Scene } from "./scene"
+import { appearance, onShow, Scene } from "./scene"
 import { Search } from "./search"
 import { ShadingPie } from "./shading-pie"
 import { useThumbnails } from "./thumbnails"
@@ -73,6 +75,7 @@ import { sectionAcross, sectionFacing, SectionPlanes } from "./section-planes"
 const NO_NOTES: Note[] = []
 const NO_COLOURS: Record<string, string> = {}
 const NO_PARTS: string[] = []
+const NOTHING_SHOWN: LoadedModel["parts"] = []
 const NO_CALLED: Called[] = []
 const NO_NAMES: Named = {}
 
@@ -779,7 +782,8 @@ function Model({ project }: { project: Project }) {
   )
 
   // Cmd+1 is the view the model opened with; Cmd+2 to 7 are the six flat ones. S cuts
-  // the model open and E pulls it apart, both again to undo. I shows what is picked
+  // the model open and E pulls it apart, both again to undo. B is the model's blueprint,
+  // in place of the view of it, and again is the view back. I shows what is picked
   // out, one part or several, on its own and close to, and again brings the rest back.
   // H is the other way about: it puts what is picked out, one part or several, out of
   // sight, and with nothing picked out brings back all that was. P brings up the list
@@ -836,6 +840,8 @@ function Model({ project }: { project: Project }) {
         if (!loaded || !alone || event.key.toLowerCase() !== "g") return
         if (spokenFor(event.target)) return
         const { view, setView } = useStore.getState()
+        // (the ground is the view's: there is none under a blueprint)
+        if (view.blueprint) return
         setView({ grid: !view.grid })
         event.preventDefault()
         return
@@ -844,6 +850,8 @@ function Model({ project }: { project: Project }) {
         const digit = /^Digit([1-7])$/.exec(event.code)?.[1]
         if (!digit) return
         event.preventDefault()
+        // the set views are the view's: a blueprint has a sheet for each of them
+        if (useStore.getState().view.blueprint) return
         const view = VIEWS[Number(digit) - 2]
         if (view) bridge.lookFrom?.(view.axis, view.sign)
         else goHome()
@@ -862,7 +870,14 @@ function Model({ project }: { project: Project }) {
       if (!loaded || !middle || event.repeat || spokenFor(event.target)) return
       const { view, setView, cutOpen } = useStore.getState()
       const letter = event.key.toLowerCase()
-      if (letter === "s") {
+      if (letter === "b") {
+        // there is no blueprint of the cube that stands in for a model
+        if (loaded.standIn) return
+        setView({ blueprint: !view.blueprint })
+      } else if (view.blueprint && "sxy".includes(letter)) {
+        // the cut is the view's: a blueprint is of the model whole
+        return
+      } else if (letter === "s") {
         if (view.section) setView({ section: null })
         else cutOpen(() => sectionFacing(loaded.box))
       } else if (letter === "e")
@@ -913,6 +928,19 @@ function Model({ project }: { project: Project }) {
     [view.only, loaded]
   )
   const explode = view.exploded ? view.spread : 0
+
+  // The blueprint takes the view's place: the model drawn flat, from each of its sides
+  // and from its corners, as much of it as the view had on show and pulled apart as far. The view is still
+  // there behind it, as it was left, for Claude to be shown and to come back to.
+  const blueprint = view.blueprint && real !== null && !lookingOver
+  const { only, hidden } = view
+  const drawn = React.useMemo(
+    () =>
+      real?.parts.filter((part) => onShow(part, { only, hidden })) ??
+      NOTHING_SHOWN,
+    [real, only, hidden]
+  )
+
   React.useEffect(() => {
     const boxes = (loaded?.parts ?? [])
       .filter((part) => near.includes(part.part.id))
@@ -1050,33 +1078,47 @@ function Model({ project }: { project: Project }) {
   return (
     <>
       {loaded && (
-        <Scene
-          loaded={loaded}
-          projectId={project.id}
-          notes={notes}
-          colours={colours}
-          view={view}
-          selectedId={selection?.part.id ?? null}
-          selectedWith={selectedWith}
-          several={several}
-          // the stand-in is nothing Claude was asked to change
-          changing={loaded.standIn ? NO_PARTS : lookingOver ? every : changing}
-          reading={lookingOver}
-          sweep={sweep}
-          hoveredId={hoveredId}
-          hoveredWith={hoveredWith}
-          seeking={seeking && !loaded.standIn}
-          found={finds}
-          plain={plain}
-          // the first model made takes the cube's place, and is framed afresh
-          homeKey={`${project.id}:${loaded.standIn ? "cube" : "model"}:${homeRequests}`}
-          // the stand-in is nothing to ask about: it is not picked, and does not light up
-          onPick={loaded.standIn ? nothing : pick}
-          onSweep={loaded.standIn ? nothing : sweepTo}
-          onTake={loaded.standIn ? nothing : take}
-          onHover={loaded.standIn ? nothing : hoverOver}
-          onShow={showOne}
-          onSection={moveSection}
+        // (out of sight under a blueprint, and none of it there to be pressed)
+        <div className={cn("absolute inset-0", blueprint && "invisible")}>
+          <Scene
+            loaded={loaded}
+            projectId={project.id}
+            notes={notes}
+            colours={colours}
+            view={view}
+            selectedId={selection?.part.id ?? null}
+            selectedWith={selectedWith}
+            several={several}
+            // the stand-in is nothing Claude was asked to change
+            changing={
+              loaded.standIn ? NO_PARTS : lookingOver ? every : changing
+            }
+            reading={lookingOver}
+            sweep={sweep}
+            hoveredId={hoveredId}
+            hoveredWith={hoveredWith}
+            seeking={seeking && !loaded.standIn}
+            found={finds}
+            plain={plain}
+            // the first model made takes the cube's place, and is framed afresh
+            homeKey={`${project.id}:${loaded.standIn ? "cube" : "model"}:${homeRequests}`}
+            // the stand-in is nothing to ask about: it is not picked, and does not light up
+            onPick={loaded.standIn ? nothing : pick}
+            onSweep={loaded.standIn ? nothing : sweepTo}
+            onTake={loaded.standIn ? nothing : take}
+            onHover={loaded.standIn ? nothing : hoverOver}
+            onShow={showOne}
+            onSection={moveSection}
+          />
+        </div>
+      )}
+      {blueprint && real && (
+        <Blueprint
+          loaded={real}
+          parts={drawn}
+          apart={explode}
+          dimensions={view.dimensions}
+          name={real.model.title ?? project.name}
         />
       )}
 
@@ -1127,7 +1169,7 @@ function Model({ project }: { project: Project }) {
           // no wider than leaves it room in the view
           className={cn(
             "absolute top-1/2 max-h-[80%] -translate-y-1/2 transition-[right]",
-            view.section
+            view.section && !blueprint
               ? "right-36 max-w-[calc(100%-9.75rem)]"
               : "right-15 max-w-[calc(100%-4.5rem)]"
           )}
@@ -1144,16 +1186,21 @@ function Model({ project }: { project: Project }) {
             groups={loaded.model.groups}
             projectId={project.id}
           />
-          {view.exploded && <ExplodeSlider />}
+          {/* how far apart the parts are pulled: which a blueprint has beside its own
+              bar, with the rest of how its sheets show the model */}
+          {blueprint ? <Options /> : view.exploded && <ExplodeSlider />}
         </div>
       )}
-      {loaded && middle && !lookingOver && (
+      {loaded && middle && !lookingOver && !blueprint && (
         <div className="pointer-events-none absolute right-3 bottom-3 flex items-center gap-1">
           <SectionPlanes middle={middle} />
           <AxisGizmo />
         </div>
       )}
-      <ShadingPie enabled={loaded !== null && !lookingOver} tap={cutAcrossZ} />
+      <ShadingPie
+        enabled={loaded !== null && !lookingOver && !blueprint}
+        tap={cutAcrossZ}
+      />
     </>
   )
 }

@@ -33,9 +33,15 @@ import { MAC } from "@/lib/platform"
 import { useStack, useStore } from "@/lib/store"
 import { ago, useNow } from "@/lib/time"
 
+/**
+ * What fades out of anything that is put away (see Tucked), and back in. It is each thing
+ * that fades, and not all of them as one: a card is glass, and glass inside something
+ * that is fading has nothing behind it to be glass over.
+ */
+const FADES = "group-data-[away]/tuck:opacity-0"
+
 /** What a card is, whether it is a project's or one of its earlier conversations'. */
-const CARD =
-  "glass pointer-events-auto relative flex w-full flex-col rounded-xl px-3 py-2.5 text-left ring-1 transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+const CARD = `glass pointer-events-auto relative flex w-full flex-col rounded-xl px-3 py-2.5 text-left ring-1 transition-[color,background-color,border-color,opacity] duration-200 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 ${FADES}`
 /** The card of what is open, and the others. */
 const LIT = "bg-sidebar-accent/90 shadow-sm ring-foreground/15"
 const UNLIT =
@@ -210,7 +216,8 @@ function Under({
             that card and would otherwise be covered. */}
         <span
           className={cn(
-            "glass absolute inset-x-2.5 top-1.75 flex items-center gap-1 rounded-b-lg border-x border-b border-foreground/5 bg-sidebar-accent/45 px-2.5 transition-[height]",
+            "glass absolute inset-x-2.5 top-1.75 flex items-center gap-1 rounded-b-lg border-x border-b border-foreground/5 bg-sidebar-accent/45 px-2.5 transition-[height,opacity] duration-200",
+            FADES,
             news
               ? "h-6 group-hover/under:h-6.5 group-focus-visible/under:h-6.5"
               : "h-2.5 group-hover/under:h-3.5 group-focus-visible/under:h-3.5"
@@ -341,7 +348,10 @@ function ProjectCard({ project, now }: { project: Project; now: number }) {
                   variant="ghost"
                   size="icon-xs"
                   aria-label="Put the earlier conversations back"
-                  className="pointer-events-auto text-muted-foreground"
+                  className={cn(
+                    "pointer-events-auto text-muted-foreground",
+                    FADES
+                  )}
                   onClick={() => setSpread(false)}
                 >
                   <CornerLeftUpIcon />
@@ -368,6 +378,35 @@ function ProjectCard({ project, now }: { project: Project; now: number }) {
             </button>
           </div>
         ))}
+    </div>
+  )
+}
+
+/**
+ * Something in the list that can be put away, and brought back: it closes up to nothing
+ * as it fades, and whatever is under it in the list comes up to where it was. Neither
+ * slowly nor in a hurry. Put away, nothing of it is there to be pressed.
+ */
+function Tucked({
+  away,
+  children,
+}: {
+  away: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <div
+      inert={away}
+      data-away={away || undefined}
+      className={cn(
+        "group/tuck grid shrink-0 transition-[grid-template-rows,margin-bottom] duration-300 ease-in-out motion-reduce:transition-none",
+        // with nothing of it left, nor is the room the list keeps between two things
+        away ? "-mb-1.5 grid-rows-[0fr]" : "grid-rows-[1fr]"
+      )}
+    >
+      {/* (what closes up cuts off whatever is outside it, and a card's edge is drawn
+          just outside the card: there is that much room round it) */}
+      <div className="-m-1 min-h-0 overflow-hidden p-1">{children}</div>
     </div>
   )
 }
@@ -414,6 +453,10 @@ function ProjectMenu({
  */
 export function Sidebar() {
   const projects = useStore((state) => state.projects)
+  // While it is a model's blueprint that is looked at, the sheets have the window: the
+  // card of the project they are of stays, at the top, and the rest are put away.
+  const activeId = useStore((state) => state.activeId)
+  const blueprint = useStore((state) => state.view.blueprint)
   const addProject = useStore((state) => state.addProject)
   const createProject = useStore((state) => state.createProject)
   const [adding, setAdding] = React.useState(false)
@@ -435,53 +478,60 @@ export function Sidebar() {
           just outside the card: it starts a little higher than the first card does */}
       <div className="-mt-1 flex min-h-0 [scrollbar-width:none] flex-col items-start gap-1.5 overflow-y-auto px-4.5 pt-1 pb-4">
         {projects.map((project) => (
-          <ProjectCard key={project.id} project={project} now={now} />
+          <Tucked key={project.id} away={blueprint && project.id !== activeId}>
+            <ProjectCard project={project} now={now} />
+          </Tucked>
         ))}
-        <DropdownMenu open={adding} onOpenChange={setAdding}>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <DropdownMenuTrigger
-                  render={
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      className="pointer-events-auto mt-1.5 shrink-0 bg-background shadow-sm"
-                    />
-                  }
-                />
-              }
-            >
-              <PlusIcon />
-              <span className="sr-only">New project</span>
-            </TooltipTrigger>
-            {!adding && (
-              <TooltipContent side="right">New project</TooltipContent>
-            )}
-          </Tooltip>
-          <DropdownMenuContent side="right" align="start">
-            <DropdownMenuGroup>
-              <DropdownMenuItem onClick={() => void createProject()}>
-                New project
-              </DropdownMenuItem>
-              {/* a Mac's picker takes files and folders alike; no other system's does */}
-              {MAC ? (
-                <DropdownMenuItem onClick={() => void addProject()}>
-                  Open file or folder…
-                </DropdownMenuItem>
-              ) : (
-                <>
-                  <DropdownMenuItem onClick={() => void addProject("file")}>
-                    Open file…
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => void addProject("folder")}>
-                    Open folder…
-                  </DropdownMenuItem>
-                </>
+        <Tucked away={blueprint}>
+          <DropdownMenu open={adding} onOpenChange={setAdding}>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        variant="outline"
+                        size="icon-sm"
+                        className={cn(
+                          "pointer-events-auto mt-1.5 shrink-0 bg-background shadow-sm",
+                          FADES
+                        )}
+                      />
+                    }
+                  />
+                }
+              >
+                <PlusIcon />
+                <span className="sr-only">New project</span>
+              </TooltipTrigger>
+              {!adding && (
+                <TooltipContent side="right">New project</TooltipContent>
               )}
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            </Tooltip>
+            <DropdownMenuContent side="right" align="start">
+              <DropdownMenuGroup>
+                <DropdownMenuItem onClick={() => void createProject()}>
+                  New project
+                </DropdownMenuItem>
+                {/* a Mac's picker takes files and folders alike; no other system's does */}
+                {MAC ? (
+                  <DropdownMenuItem onClick={() => void addProject()}>
+                    Open file or folder…
+                  </DropdownMenuItem>
+                ) : (
+                  <>
+                    <DropdownMenuItem onClick={() => void addProject("file")}>
+                      Open file…
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => void addProject("folder")}>
+                      Open folder…
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </Tucked>
       </div>
     </aside>
   )

@@ -65,9 +65,6 @@ import { bridge } from "./viewport/bridge"
  */
 const LOW = "translate-y-1"
 
-/** How far in from the side of the box the line begins: its edge, and the room by it. */
-const BAR_INSET = 7
-
 /** How far the box is from the side of the window. */
 const BOX_INSET = 14
 
@@ -286,11 +283,10 @@ function Manner() {
         <ClaudeIcon className="shrink-0" />
         <span className="truncate">Using {said}</span>
       </PopoverTrigger>
-      {/* its side is the side of the box the message is written in: the left one where
-          there is room for that, and the right one where the box is the narrower */}
+      {/* over the middle of the line that opens it, so that it is plain what it belongs
+          to; moved along only where it would otherwise run past the side of the window */}
       <PopoverContent
-        align="start"
-        alignOffset={-BAR_INSET}
+        align="center"
         side="top"
         sideOffset={12}
         collisionAvoidance={{ side: "flip", align: "shift" }}

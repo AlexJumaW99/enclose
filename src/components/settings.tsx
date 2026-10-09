@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 
 import type { Settings as AppSettings } from "@shared/api"
+import { Miniature } from "@/components/miniature"
 import { useTheme } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,6 +20,7 @@ import { Kbd } from "@/components/ui/kbd"
 import { Slider } from "@/components/ui/slider"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { SETTLE_DAYS } from "@/lib/conversations"
+import { ACCESS_WORDS } from "@/lib/manner"
 import { MAC } from "@/lib/platform"
 import { TURN_SPEED, usePreferences } from "@/lib/preferences"
 import { useStore } from "@/lib/store"
@@ -162,6 +164,7 @@ function General() {
   const access = useStore((state) => state.access)
   const setAccess = useStore((state) => state.setAccess)
   const settleDays = usePreferences((state) => state.settleDays)
+  const units = usePreferences((state) => state.units)
   const change = usePreferences((state) => state.change)
   const [settings, setSettings] = React.useState<AppSettings | null>(null)
   React.useEffect(() => {
@@ -175,8 +178,7 @@ function General() {
           title="Projects folder"
           detail={
             <>
-              Where a new project&rsquo;s folder is made when you name one. A
-              folder you open or drop on the window stays where it is.
+              Where new projects are saved.
               <span className="mt-1 block font-mono text-xs break-all">
                 {settings?.projectsFolder ?? " "}
               </span>
@@ -202,7 +204,7 @@ function General() {
         </Row>
         <Row
           title="Opened files"
-          detail="When CAD files are opened, Claude looks over the model made of them: it is shown pictures of it, says what it takes the thing to be, and names and groups the parts. Off, the parts keep the names and groups the files gave them."
+          detail="Claude names and groups the parts of CAD files you open."
         >
           <Choice
             label="Have Claude look over opened files"
@@ -222,7 +224,8 @@ function General() {
       <Group title="Conversations">
         <Row
           title="Permissions"
-          detail="Supervised: Claude asks before it changes a file or runs anything. Edits: it edits the project's files freely and asks before anything else, such as running the build. Auto: it does what is routine and asks about the rest. Full: it never asks."
+          // the one that is chosen, in the words the message box has for it
+          detail={`${ACCESS_WORDS[access].detail}.`}
         >
           <Choice
             label="Permissions"
@@ -238,7 +241,7 @@ function General() {
         </Row>
         <Row
           title="Earlier conversations"
-          detail="A conversation left alone for this long goes under its project's card, and the card offers a new one. None is deleted: they stay under the card until the project is removed."
+          detail="Conversations idle this long are tucked under their project's card."
         >
           <Days
             label="Days before a conversation settles"
@@ -247,30 +250,55 @@ function General() {
           />
         </Row>
       </Group>
+      <Group title="Blueprints">
+        <Row title="Units" detail="The unit dimensions are shown in.">
+          <Choice
+            label="Units"
+            value={units}
+            onChange={(value) => change({ units: value })}
+            options={[
+              { value: "mm", label: "mm" },
+              { value: "in", label: "in" },
+            ]}
+          />
+        </Row>
+      </Group>
     </>
   )
 }
 
+/** The themes there are, in the order they are offered. */
+const THEMES = [
+  { value: "system", label: "System" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+] as const
+
 function Appearance() {
   const { theme, setTheme } = useTheme()
   return (
-    <Group title="Theme">
-      <Row
-        title="Colours"
-        detail="System follows the Mac's light or dark setting."
-      >
-        <Choice
-          label="Theme"
-          value={theme}
-          onChange={setTheme}
-          options={[
-            { value: "system", label: "System" },
-            { value: "light", label: "Light" },
-            { value: "dark", label: "Dark" },
-          ]}
-        />
-      </Row>
-    </Group>
+    <section className="flex flex-col gap-2">
+      <h2 className="px-1 text-sm text-muted-foreground">Theme</h2>
+      <div className="grid grid-cols-3 gap-3">
+        {THEMES.map(({ value, label }) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={theme === value}
+            onClick={() => setTheme(value)}
+            className="group flex flex-col gap-2 rounded-2xl bg-card p-1.5 pb-2.5 ring-1 ring-foreground/10 outline-none hover:ring-foreground/25 focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-pressed:ring-2 aria-pressed:ring-primary"
+          >
+            {/* the window as the theme draws it, its corners following the card's */}
+            <span className="block overflow-hidden rounded-[0.75rem] ring-1 ring-foreground/10">
+              <Miniature theme={value} />
+            </span>
+            <span className="text-sm text-muted-foreground group-aria-pressed:text-foreground">
+              {label}
+            </span>
+          </button>
+        ))}
+      </div>
+    </section>
   )
 }
 
@@ -282,7 +310,7 @@ function Navigation() {
     <Group title="Moving around the model">
       <Row
         title="Scrolling"
-        detail="Fingers on a trackpad turn the model and a mouse wheel zooms. Both arrive as the same scroll, so Automatic tells them apart by how it moves. If it gets yours wrong, say which it is."
+        detail="Scrolling turns the model on a trackpad and zooms with a mouse wheel."
       >
         <Choice
           label="Scrolling"
@@ -297,7 +325,7 @@ function Navigation() {
       </Row>
       <Row
         title="Turning speed"
-        detail="How far the model turns for the same movement of the hand."
+        detail="How far the model turns as you scroll or drag."
       >
         <span className="w-10 text-right text-sm text-muted-foreground tabular-nums">
           {Math.round(turnSpeed * 100)}%
@@ -322,11 +350,13 @@ function Navigation() {
 
 const CMD = MAC ? "⌘" : "Ctrl"
 const SHIFT = MAC ? "⇧" : "Shift"
+/** Stands between two ways of doing the same thing: a word, where the rest are keys. */
+const OR = "or"
 const KEYS: { title: string; rows: [string, string[]][] }[] = [
   {
     title: "Views",
     rows: [
-      ["The view a model opens with", [CMD, "1"]],
+      ["Home", [CMD, "1"]],
       ["Front, back", [CMD, "2", "3"]],
       ["Top, bottom", [CMD, "4", "5"]],
       ["Right, left", [CMD, "6", "7"]],
@@ -335,23 +365,20 @@ const KEYS: { title: string; rows: [string, string[]][] }[] = [
   {
     title: "The model",
     rows: [
-      ["Shading: solid, glass, wireframe or outline", ["Z"]],
+      ["Shading", ["Z"]],
       ["Section", ["S"]],
-      ["Cut across an axis, while sectioned", ["X", "Y", "Z"]],
+      ["Section axis", ["X", "Y", "Z"]],
       ["Explode", ["E"]],
-      ["Show what is picked out on its own, close to", ["I"]],
-      ["Hide what is picked out, or bring back what is hidden", ["H"]],
+      ["Isolate the selection", ["I"]],
+      ["Hide the selection, or show everything", ["H"]],
       ["Parts", ["P"]],
-      ["Make a group of what is picked out", [CMD, "G"]],
-      ["Take it out of its groups", [SHIFT, CMD, "G"]],
-      ["Grid: the ground and the world's axes", [SHIFT, "G"]],
-      ["Search: find parts and groups by name", [CMD, "F"]],
-      ["Undo the last change to the model, yours or Claude's", [CMD, "Z"]],
-      ["Redo it", [SHIFT, CMD, "Z"]],
-      [
-        "Put away the search or the list, then leave the last thing gone into",
-        ["Esc"],
-      ],
+      ["Group the selection", [CMD, "G"]],
+      ["Ungroup", [SHIFT, CMD, "G"]],
+      ["Grid", [SHIFT, "G"]],
+      ["Search", [CMD, "F"]],
+      ["Undo", [CMD, "Z"]],
+      ["Redo", [SHIFT, CMD, "Z"]],
+      ["Close, or step back", ["Esc"]],
     ],
   },
   {
@@ -359,6 +386,34 @@ const KEYS: { title: string; rows: [string, string[]][] }[] = [
     rows: [
       ["Conversation", [CMD, "B"]],
       ["Settings", [CMD, ","]],
+    ],
+  },
+  {
+    title: "Trackpad",
+    rows: [
+      ["Turn", ["Two fingers"]],
+      ["Zoom", ["Pinch"]],
+      ["Pan", [SHIFT, "Two fingers"]],
+    ],
+  },
+  {
+    title: "Mouse",
+    rows: [
+      ["Turn", ["Right drag"]],
+      ["Zoom", ["Wheel"]],
+      ["Pan", [SHIFT, "Right drag"]],
+    ],
+  },
+  {
+    title: "Selecting",
+    rows: [
+      ["Select a part, or the object it belongs to", ["Click"]],
+      ["Select a single part", ["Double click", OR, CMD, "Click"]],
+      ["Add or remove a part", [SHIFT, "Click"]],
+      ["Add a whole object", [SHIFT, "Double click"]],
+      ["Select everything inside a box", ["Drag right"]],
+      ["Select everything a box touches", ["Drag left"]],
+      ["Add to the selection", [SHIFT, "Drag"]],
     ],
   },
 ]
@@ -370,31 +425,19 @@ function Shortcuts() {
         <Group key={group.title} title={group.title}>
           {group.rows.map(([what, keys]) => (
             <Row key={what} title={what}>
-              {keys.map((key) => (
-                <Kbd key={key}>{key}</Kbd>
-              ))}
+              {keys.map((key) =>
+                key === OR ? (
+                  <span key={key} className="text-xs text-muted-foreground">
+                    {key}
+                  </span>
+                ) : (
+                  <Kbd key={key}>{key}</Kbd>
+                )
+              )}
             </Row>
           ))}
         </Group>
       ))}
-      <p className="px-1 text-sm text-muted-foreground">
-        With a trackpad: two fingers turn the model, a pinch zooms, and Shift
-        with two fingers pans. With a mouse: drag with the right button to turn,
-        the wheel zooms, and Shift with that drag pans.
-      </p>
-      <p className="px-1 text-sm text-muted-foreground">
-        A click picks a part out, or the whole of the object it belongs to: the
-        parts of a group that touch one another, such as a circuit board and
-        what is on it. A click with {SHIFT} held picks out the one part: on its
-        own, or added to what is picked out, or taken back out of it. A second
-        click, or a click with {CMD} held, picks out the one part and nothing
-        else. With {SHIFT} held, a second click straight after the first adds
-        the whole of the part's object instead. A drag draws a box that picks
-        out several: from left to right the parts wholly inside it, from right
-        to left every part it touches, and an object goes whole with any part of
-        it; with {SHIFT} held it adds to what is picked out. Parts picked out
-        together show through whatever is in front of them.
-      </p>
     </>
   )
 }
@@ -415,13 +458,13 @@ function Claude() {
           claude?.path ? (
             <span className="font-mono text-xs break-all">{claude.path}</span>
           ) : (
-            "Install Claude Code and sign in to it, then start Enclose again."
+            "Install Claude Code and sign in, then restart Enclose."
           )
         }
       />
       <Row
         title="Signing in"
-        detail="Enclose has no login of its own and keeps no credentials. It works through the Claude Code on this Mac, with the account that is signed in there. To sign in or change account, do it in Claude Code."
+        detail="Enclose uses the account signed in to Claude Code."
       />
     </Group>
   )
@@ -439,6 +482,16 @@ function About() {
           className="text-sm underline underline-offset-4"
         >
           enclose.dev
+        </a>
+      </Row>
+      <Row title="Fork it and collaborate">
+        <a
+          href="https://github.com/glauberxyz/enclose"
+          target="_blank"
+          rel="noreferrer"
+          className="text-sm underline underline-offset-4"
+        >
+          github.com/glauberxyz/enclose
         </a>
       </Row>
     </Group>
