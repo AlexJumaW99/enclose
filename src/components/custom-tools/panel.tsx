@@ -144,9 +144,10 @@ export function ToolsPanel({
               className={cn("flex gap-4 border-b p-5 last:border-b-0", LINE)}
             >
               {/* what it is called and, under that in the same letters, what it does */}
-              <div className="w-32 shrink-0 text-sm/[17px]">
+              <div className="w-32 shrink-0 text-xs/4">
                 <div className="font-medium">{control.title}</div>
-                <div className="text-pretty text-white/60">
+                {/* its lines as long as one another: no word left on a line alone */}
+                <div className="text-balance text-white/60">
                   {control.description}
                 </div>
               </div>

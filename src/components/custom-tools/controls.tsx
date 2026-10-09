@@ -165,7 +165,7 @@ function Slider({
     // said over the knob, and goes along with it. The words keep inside the room: they
     // are over the knob by their own middle half way along, and by their nearer end
     // towards either end of the line.
-    <div className="relative flex min-h-15 w-full items-center self-stretch">
+    <div className="relative flex min-h-13 w-full items-center self-stretch">
       <div
         className={cn(
           SAYS,
