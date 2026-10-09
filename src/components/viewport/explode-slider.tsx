@@ -4,41 +4,42 @@ import { cn } from "cn"
 import { SPREAD, useStore } from "@/lib/store"
 
 /**
- * Shown while the model is exploded: drag to pull the parts further apart than the
- * model's own distances, which is where it starts.
+ * How far apart the parts of an exploded model are pulled: drag to pull them further
+ * than the model's own distances, which is where it starts. It is made to look like the
+ * switches it is found beside: as tall as one, with the same thing in it to take hold of.
  */
-export function ExplodeSlider({ className }: { className?: string }) {
+export function Spread({ className }: { className?: string }) {
   const spread = useStore((state) => state.view.spread)
   const setView = useStore((state) => state.setView)
   return (
     <Slider.Root
-      // The scale runs from zero so that the filled part has some length even at the
-      // start; the value itself never goes below the model's own distances.
-      min={0}
+      min={SPREAD.min}
       max={SPREAD.max}
       step={0.05}
       value={spread}
-      onValueChange={(value) =>
-        setView({ spread: Math.max(SPREAD.min, value as number) })
-      }
+      onValueChange={(value) => setView({ spread: value as number })}
+      // the handle is all of it inside the track: at either end, it is against the end
       thumbAlignment="edge"
-      className={cn(
-        "glass pointer-events-auto w-64 rounded-full bg-background/60 p-1 shadow-sm ring-1 ring-foreground/10",
-        className
-      )}
+      className={cn("w-28", className)}
     >
-      <Slider.Control className="relative flex h-8 w-full cursor-ew-resize touch-none items-center select-none">
-        <Slider.Track className="relative h-full w-full rounded-full">
-          <Slider.Indicator className="h-full rounded-full bg-foreground" />
+      {/* (as much room round the handle, at the ends, as a switch leaves round its own) */}
+      <Slider.Control className="flex h-[18.4px] w-full cursor-ew-resize touch-none items-center rounded-full bg-input px-[1.2px] select-none dark:bg-input/80">
+        <Slider.Track className="relative h-full w-full">
+          <Slider.Thumb
+            aria-label="How far apart the parts are pulled"
+            className="size-4 rounded-full bg-background outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-foreground"
+          />
         </Slider.Track>
-        {/* the grip sits just inside the end of the filled part */}
-        <Slider.Thumb
-          aria-label="How far apart the parts are pulled"
-          className="size-0 outline-none"
-        >
-          <span className="absolute top-1/2 right-2 h-3.5 w-1 -translate-y-1/2 rounded-full bg-background/45" />
-        </Slider.Thumb>
       </Slider.Control>
     </Slider.Root>
+  )
+}
+
+/** The same at the foot of the view, by itself, while the model is exploded. */
+export function ExplodeSlider() {
+  return (
+    <div className="glass pointer-events-auto flex h-10 items-center rounded-full bg-background/60 px-3.5 shadow-sm ring-1 ring-foreground/10">
+      <Spread className="w-56" />
+    </div>
   )
 }

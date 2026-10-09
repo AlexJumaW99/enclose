@@ -1,13 +1,14 @@
 // The sheets a model is drawn on: one to each of four corners it can be looked at from,
-// and to each side, A4 and upright, with the drawing in the middle of it and nothing else. And a sheet as a file,
-// an SVG, which is what is taken away of it: the lines, in millimetres, to be printed as
-// they are or opened in something that draws.
+// and to each side, upright and four wide to five high, with the drawing in the middle
+// of it and nothing else. And a sheet as a file, an SVG, which is what is taken away of
+// it: the lines, in millimetres, to be printed as they are or opened in something that
+// draws.
 import type { Vec3 } from "@shared/api"
 import { viewFrom, VIEWS } from "@/lib/orient"
 import type { Looking, Stroke } from "./lines"
 
-/** A4, upright, in mm. */
-export const SHEET = { width: 210, height: 297 }
+/** A sheet, in mm: upright, as wide as A4, and four wide to five high. */
+export const SHEET = { width: 210, height: 262.5 }
 /** How much of the sheet is kept clear all round a drawing, at the least, in mm. */
 const MARGIN = 15
 /**
@@ -173,7 +174,7 @@ function named() {
 }
 
 /**
- * A sheet as an SVG: A4, in mm, with the lines of each part together under the part's
+ * A sheet as an SVG, in mm, with the lines of each part together under the part's
  * name, and the parts of each group together under the group's. Nothing is filled in,
  * and there is no paper in it: only the lines.
  */

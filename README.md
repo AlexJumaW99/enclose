@@ -214,8 +214,8 @@ Down the right-hand edge:
   tenth line heavier: zoom out and they give way to squares ten times the size. It stays
   on, or off, from one model to the next.
 - **Blueprint** (B) puts the model's drawings where the view was: the model drawn flat,
-  from four of its corners and then from each of its six sides, each on an A4 sheet of
-  its own. A corner shows three sides at once, all turned equally from the eye (an
+  from four of its corners and then from each of its six sides, each on a sheet of
+  its own, upright and four wide to five high (210 by 262.5 mm, the width of A4). A corner shows three sides at once, all turned equally from the eye (an
   isometric drawing): the top or the bottom, with the front and the left side or the
   front and the right. The sheets stand in a row
   that is gone along sideways, and a wheel that only turns up and down goes along it too.
@@ -228,7 +228,7 @@ Down the right-hand edge:
   scale, the least reduction that fits (1:2, 1:5, 1:10 and so on), and the four corners,
   which take more room, to one of their own. The lines are a point and a half wide. The
   arrow over a sheet saves it
-  as an SVG, A4 and in millimetres, with nothing in it but the lines: those of each part
+  as an SVG, the size of the sheet and in millimetres, with nothing in it but the lines: those of each part
   together under the part's name, and the parts of each group under the group's, so that
   a program that draws (Illustrator, Figma, Inkscape) opens it with the model's own
   layers. Its tooltip says the scale. What is drawn is what the view had on show: pick

@@ -85,7 +85,9 @@ describe("the sides a model is drawn from", () => {
 describe("reduction", () => {
   it("draws life size what fits the sheet", () => {
     expect(reduction([{ width: 40, height: 40 }])).toBe(1)
-    expect(reduction([{ width: 180, height: 267 }])).toBe(1)
+    expect(reduction([{ width: 180, height: 232.5 }])).toBe(1)
+    // (it is four wide to five high: what would fit a taller sheet does not fit it)
+    expect(reduction([{ width: 180, height: 267 }])).toBe(2)
     expect(reduction([])).toBe(1)
   })
 
@@ -123,10 +125,10 @@ describe("a drawing on its sheet", () => {
     const placing = { middle: [0, 0] as [number, number], by: 1 }
     expect(
       pathOf({ points: [0, 0, 10, 0, 10, 5.12345], closed: false }, placing)
-    ).toBe("M105 148.5L115 148.5L115 143.377")
+    ).toBe("M105 131.25L115 131.25L115 126.127")
     expect(
       pathOf({ points: [0, 0, 10, 0, 10, 10], closed: true }, placing)
-    ).toBe("M105 148.5L115 148.5L115 138.5Z")
+    ).toBe("M105 131.25L115 131.25L115 121.25Z")
   })
 })
 
@@ -149,9 +151,9 @@ describe("svgOf", () => {
     ],
   })
 
-  it("is an A4 sheet in millimetres", () => {
+  it("is a sheet four wide to five high, in millimetres", () => {
     expect(svg).toContain(
-      '<svg xmlns="http://www.w3.org/2000/svg" width="210mm" height="297mm" viewBox="0 0 210 297">'
+      '<svg xmlns="http://www.w3.org/2000/svg" width="210mm" height="262.5mm" viewBox="0 0 210 262.5">'
     )
     expect(svg).toContain('fill="none"')
     // a point and a half, in millimetres

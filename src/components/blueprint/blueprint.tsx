@@ -403,9 +403,9 @@ function Sheet({
           </TooltipContent>
         </Tooltip>
       </header>
-      {/* A4, as tall as the window has room for, clear of what is at its top and its
-          foot, and no taller than it is at a pixel to the point */}
-      <div className="relative aspect-[210/297] h-[min(842px,calc(100svh-180px))] overflow-hidden rounded-[18px] bg-white ring-1 ring-foreground/10 dark:bg-[#f5f6ec] dark:ring-0">
+      {/* four wide to five high: as tall as the window has room for, clear of what is
+          at its top and its foot, and no taller than it is at a pixel to the point */}
+      <div className="relative aspect-[4/5] h-[min(744px,calc(100svh-180px))] overflow-hidden rounded-[18px] bg-white ring-1 ring-foreground/10 dark:bg-[#f5f6ec] dark:ring-0">
         {/* a drawing that is being done again waits faintly for the one to take its
             place: but not at once, in case that is here before anyone could tell */}
         <div
