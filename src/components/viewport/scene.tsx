@@ -11,6 +11,7 @@ import type { PartRef, Vec3 } from "@shared/api"
 import { PALETTE, type PaletteName } from "@shared/palette"
 import { useThemeColors, type ThemeColors } from "@/lib/css-color"
 import type { Finds, Found } from "@/lib/find"
+import { onPosed, posed } from "@/lib/custom-tools/poses"
 import { hasFigure } from "@/lib/reference"
 import type { Keepout } from "@/lib/model"
 import type { Turn } from "@/lib/orient"
@@ -517,6 +518,10 @@ export function appearance(
   return { shown, look: outside ? "glass" : "solid" }
 }
 
+/** Where a part moved by a tool is worked out, and what is left over of working it out. */
+const MOVED = new THREE.Matrix4()
+const NO_SCALE = new THREE.Vector3()
+
 const PartModel = React.memo(function PartModel({
   loaded,
   look,
@@ -713,10 +718,20 @@ const PartModel = React.memo(function PartModel({
     )
     const moving = Math.abs(next - explode) > 0.0005
     current.current = moving ? next : explode
-    group.current.position
-      .copy(home.position)
-      .addScaledVector(loaded.away, current.current)
-    group.current.quaternion.copy(home.quaternion)
+    // where the model has it: or, with a tool of the project's at work on it, where the
+    // tool has it from there
+    const pose = posed(part.id)
+    if (pose)
+      MOVED.multiplyMatrices(pose, loaded.home).decompose(
+        group.current.position,
+        group.current.quaternion,
+        NO_SCALE
+      )
+    else {
+      group.current.position.copy(home.position)
+      group.current.quaternion.copy(home.quaternion)
+    }
+    group.current.position.addScaledVector(loaded.away, current.current)
     if (moving) invalidate()
   })
 
@@ -1569,6 +1584,17 @@ function Redraw({ on }: { on: unknown }) {
   return null
 }
 
+/**
+ * The project's own tools move the parts between one frame and the next, and say so
+ * nowhere React hears of (see lib/custom-tools/host): each time they do, the view is
+ * drawn again, and every part takes its place as it is drawn.
+ */
+function Posing() {
+  const invalidate = useThree((state) => state.invalidate)
+  React.useEffect(() => onPosed(() => invalidate()), [invalidate])
+  return null
+}
+
 /** Lets the rest of the window take a picture of the view. */
 function Camera() {
   const gl = useThree((state) => state.gl)
@@ -1841,12 +1867,9 @@ export function Scene({
         box={stage}
         homeKey={homeKey}
         circling={reading}
-        // (with the figure of a person in it, a scene is another thing to take in)
-        around={
-          reference
-            ? `${reference.scene.id}${hasFigure(reference.scene) ? " with a figure" : ""}`
-            : null
-        }
+        around={reference?.scene.id ?? null}
+        // (with the figure of a person in it, there is more of a scene to take in)
+        more={reference && hasFigure(reference.scene) ? "a figure" : null}
         ground={ground}
       />
       {/* after the camera has been moved for the frame: it goes by where that is */}
@@ -1868,6 +1891,7 @@ export function Scene({
         onTake={onTake}
       />
       <Camera />
+      <Posing />
       <Redraw on={view} />
       <Redraw on={changed} />
       <Redraw on={found} />

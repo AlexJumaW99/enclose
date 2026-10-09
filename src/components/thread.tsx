@@ -366,7 +366,7 @@ export function Thread({ project }: { project: Project }) {
     open
   )
   const agent = providers.find((one) => one.id === answers)
-  const { name, cli } = PROVIDER_WORDS[answers]
+  const { cli } = PROVIDER_WORDS[answers]
   const setThreadOpen = useStore((state) => state.setThreadOpen)
   const width = useStore((state) => state.threadWidth)
   const end = React.useRef<HTMLDivElement>(null)
@@ -479,27 +479,26 @@ export function Thread({ project }: { project: Project }) {
         <Empty className="flex-1">
           {/* files being made a model of are as good as one: it is seconds away */}
           {project.manifest || project.bringingIn?.state === "working" ? (
-            <EmptyHeader>
-              <EmptyTitle>Ask {name} about this model</EmptyTitle>
+            <EmptyHeader className="gap-0.5">
+              <EmptyTitle>Ask the agent about this model</EmptyTitle>
               <EmptyDescription>
                 Describe a change, or click a part in the view and say what it
-                should become. {name} edits the project and rebuilds; the view
-                updates by itself.
+                should become.
               </EmptyDescription>
             </EmptyHeader>
           ) : project.bringingIn ? (
-            <EmptyHeader>
+            <EmptyHeader className="gap-0.5">
               <EmptyTitle>No model of the files yet</EmptyTitle>
               <EmptyDescription>
-                They are in the project, where {name} can get at them. Ask it to
-                set the project up, and it goes on from there.
+                They are in the project, where the agent can get at them. Ask it
+                to set the project up, and it goes on from there.
               </EmptyDescription>
             </EmptyHeader>
           ) : (
-            <EmptyHeader>
+            <EmptyHeader className="gap-0.5">
               <EmptyTitle>What do you want to make?</EmptyTitle>
               <EmptyDescription>
-                Describe it and {name} builds it in this folder. It takes the
+                Describe it and the agent builds it in this folder. It takes the
                 place of the cube.
               </EmptyDescription>
             </EmptyHeader>

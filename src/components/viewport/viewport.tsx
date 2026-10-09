@@ -2,7 +2,6 @@ import * as React from "react"
 import { cn } from "cn"
 import {
   ArrowRightIcon,
-  FolderPlusIcon,
   PersonStandingIcon,
   PlusIcon,
   SquareIcon,
@@ -10,6 +9,9 @@ import {
 } from "lucide-react"
 
 import { OWN_SCENE, type PartRef, type Project } from "@shared/api"
+import { ToolsPanel } from "@/components/custom-tools/panel"
+import { runTools, stopTools, useTools } from "@/lib/custom-tools/host"
+import type { PartFact } from "@/lib/custom-tools/types"
 import { Blueprint } from "@/components/blueprint/blueprint"
 import { Options } from "@/components/blueprint/options"
 import { Mark } from "@/components/mark"
@@ -637,6 +639,74 @@ function Model({ project }: { project: Project }) {
     const { view, pickScene } = useStore.getState()
     if (atWorkHere || view.reference !== null) pickScene(OWN_SCENE)
   }, [scenes, ownScene, atWorkHere])
+  // The project can have tools of its own, made for its model: controls that move it
+  // and try it out, each a file in the project's folder (see lib/custom-tools). Brought
+  // up, they are set to work on the model, and stay at work with their panel put away,
+  // until they are left with Esc: the parts are then where the tools have them. They
+  // are started again when one of them is written, and when the model is built.
+  const toolsOpen = useStore((s) => s.toolsOpen)
+  const hasTools = project.tools !== null
+  const tooling = view.tools && real !== null && hasTools && !lookingOver
+  React.useEffect(() => {
+    if (!tooling || !real) return
+    let over = false
+    const of = `${project.id}:${project.tools}`
+    const parts = real.parts.map((part): PartFact => {
+      const box = part.box.clone().applyMatrix4(part.home)
+      return {
+        id: part.part.id,
+        label: part.part.label,
+        group: part.part.group,
+        min: box.min.toArray(),
+        max: box.max.toArray(),
+      }
+    })
+    void window.cad.tools.read(project.id).then((sources) => {
+      if (!over) runTools(project.id, of, sources, parts)
+    })
+    return () => {
+      over = true
+    }
+  }, [tooling, real, project.id, project.tools])
+  React.useEffect(() => {
+    if (!tooling) stopTools()
+  }, [tooling])
+  React.useEffect(() => stopTools, [])
+  // With the last of them taken away there is nothing to be at work, or to bring up.
+  React.useEffect(() => {
+    if (hasTools) return
+    const { view, setView, setToolsOpen } = useStore.getState()
+    setToolsOpen(false)
+    if (view.tools) setView({ tools: false })
+  }, [hasTools])
+  // A tool that Claude has just written, at work in the project, is brought up: what
+  // was asked for is there to be seen and tried.
+  const toolsSeen = React.useRef<number | null | undefined>(undefined)
+  React.useEffect(() => {
+    const was = toolsSeen.current
+    toolsSeen.current = project.tools
+    // (as they were found when the project was opened is not their having been written)
+    if (was === undefined || project.tools === null || project.tools === was)
+      return
+    if (atWorkHere) useStore.getState().setToolsOpen(true)
+  }, [project.tools, atWorkHere])
+  // How the tools have the parts look, apart from where they are: out of sight, or in
+  // another of the app's colours.
+  const toolLooks = useTools((s) => s.looks)
+  const shownColours = React.useMemo(
+    () =>
+      Object.keys(toolLooks.colours).length > 0
+        ? { ...colours, ...toolLooks.colours }
+        : colours,
+    [colours, toolLooks.colours]
+  )
+  const shownView = React.useMemo(
+    () =>
+      toolLooks.hidden.length > 0
+        ? { ...view, hidden: [...view.hidden, ...toolLooks.hidden] }
+        : view,
+    [view, toolLooks.hidden]
+  )
   // Meanwhile the view is Claude's: the camera goes round the model by itself, and
   // nothing in the view answers the hand or the keys. When it is through, the camera
   // goes back to where a model opens, as Cmd+1 would take it.
@@ -958,7 +1028,8 @@ function Model({ project }: { project: Project }) {
   //
   // Cmd+G makes a group of the parts picked out, and Shift+Cmd+G takes them out of
   // their groups (see above). Cmd+/ sets the model in the reference scene that suits
-  // it, and again takes it back out.
+  // it, and again takes it back out. T brings up the project's own tools, where it has
+  // some, and puts them away.
   //
   // Cmd+Z takes back the last thing done to the model, a colour given by hand, parts
   // put into groups another way or what Claude did in a turn, and with Shift puts it
@@ -1082,6 +1153,12 @@ function Model({ project }: { project: Project }) {
       } else if (letter === "p") {
         const { partsOpen, setPartsOpen } = useStore.getState()
         setPartsOpen(!partsOpen)
+      } else if (letter === "t") {
+        // the project's own tools, where it has some: they are the view's, as the
+        // cut is, and wait under a blueprint
+        if (!hasTools || loaded.standIn || view.blueprint) return
+        const { toolsOpen, setToolsOpen } = useStore.getState()
+        setToolsOpen(!toolsOpen)
       } else if (letter === " ") {
         // the camera is the view's: a blueprint has none to bring anywhere
         if (view.blueprint || spaceTaken(event)) return
@@ -1107,6 +1184,7 @@ function Model({ project }: { project: Project }) {
     groupThem,
     ungroupThem,
     toggleReference,
+    hasTools,
   ])
 
   // The camera goes to what I shows on its own, one part or several together, and
@@ -1261,8 +1339,8 @@ function Model({ project }: { project: Project }) {
             reference={reference}
             projectId={project.id}
             notes={notes}
-            colours={colours}
-            view={view}
+            colours={shownColours}
+            view={shownView}
             selectedId={selection?.part.id ?? null}
             selectedWith={selectedWith}
             several={several}
@@ -1335,7 +1413,12 @@ function Model({ project }: { project: Project }) {
       )}
 
       {searched && <Search finds={finds} onShow={showFound} />}
-      <Tools loaded={loaded} projectId={project.id} locked={lookingOver} />
+      <Tools
+        loaded={loaded}
+        projectId={project.id}
+        locked={lookingOver}
+        hasTools={hasTools}
+      />
       {loaded && partsOpen && !lookingOver && (
         <PartsPanel
           loaded={loaded}
@@ -1362,6 +1445,18 @@ function Model({ project }: { project: Project }) {
           className={cn(
             "absolute top-1/2 max-h-[80%] -translate-y-1/2 transition-[right]",
             view.section ? "right-38.5" : "right-17.5"
+          )}
+        />
+      )}
+      {real && hasTools && toolsOpen && !lookingOver && !blueprint && (
+        <ToolsPanel
+          projectId={project.id}
+          // where the list of parts goes, which is never up with it
+          className={cn(
+            "absolute top-1/2 max-h-[80%] -translate-y-1/2 transition-[right]",
+            view.section
+              ? "right-36 max-w-[calc(100%-9.75rem)]"
+              : "right-15 max-w-[calc(100%-4.5rem)]"
           )}
         />
       )}
@@ -1407,39 +1502,50 @@ function Model({ project }: { project: Project }) {
 
 const nothing = () => {}
 
+/** How big the mark stands over the words of welcome, px. */
+const WELCOME_MARK = 72
+
 /** No projects at all: how one is started. */
 function Welcome() {
   const addProject = useStore((s) => s.addProject)
   const createProject = useStore((s) => s.createProject)
+  const startExample = useStore((s) => s.startExample)
   return (
     <Empty className="h-full">
       <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <FolderPlusIcon />
+        <EmptyMedia>
+          <Mark size={WELCOME_MARK} />
         </EmptyMedia>
         <EmptyTitle>Drop a file or folder here</EmptyTitle>
         <EmptyDescription>
-          A STEP file, a folder of them, or a folder to start in: it becomes a
-          project.
+          Drop a STEP file, a folder or create something new
         </EmptyDescription>
       </EmptyHeader>
-      <EmptyContent className="flex-row justify-center">
+      <EmptyContent className="max-w-56 items-stretch gap-2">
+        <Button onClick={() => void createProject()}>
+          Create something new
+        </Button>
         {/* a Mac's picker takes files and folders alike; no other system's does */}
         {MAC ? (
-          <Button variant="outline" onClick={() => void addProject()}>
+          <Button variant="secondary" onClick={() => void addProject()}>
             Open file or folder
           </Button>
         ) : (
-          <>
-            <Button variant="outline" onClick={() => void addProject("file")}>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="secondary" onClick={() => void addProject("file")}>
               Open file
             </Button>
-            <Button variant="outline" onClick={() => void addProject("folder")}>
+            <Button
+              variant="secondary"
+              onClick={() => void addProject("folder")}
+            >
               Open folder
             </Button>
-          </>
+          </div>
         )}
-        <Button onClick={() => void createProject()}>Create</Button>
+        <Button variant="secondary" onClick={() => void startExample()}>
+          Start with example
+        </Button>
       </EmptyContent>
     </Empty>
   )

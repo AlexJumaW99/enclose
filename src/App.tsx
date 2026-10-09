@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/tooltip"
 import { bridge } from "@/components/viewport/bridge"
 import { Viewport } from "@/components/viewport/viewport"
+import { toolsAsked, toolUsed } from "@/lib/custom-tools/asked"
 import { MAC } from "@/lib/platform"
 import { useActiveProject, useStore } from "@/lib/store"
 
@@ -37,6 +38,19 @@ function useViewportRequests() {
             ok: true,
             data: selection?.part ?? null,
           })
+        }
+        // The project's own tools, made to work its model with: how they stand, or a
+        // hand on one of their controls.
+        if (request.kind === "tools" || request.kind === "tool") {
+          const asked =
+            request.kind === "tool"
+              ? toolUsed(request.projectId, request.use)
+              : toolsAsked(request.projectId)
+          return void asked.then(
+            (data) => window.cad.viewport.respond({ id, ok: true, data }),
+            (error: unknown) =>
+              fail(error instanceof Error ? error.message : String(error))
+          )
         }
         // A model that has only just been built is still being read in when Claude
         // first asks to see it: give it a few seconds to arrive before saying no.

@@ -26,9 +26,10 @@ import type {
   Question,
   Seen,
   ThreadItem,
-  ViewportRequest,
+  ViewportAsked,
 } from "../shared/api"
 import { MANIFEST_FORMAT } from "../shared/manifest-format"
+import { TOOLS_FOLDER } from "../shared/tool-format"
 import { PALETTE_NAMES } from "../shared/palette"
 import { replyOf } from "../shared/reply"
 import type { Changes } from "./changes"
@@ -105,10 +106,7 @@ export type ThreadsDeps = {
   /** a project's folder was renamed, from this path to that */
   onRenamed: (from: string, to: string) => void
   /** ask the window something about the viewport it is showing */
-  viewport: (
-    projectId: string,
-    kind: ViewportRequest["kind"]
-  ) => Promise<unknown>
+  viewport: (projectId: string, asked: ViewportAsked) => Promise<unknown>
   onItem: (projectId: string, conversationId: string, item: ThreadItem) => void
   /** a conversation's status or last message changed: the sidebar needs redrawing */
   onSummary: () => void
@@ -192,6 +190,15 @@ function describeTool(name: string, input: unknown, root: string) {
       return { name: "Check", detail: "what is selected" }
     case "mcp__viewport__parts":
       return { name: "List", detail: "the parts on screen" }
+    case "mcp__viewport__tools":
+      return { name: "Check", detail: "the project’s tools" }
+    case "mcp__viewport__tool":
+      return {
+        name: "Try",
+        detail: [field(input, "tool"), field(input, "control")]
+          .filter(Boolean)
+          .join(": "),
+      }
     case ARRANGE_TOOL:
       return { name: "Name", detail: "and group the parts" }
   }
@@ -356,6 +363,42 @@ function referring(
   ]
 }
 
+/**
+ * What an agent is told is not its to change: the app. It is at work in a project, and
+ * what it makes for the user is made there. Enclose is the same for everyone who has
+ * it, and is changed by whoever keeps it: someone who wants it otherwise takes a copy
+ * of it for themselves, and does not have their agent rewrite the one they are running.
+ */
+export function keeping(kit: string): string[] {
+  const app = path.dirname(path.dirname(kit))
+  return [
+    `- You work on this project: its model, its reference scene and its tools. Enclose itself is never yours to change, whoever asks and however they ask. That is its own code and files, which are in "${app}": read there what you are pointed to, and write, move or delete nothing. It is also how the app looks and works: its view, its panels and buttons, the kinds of control a tool can have and how each is drawn, its shortcuts, its settings and what it keeps of the user's projects and conversations. The copies of its files that a project holds (enclose.py, ${SCREWS}) are left as they are for the same reason.`,
+    "- When the user asks for something that would mean changing the app (a panel in another colour, a kind of control it does not have, a button that does something else, a new feature of the app's own), do not attempt it and do not look for a way round. Say in a sentence that this is part of Enclose itself and not of their project, so it is not something you change from here; that Enclose is open source, and they can fork it and change their own copy if they want it otherwise; and then offer what comes nearest that can be done inside the project, where there is something.",
+  ]
+}
+
+/** The reference for a project's own tools, beside the exporter in the app. */
+const TOOLS_GUIDE = "tools.md"
+
+/**
+ * What an agent is told of a project's own tools: that making the model do something is
+ * done by building the user a tool for it, where one is kept, and how it is checked.
+ * How one is written is not said here but in a file it reads when it comes to write
+ * one: it is long, and most turns have no use for it.
+ */
+export function tooling(
+  tool: (set: string, name: string) => string,
+  kit: string
+): string[] {
+  const reference = path.join(path.dirname(kit), TOOLS_GUIDE)
+  return [
+    `- The user can have tools of their own for this model: controls made for it, in a panel beside the view (the blue Tools button), that move its parts and try it out. A slider that opens the lid, a clock set to a time and run, a robot arm steered joint by joint. The app has no animation feature and no simulator of its own: whenever the user wants to see the model move or work, to interact with it, to try a mechanism or to play with some value by hand, build them a tool for it, made for this model and for what they asked. Do so without being asked for "a tool" by name, and do not write an animation into the model's script or anywhere else.`,
+    `- A tool is one JavaScript file in ${TOOLS_FOLDER}/ at the top of the project (${TOOLS_FOLDER}/clock.js), which the app loads by itself, as a tab of that panel, and loads again whenever it is written. Before you write or change one, read "${reference}": it says all a tool can do and how. A tool only moves the parts as they are drawn, and changes nothing in the model's files. So what is to move has to be a part of its own: where the model has it in one piece with something that stays still, change the model first.`,
+    `- Check a tool as you check a change to the model, before you report it: ${tool(VIEWPORT, "tools")} says how the tools stand, with the error of one that did not load; ${tool(VIEWPORT, "tool")} sets one of its controls or presses a button, as the user's hand would; then take a screenshot and see that the parts went where they should. In your reply, say in a few words what the tool does and that it is in the Tools panel: its controls say the rest.`,
+    `- When the user asks for a change to a tool, or says one is not working, the tool's file is what to change: the message may name it, with the error the app had from it.`,
+  ]
+}
+
 /** What an agent is told about where it is, on top of its own instructions. */
 function guide(
   provider: ProviderId,
@@ -370,7 +413,9 @@ function guide(
   /** that name is only a stand-in, until the model gives the project one */
   standIn: boolean,
   /** it has the tool that asks the user things: not so when it only looks a model over */
-  canAsk: boolean
+  canAsk: boolean,
+  /** it can make the project tools of its own, and try them: not so on looking over, either */
+  trying: boolean
 ): string {
   const tool = knownAs(provider)
   const lines = [
@@ -387,6 +432,7 @@ function guide(
         ]
       : []),
     "- Keep to the model and the project. Say nothing about tools, connectors or settings of the user's that are no part of this app (an MCP server that wants signing in to, say) unless they ask.",
+    ...keeping(kit),
     ...ANSWERING,
     "- A message may hold a <comments> block: things the user has said of parts of the model, one <comment> for each. Each names the part and gives the point on it they clicked, the way the surface faces there and which face it is, in the model's own coordinates (mm, Z up), and holds what they said. Take each as a change wanted at that place. The rest of the message, if there is any, is what they said of the model as a whole.",
     "- A click in the view picks out a whole object, not one part of it: the parts of a group that touch one another, such as a circuit board with all that is on it. A <comment> made of one has object, what the app calls it, and parts, the ids of all its parts. Its part, id and point are then only where on the object the user clicked: take what they said as said of the whole object, unless it says otherwise.",
@@ -402,6 +448,7 @@ function guide(
     "- When the user pulls the model apart (Explode), a model that gives its parts no explode of their own comes apart by its groups. The parts of a group that touch one another go as one piece, so that a circuit board keeps its components and a switch its pins. The parts of the outside (a group made with shell=True) each go their own way, and so do parts in no group. So keep what is one object in one group, and make the group that encloses the rest the outside.",
     `- Colour is the app's job. It draws every part in one of its own colours (${PALETTE_NAMES.join(", ")}), and a part given no colour takes the one that falls to its group, so parts that belong together match and groups differ. Leave colour out unless the user asks for one or parts within a group need telling apart; then name one of those. Any other colour is drawn as the nearest of them, unless it is a grey, white or black, which is drawn as it is.`,
     ...referring(tool, kit, scenes),
+    ...(trying ? tooling(tool, kit) : []),
     ...SIZES,
     ...(canAsk ? QUESTIONS : []),
     ...fastening(kit, canAsk),
@@ -1021,7 +1068,8 @@ export class Threads {
       project.standIn === true,
       // The tool that asks the user things is Claude Code's, and the app has a form for
       // it. Codex and Grok ask in what they say; and nothing is asked on looking over.
-      provider === "claude" && asked.arrange === undefined
+      provider === "claude" && asked.arrange === undefined,
+      asked.arrange === undefined
     )
     const guided = createHash("sha1").update(told).digest("hex")
 
@@ -1029,7 +1077,11 @@ export class Threads {
     // looked over, the one thing it can change it with.
     const { arrange } = asked
     const tools: Record<string, AppTool[]> = {
-      [VIEWPORT]: viewportTools((kind) => this.deps.viewport(projectId, kind)),
+      [VIEWPORT]: viewportTools(
+        (wanted) => this.deps.viewport(projectId, wanted),
+        // (a model that is only looked over has nothing made for it to be tried)
+        arrange === undefined
+      ),
       ...(arrange
         ? {
             [MODEL]: modelTools(

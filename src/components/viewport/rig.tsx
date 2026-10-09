@@ -174,9 +174,17 @@ function direct(stage: {
   } | null = null
   /**
    * What the camera was looking at before the model was set in something to be seen
-   * beside, and at what scale: where it comes back in to when that is taken away.
+   * beside, at what scale and from which side: where it comes back in to when that is
+   * taken away.
    */
-  let outside: { target: THREE.Vector3; scale: number } | null = null
+  let outside: {
+    target: THREE.Vector3
+    scale: number
+    theta: number
+    phi: number
+  } | null = null
+  /** whether the model is set in such a thing, as far as the camera has been told */
+  let surrounded = false
   /** the ground that what the camera looks at was last kept above; null with none */
   let grounded: number | null = null
 
@@ -510,51 +518,63 @@ function direct(stage: {
     /**
      * The model has been set in something far bigger than itself to be seen beside, a
      * reference scene, or taken out of it again: by now the stage's box is all there is
-     * to see. Set in it, the camera stands back to take the whole in, from the side it
-     * is on. Taken out, it comes back in to what it was looking at before, as near as it
-     * was then. From the view a model opens with, both are that view again, of whatever
-     * there now is to frame. And so is being set in it from the flat view from
-     * underneath, or on the way there: with a ground to keep above, that is no side to
-     * stand back on.
+     * to see.
+     *
+     * Set in a scene it was not in (`fresh`), it is seen the way a model is when it
+     * opens, whichever side it was being looked at from: all of the scene, from above
+     * and in front. A scene is there to be taken in at a glance, and the side a part was
+     * being looked at from, close to or from underneath, is seldom one to see it from.
+     * Taken out, the camera goes back to what it was looking at before, from the side it
+     * was on and as near as it was, if the view has not been turned since; turned, it
+     * comes in to the model from the side it is now on.
+     *
+     * Where the scene is the same and there is only more in it to take in, or less, a
+     * figure shown or hidden, the camera stands back or comes in from the side it is on.
      */
-    surround(on: boolean, ratio: number) {
+    surround(on: boolean, ratio: number, fresh: boolean) {
       controls.smoothTime = SMOOTH.turn
-      const under =
-        on &&
-        stage.ground() !== null &&
-        (mode === "flat" || tie?.kind === "closing") &&
-        heading().phi > Math.PI / 2 + THERE
-      if (under) {
-        outside ??= {
-          target: controls.getTarget(new THREE.Vector3(), true),
-          scale: scaleThen(),
+      const opening = atHome && mode === "lens" && tie === null
+      const was = surrounded
+      surrounded = on
+      if (on && fresh) {
+        // Where it comes back to: nowhere, from the view a model opens with or from
+        // a flat one, which are views of the whole. Going from one scene to another,
+        // it is still where it was before the first that it comes back to.
+        if (!was) outside = null
+        if (!was && !opening && mode === "lens" && tie === null) {
+          const { theta, phi } = heading()
+          outside = {
+            target: controls.getTarget(new THREE.Vector3(), true),
+            scale: scaleThen(),
+            theta,
+            phi,
+          }
         }
         this.home(true, ratio, seen)
         return
       }
-      if (atHome && mode === "lens" && tie === null) {
-        // (at home there is nothing to go back to but home)
-        if (!on) outside = null
+      if (opening) {
+        if (!on && outside) {
+          // not turned since it was set in the scene: back to where it was
+          const { target, scale, theta, phi } = outside
+          outside = null
+          atHome = false
+          void controls.rotateTo(
+            nearestTurn(controls.azimuthAngle, theta),
+            phi,
+            true
+          )
+          void controls.moveTo(target.x, target.y, target.z, true)
+          scaleTo(scale)
+          stage.redraw()
+          return
+        }
         this.home(true, ratio, seen)
         return
       }
-      if (on) {
-        // going from one such thing to another, it is still the first it comes back from
-        outside ??= {
-          target: controls.getTarget(new THREE.Vector3(), true),
-          scale: scaleThen(),
-        }
-        takeIn(stage.box())
-      } else if (outside) {
-        const { target, scale } = outside
-        outside = null
-        void controls.moveTo(target.x, target.y, target.z, true)
-        scaleTo(scale)
-      } else {
-        // it was at home when it stood back, and has been turned since: the model as
-        // it is seen from here
-        takeIn(framed())
-      }
+      // the view has been turned since: what there was to come back to is let go of
+      if (!on) outside = null
+      takeIn(on ? stage.box() : framed())
       stage.redraw()
     },
 
@@ -900,6 +920,7 @@ export function Rig({
   homeKey,
   circling = false,
   around = null,
+  more = null,
   ground = null,
 }: {
   /** all there is to see: the model, with whatever it is set in */
@@ -912,6 +933,11 @@ export function Rig({
    * one such thing from another; null while it is set in nothing.
    */
   around?: string | null
+  /**
+   * What more there is in that to take in, by a name: the figure of a person, which
+   * comes and goes. Null where there is nothing more.
+   */
+  more?: string | null
   /**
    * How high the ground is that such a thing stands on, in the model's frame: the
    * camera keeps above it. Null while the model is set in nothing.
@@ -1023,14 +1049,21 @@ export function Rig({
   }, [aspect])
 
   // Set in a reference scene, taken out of one, or moved from one to another: the
-  // camera stands back to take all of it in, and comes back in when there is no more
-  // of it. Not when the same scene is built again, which should not move the camera.
-  const within = React.useRef(around)
+  // camera goes to where a model opens, to take all of the scene in, and comes back in
+  // when there is no more of it. With more in the same scene to take in, or less, it
+  // stands back or comes in from where it is. Not when the same scene is built again,
+  // which should not move the camera.
+  const within = React.useRef({ around, more })
   React.useEffect(() => {
-    if (within.current === around) return
-    within.current = around
-    director.current?.surround(around !== null, shape.current)
-  }, [around])
+    const was = within.current
+    if (was.around === around && was.more === more) return
+    within.current = { around, more }
+    director.current?.surround(
+      around !== null,
+      shape.current,
+      was.around !== around
+    )
+  }, [around, more])
 
   // What the hand does on the view. Fingers moving across a trackpad turn the model, a
   // pinch zooms, and so does a mouse wheel. Holding Shift pans instead: with the fingers,

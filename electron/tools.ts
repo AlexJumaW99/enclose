@@ -8,7 +8,7 @@ import type { AddressInfo } from "node:net"
 
 import { z } from "zod"
 
-import type { ViewportRequest } from "../shared/api"
+import type { ViewportAsked } from "../shared/api"
 import type { Arrangement } from "./imports"
 
 /** What a tool gives back: words, or a picture. */
@@ -52,9 +52,61 @@ const told = (value: unknown) => words(JSON.stringify(value, null, 1))
 export const VIEWPORT = "viewport"
 export const MODEL = "model"
 
-/** The tools an agent sees what the user sees with. `ask` puts a question to the window. */
+/**
+ * The tools an agent sees what the user sees with. `ask` puts a question to the window.
+ * With `trying`, it has the two as well that a project's own tools are tried with: the
+ * ones made for the user to work the model with (see shared/tool-format.ts).
+ */
 export function viewportTools(
-  ask: (kind: ViewportRequest["kind"]) => Promise<unknown>
+  ask: (asked: ViewportAsked) => Promise<unknown>,
+  trying = false
+): AppTool[] {
+  return [
+    ...seeing((kind) => ask({ kind })),
+    ...(trying ? tryingTools(ask) : []),
+  ]
+}
+
+/** What a project's own tools are tried with: how they stand, and a hand on a control. */
+function tryingTools(
+  ask: (asked: ViewportAsked) => Promise<unknown>
+): AppTool[] {
+  return [
+    appTool(
+      "tools",
+      "The project's own tools (the files in tools/), as the app has them loaded right now: for each its name, every control with its current value, and its error if it failed to load or run. Opens the Tools panel in the view if it is not open. Call it after writing or changing a tool, to see that it loaded.",
+      {},
+      async () => ask({ kind: "tools" }).then(told, failed)
+    ),
+    appTool(
+      "tool",
+      "Work one control of one of the project's own tools, as the user's hand would: set its value, or press one of its buttons. The model in the view moves as the tool has it. Returns that tool as it stands a moment later; take a screenshot afterwards to see the model.",
+      {
+        tool: z.string().describe('The tool, by its file\'s name: "clock".'),
+        control: z.string().describe("The control, by its key in controls."),
+        value: z
+          .union([
+            z.number(),
+            z.boolean(),
+            z.string(),
+            z.tuple([z.number(), z.number()]),
+          ])
+          .optional()
+          .describe(
+            "What to set it to: a number for a slider, [x, y] for a pad, true or false for a toggle, an option's id for a choice or a list, a colour's name for a palette."
+          ),
+        press: z
+          .string()
+          .optional()
+          .describe("For buttons: the id of the one to press."),
+      },
+      async (use) => ask({ kind: "tool", use }).then(told, failed)
+    ),
+  ]
+}
+
+function seeing(
+  ask: (kind: "screenshot" | "selection" | "parts") => Promise<unknown>
 ): AppTool[] {
   return [
     appTool(

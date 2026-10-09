@@ -4,6 +4,8 @@ import type { Seen } from "../shared/api"
 import {
   answersTo,
   fastening,
+  keeping,
+  tooling,
   lookOverAsked,
   questionsOf,
   withNotes,
@@ -312,5 +314,39 @@ describe("answersTo", () => {
     const told = answersTo(asked, ["Mug, a flask", ""])
     expect(told["What does it hold?"]).toBe("Mug, a flask")
     expect(told["Where does it go?"]).toMatch(/^No answer: they leave this/)
+  })
+})
+
+describe("tooling", () => {
+  const claude = (set: string, name: string) => `mcp__${set}__${name}`
+
+  it("says where a tool is kept, and where how to write one is said", () => {
+    const told = tooling(claude, "/app/kit/enclose.py").join("\n")
+    expect(told).toContain("tools/clock.js")
+    expect(told).toContain('read "/app/kit/tools.md"')
+  })
+
+  it("names the tools a tool is tried with as the agent knows them", () => {
+    const told = tooling(claude, "/app/kit/enclose.py").join("\n")
+    expect(told).toContain("mcp__viewport__tools says how the tools stand")
+    expect(told).toContain("mcp__viewport__tool sets one of its controls")
+    const grok = tooling((set, name) => `${set}__${name}`, "/k/enclose.py")
+    expect(grok.join("\n")).toContain("viewport__tool sets")
+  })
+})
+
+describe("keeping", () => {
+  it("says where the app is, and that nothing there is to be changed", () => {
+    const told = keeping("/Applications/Enclose/kit/enclose.py").join("\n")
+    expect(told).toContain('which are in "/Applications/Enclose"')
+    expect(told).toContain("write, move or delete nothing")
+    // nor the copies of its files that a project holds
+    expect(told).toContain("enclose.py, screws.py")
+  })
+
+  it("has the user told how the app can be changed: by forking it", () => {
+    const told = keeping("/app/kit/enclose.py").join("\n")
+    expect(told).toContain("do not attempt it")
+    expect(told).toContain("fork it and change their own copy")
   })
 })

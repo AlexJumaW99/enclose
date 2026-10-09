@@ -1,0 +1,314 @@
+{
+ "title": "Clock movement",
+ "reference": "table",
+ "groups": [
+  {
+   "id": "frame",
+   "label": "Frame",
+   "shell": true
+  },
+  {
+   "id": "going_train",
+   "label": "Going train"
+  },
+  {
+   "id": "motion_work",
+   "label": "Motion work"
+  },
+  {
+   "id": "hands",
+   "label": "Hands"
+  }
+ ],
+ "parts": [
+  {
+   "id": "base",
+   "label": "Base",
+   "group": "frame",
+   "color": "grey",
+   "explode": [
+    0.0,
+    0.0,
+    -30.0
+   ],
+   "file": "base.glb",
+   "edges": "base.edges.bin"
+  },
+  {
+   "id": "back-plate",
+   "label": "Back plate",
+   "group": "frame",
+   "color": "lightgrey",
+   "explode": [
+    0.0,
+    60.0,
+    0.0
+   ],
+   "file": "back-plate.glb",
+   "edges": "back-plate.edges.bin"
+  },
+  {
+   "id": "pillars",
+   "label": "Pillars",
+   "group": "frame",
+   "color": "lightgrey",
+   "explode": [
+    0.0,
+    40.0,
+    0.0
+   ],
+   "file": "pillars.glb",
+   "edges": "pillars.edges.bin"
+  },
+  {
+   "id": "front-plate",
+   "label": "Front plate",
+   "group": "frame",
+   "color": "lightgrey",
+   "explode": [
+    0.0,
+    -20.0,
+    0.0
+   ],
+   "file": "front-plate.glb",
+   "edges": "front-plate.edges.bin"
+  },
+  {
+   "id": "dial",
+   "label": "Dial",
+   "group": "frame",
+   "color": "white",
+   "explode": [
+    0.0,
+    -70.0,
+    0.0
+   ],
+   "file": "dial.glb",
+   "edges": "dial.edges.bin"
+  },
+  {
+   "id": "centre-wheel",
+   "label": "Centre wheel",
+   "group": "going_train",
+   "explode": [
+    0.0,
+    20.0,
+    0.0
+   ],
+   "file": "centre-wheel.glb",
+   "edges": "centre-wheel.edges.bin"
+  },
+  {
+   "id": "third-wheel",
+   "label": "Third wheel",
+   "group": "going_train",
+   "explode": [
+    0.0,
+    10.0,
+    0.0
+   ],
+   "file": "third-wheel.glb",
+   "edges": "third-wheel.edges.bin"
+  },
+  {
+   "id": "fourth-wheel",
+   "label": "Fourth wheel",
+   "group": "going_train",
+   "explode": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "file": "fourth-wheel.glb",
+   "edges": "fourth-wheel.edges.bin"
+  },
+  {
+   "id": "minute-wheel",
+   "label": "Minute wheel",
+   "group": "motion_work",
+   "explode": [
+    0.0,
+    -35.0,
+    0.0
+   ],
+   "file": "minute-wheel.glb",
+   "edges": "minute-wheel.edges.bin"
+  },
+  {
+   "id": "hour-wheel",
+   "label": "Hour wheel",
+   "group": "motion_work",
+   "explode": [
+    0.0,
+    -50.0,
+    0.0
+   ],
+   "file": "hour-wheel.glb",
+   "edges": "hour-wheel.edges.bin"
+  },
+  {
+   "id": "seconds-hand",
+   "label": "Seconds hand",
+   "group": "hands",
+   "explode": [
+    0.0,
+    -85.0,
+    0.0
+   ],
+   "file": "seconds-hand.glb",
+   "edges": "seconds-hand.edges.bin"
+  },
+  {
+   "id": "hour-hand",
+   "label": "Hour hand",
+   "group": "hands",
+   "explode": [
+    0.0,
+    -95.0,
+    0.0
+   ],
+   "file": "hour-hand.glb",
+   "edges": "hour-hand.edges.bin"
+  },
+  {
+   "id": "minute-hand",
+   "label": "Minute hand",
+   "group": "hands",
+   "explode": [
+    0.0,
+    -105.0,
+    0.0
+   ],
+   "file": "minute-hand.glb",
+   "edges": "minute-hand.edges.bin"
+  }
+ ],
+ "keepouts": [],
+ "downloads": [
+  {
+   "file": "step/clock_movement.step",
+   "name": "clock_movement.step",
+   "label": "Clock movement",
+   "detail": "every part, in place",
+   "kind": "full",
+   "bytes": 4455081
+  },
+  {
+   "file": "step/base.step",
+   "name": "base.step",
+   "label": "Base",
+   "detail": "",
+   "kind": "part",
+   "part": "base",
+   "bytes": 37338
+  },
+  {
+   "file": "step/back-plate.step",
+   "name": "back-plate.step",
+   "label": "Back plate",
+   "detail": "",
+   "kind": "part",
+   "part": "back-plate",
+   "bytes": 18197
+  },
+  {
+   "file": "step/pillars.step",
+   "name": "pillars.step",
+   "label": "Pillars",
+   "detail": "",
+   "kind": "part",
+   "part": "pillars",
+   "bytes": 19825
+  },
+  {
+   "file": "step/front-plate.step",
+   "name": "front-plate.step",
+   "label": "Front plate",
+   "detail": "",
+   "kind": "part",
+   "part": "front-plate",
+   "bytes": 81644
+  },
+  {
+   "file": "step/dial.step",
+   "name": "dial.step",
+   "label": "Dial",
+   "detail": "",
+   "kind": "part",
+   "part": "dial",
+   "bytes": 214305
+  },
+  {
+   "file": "step/centre-wheel.step",
+   "name": "centre-wheel.step",
+   "label": "Centre wheel",
+   "detail": "",
+   "kind": "part",
+   "part": "centre-wheel",
+   "bytes": 1233138
+  },
+  {
+   "file": "step/third-wheel.step",
+   "name": "third-wheel.step",
+   "label": "Third wheel",
+   "detail": "",
+   "kind": "part",
+   "part": "third-wheel",
+   "bytes": 1105955
+  },
+  {
+   "file": "step/fourth-wheel.step",
+   "name": "fourth-wheel.step",
+   "label": "Fourth wheel",
+   "detail": "",
+   "kind": "part",
+   "part": "fourth-wheel",
+   "bytes": 133008
+  },
+  {
+   "file": "step/minute-wheel.step",
+   "name": "minute-wheel.step",
+   "label": "Minute wheel",
+   "detail": "",
+   "kind": "part",
+   "part": "minute-wheel",
+   "bytes": 771407
+  },
+  {
+   "file": "step/hour-wheel.step",
+   "name": "hour-wheel.step",
+   "label": "Hour wheel",
+   "detail": "",
+   "kind": "part",
+   "part": "hour-wheel",
+   "bytes": 653407
+  },
+  {
+   "file": "step/seconds-hand.step",
+   "name": "seconds-hand.step",
+   "label": "Seconds hand",
+   "detail": "",
+   "kind": "part",
+   "part": "seconds-hand",
+   "bytes": 32202
+  },
+  {
+   "file": "step/hour-hand.step",
+   "name": "hour-hand.step",
+   "label": "Hour hand",
+   "detail": "",
+   "kind": "part",
+   "part": "hour-hand",
+   "bytes": 21705
+  },
+  {
+   "file": "step/minute-hand.step",
+   "name": "minute-hand.step",
+   "label": "Minute hand",
+   "detail": "",
+   "kind": "part",
+   "part": "minute-hand",
+   "bytes": 32248
+  }
+ ]
+}

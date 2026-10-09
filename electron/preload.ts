@@ -22,6 +22,7 @@ const api: CadApi = {
     add: (kind) => ipcRenderer.invoke(CHANNEL.projectsAdd, kind),
     open: (paths) => ipcRenderer.invoke(CHANNEL.projectsOpen, paths),
     create: () => ipcRenderer.invoke(CHANNEL.projectsCreate),
+    example: () => ipcRenderer.invoke(CHANNEL.projectsExample),
     pathOf: (file) => webUtils.getPathForFile(file),
     remove: (id) => ipcRenderer.invoke(CHANNEL.projectsRemove, id),
     reveal: (id) => ipcRenderer.invoke(CHANNEL.projectsReveal, id),
@@ -43,6 +44,9 @@ const api: CadApi = {
   reference: {
     scenes: (projectId) =>
       ipcRenderer.invoke(CHANNEL.referenceScenes, projectId),
+  },
+  tools: {
+    read: (projectId) => ipcRenderer.invoke(CHANNEL.toolsRead, projectId),
   },
   changes: {
     undo: (projectId) => ipcRenderer.invoke(CHANNEL.changesUndo, projectId),

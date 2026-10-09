@@ -6,6 +6,7 @@ import {
   DownloadIcon,
   DraftingCompassIcon,
   Grid3x3Icon,
+  HammerIcon,
   MessageSquareIcon,
   RotateCcwIcon,
   SearchIcon,
@@ -172,11 +173,14 @@ export function Tools({
   loaded,
   projectId,
   locked = false,
+  hasTools = false,
 }: {
   loaded: LoadedModel | null
   projectId: string
   /** the view is not the hand's to change for now: how it is looked at is put away */
   locked?: boolean
+  /** the project has tools of its own, made for its model */
+  hasTools?: boolean
 }) {
   const view = useStore((state) => state.view)
   const { blueprint } = view
@@ -190,6 +194,8 @@ export function Tools({
   const setPartsOpen = useStore((state) => state.setPartsOpen)
   const referenceOpen = useStore((state) => state.referenceOpen)
   const setReferenceOpen = useStore((state) => state.setReferenceOpen)
+  const toolsOpen = useStore((state) => state.toolsOpen)
+  const setToolsOpen = useStore((state) => state.setToolsOpen)
   const finding = useStore((state) => state.finding !== null)
   const find = useStore((state) => state.find)
   const whole = loaded ? oneFile(loaded.model.downloads) : null
@@ -336,6 +342,24 @@ export function Tools({
               onChange={(on) => find(on ? "" : null)}
             >
               <SearchIcon />
+            </Switch>
+          )}
+          {/* The project's own tools, made for its model and not the app's: so it is
+              the one button here that is painted, blue, off as on, and is there only
+              where the project has some. On, it has a white line round it: while
+              the tools are up, and while they are at work on the model with their
+              panel put away. */}
+          {!loaded.standIn && hasTools && (
+            <Switch
+              label="Tools"
+              shortcut="T"
+              opens="tools"
+              on={(toolsOpen || view.tools) && !blueprint}
+              disabled={blueprint}
+              onChange={() => setToolsOpen(!toolsOpen)}
+              className="bg-tool text-white ring-tool hover:bg-tool/85 hover:text-white aria-pressed:bg-tool aria-pressed:text-white aria-pressed:ring-2 aria-pressed:ring-white aria-pressed:hover:bg-tool/85 aria-pressed:hover:text-white"
+            >
+              <HammerIcon />
             </Switch>
           )}
         </Stack>

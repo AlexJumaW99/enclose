@@ -338,6 +338,7 @@ const KEYS: { title: string; rows: [string, string[]][] }[] = [
       ["Hide the selection, or show everything", ["H"]],
       ["Blueprint", ["B"]],
       ["Search", [CMD, "F"]],
+      ["Tools", ["T"]],
       ["Undo", [CMD, "Z"]],
       ["Redo", [SHIFT, CMD, "Z"]],
       ["Close, or step back", ["Esc"]],

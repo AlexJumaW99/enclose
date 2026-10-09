@@ -258,9 +258,10 @@ Down the right-hand edge:
 
   A scene is drawn to be looked past: flat, all in one tone a little lighter than the
   view behind it (darker, in the light theme), with a thin line round each thing in it
-  and along its edges, and nothing of it can be picked. The camera stands back to take
-  all of it in, from the side it is on, and comes back in to where it was when the model
-  is taken out; Cmd+1 and the set views frame the scene with the model for as long as it
+  and along its edges, and nothing of it can be picked. The camera goes to the view a
+  model opens with, from above and in front, to take all of the scene in, whichever side
+  the model was being looked at from; and when the model is taken out it goes back to
+  where it was, unless the view was turned meanwhile; Cmd+1 and the set views frame the scene with the model for as long as it
   is there. The grid, if it is on, is ruled on the scene's floor. The camera keeps above
   the ground the scene stands on, as an eye would: it goes down round the model as far
   as that ground and stops, and the view from underneath (Cmd+5) is not to be had until
@@ -338,10 +339,49 @@ Down the right-hand edge:
   view can be turned between one letter and the next; a click on a part picks it out as
   ever, and that is the end of the search.
 
-Esc puts the search away if it is up, and then the parts list, or the list of reference
-scenes. After that it gets back out of the section, the explode, the reference scene,
-whatever is showing on its own and whatever was put out of sight, one press each,
-starting with whichever you went into last.
+- **Tools** (T) is the one blue button, and is there only in a project that has tools of
+  its own. They are not the app's: each was made for that project's model, by Claude,
+  because someone asked to see the model do something. The hands of a clock set to a
+  time and run, a lid opened by a slider, an arm steered joint by joint. The app has no
+  animation of its own to learn, and nobody has to wait for one to be added: say what
+  you want to try, and Claude builds the tool for it. What is the project's own is
+  blue, the button and the panel it brings up, so that it is never taken for something
+  the app came with.
+
+  The panel has a tab for each tool, and under it the tool's controls, one below
+  another: what each is called, what it does in a few words, and beside that the
+  control itself. A control is one of the app's kinds, whatever the tool: a slider, a
+  pad that takes two values at once (and can spring back, as a joystick does), a
+  switch, a choice of a few, a list of many, a row of buttons, a choice among the
+  app's colours, or something the tool says. The panel stays up while the view is
+  turned, since a tool is worked with the model in sight. The button or Esc puts it
+  away, and the tools are still at work then, the button still lit: Esc again lets go
+  of the model, which is back as it is built.
+
+  A tool is one file of JavaScript in `tools/` at the top of the project
+  (`tools/clock.js`), a tab for each file, loaded again whenever it is written. It
+  says what its controls are and, each time the view is drawn, where the parts are
+  from how the controls stand: turned about a line, carried somewhere, put out of
+  sight, drawn in another colour. It changes nothing in the project's files; the parts
+  are only drawn where it has them. [`kit/tools.md`](kit/tools.md) says how one is
+  written, and is what Claude reads before it writes one. A tool is run shut away from
+  the rest of the app, in a worker of its own: it is told the parts' names and sizes,
+  and has no way to the window, to files or to the network, so a project that came
+  from someone else can be opened with its tools. One that goes wrong, or never comes
+  back from a frame, is stopped and says why in its tab, with a button that takes that
+  to Claude.
+
+  [`examples/clock`](examples/clock) is a project to try it on: a clock movement whose
+  wheels have the numbers of teeth a real one has, and a tool that sets the time the
+  hands show, runs it forwards or back at three speeds, or keeps it to the computer's
+  clock. Open the folder as a project, or, with no projects yet, press Start with
+  example: that makes a project of a copy of it, where new projects go.
+
+Esc puts the search away if it is up, and then the parts list, the list of reference
+scenes, or the project's tools. After that it gets back out of the section, the explode,
+the reference scene, the tools' hold on the model, whatever is showing on its own and
+whatever was put out of sight, one press each, starting with whichever you went into
+last.
 
 Nobody arranges the groups by hand. They come from the manifest, which the project's
 build writes, and Claude is told that grouping is its job: when it adds or removes parts
@@ -351,6 +391,13 @@ it puts each where a person would look for it, and makes a group when none fits.
 [Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview) in the project's folder.
 The app has no login of its own and stores no credentials; if you need to sign in again,
 do it in Claude Code. Cmd+B shows the conversation, and puts it away again.
+
+Claude works on the project, and not on the app. What it makes for you is made in the
+project's folder: the model, a reference scene, tools. It is told that Enclose itself is
+not its to change, whoever asks: not its code or the files it keeps for projects to copy,
+and not how its view, its panels or a tool's controls look and work. Asked for that, it
+says so and offers what can be done in the project. The app is open source: fork it to
+make it otherwise.
 
 A project can have any number of conversations, and none of them is deleted while the
 project is in the app. Its card is the one being carried on. A conversation left alone
@@ -394,7 +441,10 @@ card says so.
 
 On top of what Claude Code can already do, the app gives Claude three tools: a screenshot
 of the view as you see it, the list of parts with their groups and sizes, and your current
-selection.
+selection. It has two more for a project's own tools, the ones it makes for you to work
+the model with: how they stand, with the error of one that did not load, and a hand on
+one of their controls, so that it can try what it made and look at the model before it
+says it is done.
 Click a part and it is picked out: it turns white, with a heavier line round it, and
 three buttons appear where you clicked, with the part's name beside them, and stay on
 that spot of the part as it is turned. While you choose a colour for it, and for a moment
@@ -495,11 +545,12 @@ and a list of every shortcut.
 
 ```
 electron/    the app's own process: window, project list, the line to Claude
+examples/    projects to open and try things on: a clock movement, with a tool
 icons/       the app's icon, in the sizes each system asks for
 kit/         the exporter a project copies in to write its model (Python), the
              screws it can put in one, the app's own reference scenes, each drawn in
-             code and kept as built, and the figure of a person that stands in some
-             of them
+             code and kept as built, the figure of a person that stands in some
+             of them, and how a project's own tools are written
 shared/      types and the manifest format, used by both sides
 src/         the window: project cards, 3D view and its tools, conversation
 scripts/     dev loop, production build, the icon's sizes, and the reference scenes

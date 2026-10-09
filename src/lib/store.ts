@@ -94,6 +94,12 @@ export type View = {
    * Null while it is set in none.
    */
   reference: string | null
+  /**
+   * Whether the project's own tools are at work on the model: the ones made for it, to
+   * move it and try it out (see lib/custom-tools). While they are, its parts are where
+   * the tools have them, and not where it is built.
+   */
+  tools: boolean
 }
 
 /**
@@ -348,11 +354,18 @@ const homeView = (): View => ({
   blueprint: false,
   dimensions: saved(DIMENSIONS_KEY) === "on",
   reference: null,
+  tools: false,
 })
 
 /** What the view can be put into, and got back out of with Esc. */
 export type Entered =
-  "section" | "explode" | "only" | "hidden" | "blueprint" | "reference"
+  | "section"
+  | "explode"
+  | "only"
+  | "hidden"
+  | "blueprint"
+  | "reference"
+  | "tools"
 
 /** Those of them that are on, in the order they were gone into: the last is the latest. */
 function enteredNow(view: View, before: Entered[]): Entered[] {
@@ -363,6 +376,7 @@ function enteredNow(view: View, before: Entered[]): Entered[] {
     hidden: view.hidden.length > 0,
     blueprint: view.blueprint,
     reference: view.reference !== null,
+    tools: view.tools,
   }
   const still = before.filter((name) => on[name])
   const fresh = (Object.keys(on) as Entered[]).filter(
@@ -394,6 +408,11 @@ type State = {
   partsOpen: boolean
   /** whether the list of reference scenes is up, in the place the list of parts has */
   referenceOpen: boolean
+  /**
+   * Whether the panel of the project's own tools is up, in the place the list of parts
+   * has. Put away, the tools are still at work on the model until they are left.
+   */
+  toolsOpen: boolean
   /**
    * The reference scene the user has picked for each project from that list, by what
    * the scene is known by: the one the project's model is set in from then on.
@@ -520,6 +539,8 @@ type State = {
   openPaths(paths: string[]): Promise<void>
   /** Make a new project's folder where new projects go, and open it. */
   createProject(): Promise<void>
+  /** Make a project of the app's example, and open it. */
+  startExample(): Promise<void>
   removeProject(id: string): Promise<void>
   setView(patch: Partial<View>): void
   /**
@@ -580,6 +601,8 @@ type State = {
   setThreadWidth(width: number): void
   setPartsOpen(open: boolean): void
   setReferenceOpen(open: boolean): void
+  /** Bring the project's own tools up, which sets them to work on the model; or put them away. */
+  setToolsOpen(open: boolean): void
   /**
    * Set the open project's model in a reference scene picked by hand, which is kept as
    * the one for that project.
@@ -589,8 +612,9 @@ type State = {
   setSettingsOpen(open: boolean): void
   /**
    * What Esc does: stop looking for parts by name, if they are being looked for; put the
-   * parts list away, if it is up, or the list of reference scenes; and otherwise get out
-   * of the last thing gone into, the blueprint and a reference scene among them.
+   * parts list away, if it is up, or the list of reference scenes, or the project's
+   * tools; and otherwise get out of the last thing gone into, the blueprint, a reference
+   * scene and the tools' hold on the model among them.
    * False if there was nothing to do.
    */
   leave(): boolean
@@ -718,6 +742,7 @@ export const useStore = create<State>()((set, get) => ({
   threadWidth: savedThreadWidth(),
   partsOpen: false,
   referenceOpen: false,
+  toolsOpen: false,
   sceneOf: savedScenes(),
   figure: saved(FIGURE_KEY) === "shown",
   settingsOpen: false,
@@ -761,6 +786,8 @@ export const useStore = create<State>()((set, get) => ({
       hoveredId: null,
       finding: null,
       writing: null,
+      // (the tools are the project's own: another's are not up until asked for)
+      toolsOpen: false,
       view: homeView(),
       entered: enteredNow(homeView(), state.entered),
     }))
@@ -799,6 +826,11 @@ export const useStore = create<State>()((set, get) => ({
     get().activate(project.id)
   },
 
+  async startExample() {
+    const project = await window.cad.projects.example()
+    if (project) get().activate(project.id)
+  },
+
   async removeProject(id) {
     await window.cad.projects.remove(id)
   },
@@ -821,10 +853,11 @@ export const useStore = create<State>()((set, get) => ({
         cuts: kept,
         entered: enteredNow(view, state.entered),
         // nothing is picked out of a blueprint: what was, in the view, is let go of,
-        // and the list of scenes to set the model in is put away
+        // and the list of scenes to set the model in is put away, with its tools
         ...(patch.blueprint &&
           !state.view.blueprint && {
             referenceOpen: false,
+            toolsOpen: false,
             selection: null,
             several: NONE,
             sweep: null,
@@ -1091,12 +1124,31 @@ export const useStore = create<State>()((set, get) => ({
   },
 
   setPartsOpen(partsOpen) {
-    // (the list of reference scenes has the same place: one of them at a time)
-    set(partsOpen ? { partsOpen, referenceOpen: false } : { partsOpen })
+    // (the list of reference scenes has the same place, and the project's tools: one
+    // of them at a time)
+    set(
+      partsOpen
+        ? { partsOpen, referenceOpen: false, toolsOpen: false }
+        : { partsOpen }
+    )
   },
 
   setReferenceOpen(referenceOpen) {
-    set(referenceOpen ? { referenceOpen, partsOpen: false } : { referenceOpen })
+    set(
+      referenceOpen
+        ? { referenceOpen, partsOpen: false, toolsOpen: false }
+        : { referenceOpen }
+    )
+  },
+
+  setToolsOpen(toolsOpen) {
+    set(
+      toolsOpen
+        ? { toolsOpen, partsOpen: false, referenceOpen: false }
+        : { toolsOpen }
+    )
+    // brought up, they are at work: and stay so, put away, until they are left
+    if (toolsOpen && !get().view.tools) get().setView({ tools: true })
   },
 
   pickScene(sceneId) {
@@ -1118,15 +1170,16 @@ export const useStore = create<State>()((set, get) => ({
   },
 
   leave() {
-    const { finding, partsOpen, referenceOpen, entered, setView } = get()
+    const { finding, partsOpen, referenceOpen, toolsOpen, entered, setView } =
+      get()
     // what is being typed goes first, and then the list: both are things on top of the
     // view. What was picked in the list stays
     if (finding !== null) {
       set({ finding: null })
       return true
     }
-    if (partsOpen || referenceOpen) {
-      set({ partsOpen: false, referenceOpen: false })
+    if (partsOpen || referenceOpen || toolsOpen) {
+      set({ partsOpen: false, referenceOpen: false, toolsOpen: false })
       return true
     }
     const last = entered.at(-1)
@@ -1136,6 +1189,7 @@ export const useStore = create<State>()((set, get) => ({
     else if (last === "hidden") setView({ hidden: NONE })
     else if (last === "blueprint") setView({ blueprint: false })
     else if (last === "reference") setView({ reference: null })
+    else if (last === "tools") setView({ tools: false })
     else setView({ only: null })
     return true
   },

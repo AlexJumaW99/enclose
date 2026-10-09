@@ -82,6 +82,12 @@ export type Project = {
    * rewritten, so the window knows to load it again.
    */
   reference: number | null
+  /**
+   * Whether it has tools of its own, in its folder, to work its model with (see
+   * shared/tool-format.ts): null if not, and otherwise a number that goes up each time
+   * one of them is written, so the window knows to load them again.
+   */
+  tools: number | null
   /** the latest thing Claude did to its files that can be taken back, and put back */
   undo: Undoable | null
   redo: Undoable | null
@@ -378,11 +384,30 @@ export type ReferenceSource = {
 /** What a project's own reference scene is known by, among the app's. */
 export const OWN_SCENE = "own"
 
-export type ViewportRequest = {
-  id: number
-  projectId: string
-  kind: "screenshot" | "selection" | "parts"
+/**
+ * One of a project's own tools, as the window is handed it: what it is known by, which
+ * is what its file is called without the ending ("clock"), the file, and what is
+ * written in it.
+ */
+export type ToolSource = { id: string; file: string; source: string }
+
+/**
+ * Something an agent has a project's tool do, as a hand would: set one of its controls
+ * to a value, or press one of a row of buttons.
+ */
+export type ToolUse = {
+  tool: string
+  control: string
+  value?: number | boolean | string | [number, number]
+  press?: string
 }
+
+/** What can be asked of the window about its viewport. */
+export type ViewportAsked =
+  | { kind: "screenshot" | "selection" | "parts" | "tools" }
+  | { kind: "tool"; use: ToolUse }
+
+export type ViewportRequest = { id: number; projectId: string } & ViewportAsked
 
 export type ViewportResponse =
   | { id: number; ok: true; data: unknown }
@@ -416,6 +441,8 @@ export type CadApi = {
     open(paths: string[]): Promise<Project | null>
     /** make a folder where new projects go, under a stand-in name, and add it */
     create(): Promise<Project>
+    /** copy the app's example to where new projects go, and add the copy */
+    example(): Promise<Project | null>
     /** where on disk something dropped on the window is */
     pathOf(file: File): string
     /**
@@ -465,6 +492,10 @@ export type CadApi = {
      * biggest.
      */
     scenes(projectId: string): Promise<ReferenceSource[]>
+  }
+  tools: {
+    /** A project's own tools, as they are written in its folder: none if it has none. */
+    read(projectId: string): Promise<ToolSource[]>
   }
   thread: {
     items(projectId: string, conversationId: string): Promise<ThreadItem[]>
@@ -560,6 +591,7 @@ export const CHANNEL = {
   projectsAdd: "projects:add",
   projectsOpen: "projects:open",
   projectsCreate: "projects:create",
+  projectsExample: "projects:example",
   projectsRemove: "projects:remove",
   projectsReveal: "projects:reveal",
   projectsChanged: "projects:changed",
@@ -570,6 +602,7 @@ export const CHANNEL = {
   modelSaveDrawings: "model:save-drawings",
   modelNameGroup: "model:name-group",
   referenceScenes: "reference:scenes",
+  toolsRead: "tools:read",
   threadItems: "thread:items",
   threadSend: "thread:send",
   threadLookOver: "thread:look-over",

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest"
 
 import { answerTo, modelTools, ToolServer, viewportTools } from "./tools"
 
-const viewport = viewportTools(async (kind) => {
+const viewport = viewportTools(async ({ kind }) => {
   if (kind === "screenshot") return { data: "AAAA", mimeType: "image/png" }
   if (kind === "parts") return [{ id: "lid", label: "Lid" }]
   throw new Error("The viewport did not answer.")
@@ -51,6 +51,42 @@ describe("answerTo", () => {
       required: ["what", "groups", "parts"],
     })
     expect(arrange.inputSchema).not.toHaveProperty("$schema")
+  })
+
+  it("has the tools a project's own are tried with only where they are to be", async () => {
+    const names = (tools: ReturnType<typeof viewportTools>) =>
+      tools.map((tool) => tool.name)
+    expect(names(viewport)).toEqual(["screenshot", "selection", "parts"])
+    const asked: unknown[] = []
+    const trying = viewportTools(async (wanted) => {
+      asked.push(wanted)
+      return [{ tool: "clock", name: "Clock", controls: [] }]
+    }, true)
+    expect(names(trying)).toEqual([
+      "screenshot",
+      "selection",
+      "parts",
+      "tools",
+      "tool",
+    ])
+    // a hand on a control is passed on as it was given
+    expect(
+      await answerTo("viewport", trying, {
+        id: 1,
+        method: "tools/call",
+        params: {
+          name: "tool",
+          arguments: { tool: "clock", control: "set", value: 90 },
+        },
+      })
+    ).toMatchObject({
+      result: {
+        content: [{ type: "text", text: expect.stringContaining("Clock") }],
+      },
+    })
+    expect(asked).toEqual([
+      { kind: "tool", use: { tool: "clock", control: "set", value: 90 } },
+    ])
   })
 
   it("runs a tool, and gives back words or a picture", async () => {

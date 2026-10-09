@@ -31,14 +31,17 @@ import {
   type ReferenceSource,
   type Seen,
   type Settings,
+  type ToolSource,
   type Undone,
   type Vec3,
+  type ViewportAsked,
   type ViewportRequest,
   type ViewportResponse,
 } from "../shared/api"
 import { Changes } from "./changes"
 import { followRename, listCommands, lookAtClaude } from "./claude"
 import { lookAtCodex } from "./codex"
+import { readTools } from "./custom-tools"
 import { lookAtGrok } from "./grok"
 import {
   arrange,
@@ -50,6 +53,7 @@ import {
   SCRIPT,
   sortOpened,
 } from "./imports"
+import { startFrom } from "./examples"
 import { standInName } from "./names"
 import { groupNameOf } from "./naming"
 import { folderName, makeFolder, Projects, resolveInside } from "./projects"
@@ -131,6 +135,11 @@ let providers: Providers
 const toolServer = new ToolServer()
 /** where the app keeps the exporter a project copies to write its model */
 const KIT = path.join(app.getAppPath(), "kit", "enclose.py")
+/** the project the app has to start from, for someone with none of their own yet */
+const EXAMPLE = {
+  dir: path.join(app.getAppPath(), "examples", "clock"),
+  name: "Clock movement",
+}
 /** the reference scenes the app has of its own, for a model to be seen in */
 const SCENES = appScenes(path.join(app.getAppPath(), "kit", "scenes"))
 
@@ -233,18 +242,24 @@ const waiting = new Map<
 
 function askViewport(
   projectId: string,
-  kind: ViewportRequest["kind"]
+  asked: ViewportAsked
 ): Promise<unknown> {
   return new Promise((resolve, reject) => {
     if (!win || win.isDestroyed())
       return reject(new Error("The app window is closed."))
+    // A tool just written may not have been noticed yet: the window is told of the
+    // project's tools as they now are before it is asked about them.
+    if (asked.kind === "tools" || asked.kind === "tool") {
+      projects.refresh(projectId)
+      broadcast()
+    }
     const id = ++requests
     const timer = setTimeout(() => {
       waiting.delete(id)
       reject(new Error("The viewport did not answer."))
     }, 15_000)
     waiting.set(id, { resolve, reject, timer })
-    const request: ViewportRequest = { id, projectId, kind }
+    const request: ViewportRequest = { id, projectId, ...asked }
     win.webContents.send(CHANNEL.viewportRequest, request)
   })
 }
@@ -664,6 +679,24 @@ function wire() {
     const id = projects.add(made.dir, { name: made.name, standIn: true })
     return list().find((p) => p.id === id) ?? null
   })
+  ipcMain.handle(CHANNEL.projectsExample, async () => {
+    let id: string | null = null
+    try {
+      const { projectsFolder } = settings.get()
+      const dir = startFrom(EXAMPLE.dir, EXAMPLE.name, projectsFolder, KIT)
+      id = projects.add(dir, { name: EXAMPLE.name })
+      // an example that comes without its model built has it made now
+      if (!projects.get(id)?.manifest) makeModel(id)
+    } catch (error) {
+      if (win && !CAPTURE)
+        await dialog.showMessageBox(win, {
+          type: "info",
+          message: "The example could not be opened",
+          detail: error instanceof Error ? error.message : String(error),
+        })
+    }
+    return list().find((p) => p.id === id) ?? null
+  })
   ipcMain.handle(CHANNEL.projectsRemove, async (_, id: string) => {
     const project = projects.get(String(id))
     if (!project) return
@@ -758,6 +791,10 @@ function wire() {
       ]
     }
   )
+  ipcMain.handle(CHANNEL.toolsRead, (_, id: string): ToolSource[] => {
+    const project = projects.get(String(id))
+    return project ? readTools(project.path) : []
+  })
   ipcMain.handle(
     CHANNEL.modelSaveCopies,
     async (_, id: string, files: unknown, folder: string) => {

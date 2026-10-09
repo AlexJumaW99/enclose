@@ -6,6 +6,8 @@ import path from "node:path"
 import type { BringingIn, ConversationSummary, Project } from "../shared/api"
 import { CONFIG_NAMES, MANIFEST_NAMES } from "../shared/manifest-format"
 import { findReference } from "./reference"
+import { findTools } from "./custom-tools"
+import { TOOLS_FOLDER } from "../shared/tool-format"
 
 type Saved = {
   id: string
@@ -232,6 +234,16 @@ export class Projects {
   private sceneRevisions = new Map<string, number>()
   private sceneWatchers = new Map<string, fs.FSWatcher>()
   private sceneTimers = new Map<string, NodeJS.Timeout>()
+  /**
+   * The tools each project has of its own, as they were last found: which files, and
+   * when each was written. How often that has been found changed; where they are
+   * watched for, and what watches. All by project.
+   */
+  private tools = new Map<string, string>()
+  private toolRevisions = new Map<string, number>()
+  private toolsWatched = new Map<string, string>()
+  private toolWatchers = new Map<string, fs.FSWatcher[]>()
+  private toolTimers = new Map<string, NodeJS.Timeout>()
   private watchers = new Map<string, fs.FSWatcher>()
   private timers = new Map<string, NodeJS.Timeout>()
   /** how far the making of a model from files opened into a project has got */
@@ -264,6 +276,7 @@ export class Projects {
   /** Find the project's model and watch its manifest, so a rebuild shows up by itself. */
   private locate(project: Saved) {
     this.locateScene(project)
+    this.locateTools(project)
     const found = findModel(project.path)
     const before = this.found.get(project.id)?.manifest ?? null
     this.found.set(project.id, found)
@@ -348,6 +361,59 @@ export class Projects {
     }
   }
 
+  /**
+   * Find the tools a project has of its own, and watch for them: the folder they are
+   * in, for one being written, and the project's, for that folder coming or going. A
+   * tool written again shows up by itself, as a model built again does. True if they
+   * are not as they were last found.
+   */
+  private locateTools(project: Saved): boolean {
+    const { id } = project
+    const dir = path.join(project.path, TOOLS_FOLDER)
+    const found = findTools(project.path)
+      .map((name) => {
+        try {
+          const { mtimeMs, size } = fs.statSync(path.join(dir, name))
+          return `${name}:${mtimeMs}:${size}`
+        } catch {
+          return name
+        }
+      })
+      .join("|")
+    const there = fs.existsSync(dir)
+    const watched = `${project.path}|${there}`
+    if (this.toolsWatched.get(id) !== watched) {
+      this.toolsWatched.set(id, watched)
+      for (const watcher of this.toolWatchers.get(id) ?? []) watcher.close()
+      const again = () => {
+        clearTimeout(this.toolTimers.get(id))
+        this.toolTimers.set(
+          id,
+          setTimeout(() => {
+            if (this.locateTools(project)) this.onChange()
+          }, 300)
+        )
+      }
+      const watchers: fs.FSWatcher[] = []
+      try {
+        watchers.push(
+          fs.watch(project.path, { persistent: false }, (_, changed) => {
+            if (changed === TOOLS_FOLDER) again()
+          })
+        )
+        if (there) watchers.push(fs.watch(dir, { persistent: false }, again))
+      } catch {
+        // unwatchable: the tools still load, they just won't load again by themselves
+      }
+      this.toolWatchers.set(id, watchers)
+    }
+    if (found === (this.tools.get(id) ?? "")) return false
+    if (found) this.tools.set(id, found)
+    else this.tools.delete(id)
+    this.toolRevisions.set(id, (this.toolRevisions.get(id) ?? 0) + 1)
+    return true
+  }
+
   list(conversations: (id: string) => ConversationSummary[]): Project[] {
     return this.saved.map((p) => {
       const manifest = this.found.get(p.id)?.manifest ?? null
@@ -363,6 +429,9 @@ export class Projects {
         revision: this.revisions.get(p.id) ?? 0,
         reference: this.scenes.has(p.id)
           ? (this.sceneRevisions.get(p.id) ?? 0)
+          : null,
+        tools: this.tools.has(p.id)
+          ? (this.toolRevisions.get(p.id) ?? 0)
           : null,
         // what can be taken back is kept elsewhere (changes.ts), and said by whoever
         // has both
@@ -457,6 +526,13 @@ export class Projects {
     this.sceneTimers.delete(id)
     this.scenes.delete(id)
     this.sceneRevisions.delete(id)
+    for (const watcher of this.toolWatchers.get(id) ?? []) watcher.close()
+    this.toolWatchers.delete(id)
+    clearTimeout(this.toolTimers.get(id))
+    this.toolTimers.delete(id)
+    this.tools.delete(id)
+    this.toolRevisions.delete(id)
+    this.toolsWatched.delete(id)
     this.bringing.delete(id)
     this.saved = this.saved.filter((p) => p !== project)
     // projects made before `made` was kept are known by having a name of their own
@@ -511,8 +587,9 @@ export class Projects {
         build: this.found.get(id)?.build ?? null,
       })
       this.watch(project)
-      // and so is its reference scene, if it has one of its own
+      // and so is its reference scene, if it has one of its own, and its tools
       this.locateScene(project)
+      this.locateTools(project)
       moved(from, to)
     }
     this.save()
@@ -588,5 +665,8 @@ export class Projects {
     for (const timer of this.timers.values()) clearTimeout(timer)
     for (const watcher of this.sceneWatchers.values()) watcher.close()
     for (const timer of this.sceneTimers.values()) clearTimeout(timer)
+    for (const watchers of this.toolWatchers.values())
+      for (const watcher of watchers) watcher.close()
+    for (const timer of this.toolTimers.values()) clearTimeout(timer)
   }
 }
