@@ -1,0 +1,26 @@
+{
+ "name": "Room",
+ "detail": "12 × 10 ft",
+ "stand": [
+  0.0,
+  0.0,
+  0.0
+ ],
+ "floor": 0.0,
+ "suits": "a thing that stands on the floor, or is too big for a table",
+ "upTo": [
+  3000.0,
+  2400.0,
+  2300.0
+ ],
+ "parts": [
+  {
+   "id": "floor",
+   "file": "floor.glb"
+  },
+  {
+   "id": "walls",
+   "file": "walls.glb"
+  }
+ ]
+}

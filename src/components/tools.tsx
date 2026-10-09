@@ -12,7 +12,7 @@ import {
   UnfoldVerticalIcon,
 } from "lucide-react"
 
-import { SectionIcon } from "@/components/icons"
+import { ReferenceIcon, SectionIcon } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Kbd } from "@/components/ui/kbd"
 import { Toggle } from "@/components/ui/toggle"
@@ -95,7 +95,7 @@ function Press({
 }
 
 /** A button that is either on or off, named by its tooltip. */
-function Switch({
+export function Switch({
   label,
   opens,
   shortcut,
@@ -104,9 +104,11 @@ function Switch({
   on,
   onChange,
   disabled,
+  className,
   children,
 }: {
   label: string
+  className?: string
   /** there is nothing for it to do, as things are: it is there, and is not to be pressed */
   disabled?: boolean
   /** what the button brings up, for that thing to know its own button by */
@@ -136,7 +138,8 @@ function Switch({
               .replace(/⇧|Shift /, "Shift+")}
             className={cn(
               ROUND,
-              "aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary/85 aria-pressed:hover:text-primary-foreground"
+              "aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary/85 aria-pressed:hover:text-primary-foreground",
+              className
             )}
           />
         }
@@ -162,7 +165,8 @@ function Switch({
  * conversation, and the model as a file. In the middle, how the model is looked at.
  *
  * While it is the model's blueprint that is looked at, the ones that are only for the
- * view of the model itself, the cut and the ground, are there and not to be pressed.
+ * view of the model itself, the cut, the ground and what the model is set in, are there
+ * and not to be pressed.
  */
 export function Tools({
   loaded,
@@ -184,6 +188,8 @@ export function Tools({
   const setThreadOpen = useStore((state) => state.setThreadOpen)
   const partsOpen = useStore((state) => state.partsOpen)
   const setPartsOpen = useStore((state) => state.setPartsOpen)
+  const referenceOpen = useStore((state) => state.referenceOpen)
+  const setReferenceOpen = useStore((state) => state.setReferenceOpen)
   const finding = useStore((state) => state.finding !== null)
   const find = useStore((state) => state.find)
   const whole = loaded ? oneFile(loaded.model.downloads) : null
@@ -291,6 +297,22 @@ export function Tools({
           >
             <UnfoldVerticalIcon />
           </Switch>
+          {/* things of a known size for the model to be seen beside: the button brings
+              up the scenes there are, and is lit while the list is up and while the
+              model is set in one. (The key sets it in whichever suits it, at once.)
+              There is none for the cube that stands in for a model */}
+          {!loaded.standIn && (
+            <Switch
+              label="Reference"
+              shortcut={MAC ? "⌘/" : "Ctrl /"}
+              opens="reference"
+              on={referenceOpen || (view.reference !== null && !blueprint)}
+              disabled={blueprint}
+              onChange={() => setReferenceOpen(!referenceOpen)}
+            >
+              <ReferenceIcon />
+            </Switch>
+          )}
           {/* the model drawn flat, from each of its sides and from its corners, on
               sheets that take the view's place: there is nothing to draw of the cube
               that stands in for one */}

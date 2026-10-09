@@ -1,0 +1,21 @@
+{
+ "name": "Person",
+ "detail": "5′9″",
+ "stand": [
+  450.0,
+  0.0,
+  0.0
+ ],
+ "against": [
+  -1,
+  0
+ ],
+ "floor": 0.0,
+ "suits": "a thing too big to go in a room: a shed, a boat, a car",
+ "parts": [
+  {
+   "id": "person",
+   "file": "person.glb"
+  }
+ ]
+}

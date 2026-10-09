@@ -10,6 +10,7 @@ import { acceleratedRaycast } from "three-mesh-bvh"
 import type { PartRef, Vec3 } from "@shared/api"
 import { useThemeColors, type ThemeColors } from "@/lib/css-color"
 import type { Finds, Found } from "@/lib/find"
+import { hasFigure } from "@/lib/reference"
 import type { Keepout } from "@/lib/model"
 import type { Turn } from "@/lib/orient"
 import { MAC } from "@/lib/platform"
@@ -22,6 +23,7 @@ import type { LoadedModel, LoadedPart } from "./load"
 import { DRAG_FROM, Marquee } from "./marquee"
 import { EDGE, finish, skinColour } from "./paint"
 import { NoteMark, PartMarks } from "./part-marks"
+import { groundOf, Reference, setIn, type LoadedReference } from "./reference"
 import { FOV, MODEL_TO_WORLD, REACH, Rig, toWorld } from "./rig"
 import { SectionHandle } from "./section-handle"
 
@@ -43,6 +45,8 @@ const GLASS_FROM = 0.25
 const ORDER = {
   solid: 0,
   cut: 0.5,
+  // the lines of a scene the model is set in: under the ground's, and the model's own
+  scene: 0.8,
   ground: 0.9,
   edges: 1,
   glass: 2,
@@ -80,6 +84,8 @@ const COVER = only(2)
 const HINT = only(3)
 /** In the picture of where the parts Claude is at work on are (see Hint). */
 const CHANGING = only(4)
+/** In the picture a reference scene's lines are found in (see Reference). */
+const SCENE = only(5)
 /** Lights fall on whatever is being drawn. */
 const EVERY = new THREE.Layers()
 EVERY.enableAll()
@@ -1464,6 +1470,7 @@ function Camera() {
 
 export function Scene({
   loaded,
+  reference = null,
   projectId,
   view,
   selectedId,
@@ -1488,6 +1495,11 @@ export function Scene({
   onSection,
 }: {
   loaded: LoadedModel
+  /**
+   * The reference scene the model is set in, to be seen beside things of a known size:
+   * null while it is set in none.
+   */
+  reference?: LoadedReference | null
   projectId: string
   view: View
   /** what has been said of parts and not yet sent */
@@ -1552,6 +1564,19 @@ export function Scene({
   )
   const radius = loaded.box.getSize(new THREE.Vector3()).length() / 2
   const explode = view.exploded ? view.spread : 0
+  // all there is to see, which is what the camera frames: the model, and whatever it
+  // is set in
+  const stage = React.useMemo(
+    () => (reference ? setIn(reference, loaded.box) : loaded.box),
+    [reference, loaded.box]
+  )
+  // and the ground that stands on, which the camera keeps above: lower, with the model
+  // pulled apart, by as far as the scene goes down under it
+  const ground = React.useMemo(
+    () =>
+      reference ? groundOf(reference, loaded.box, loaded.parts, explode) : null,
+    [reference, loaded, explode]
+  )
   // What is lit as picked out: the one part or piece, or the several; or, while parts
   // are looked for by name, what was found; or, while a box is being drawn across the
   // view, what it takes in so far.
@@ -1664,7 +1689,18 @@ export function Scene({
           how={reading ? READ : CHANGED}
         />
       )}
-      <Rig box={loaded.box} homeKey={homeKey} circling={reading} />
+      <Rig
+        box={stage}
+        homeKey={homeKey}
+        circling={reading}
+        // (with the figure of a person in it, a scene is another thing to take in)
+        around={
+          reference
+            ? `${reference.scene.id}${hasFigure(reference.scene) ? " with a figure" : ""}`
+            : null
+        }
+        ground={ground}
+      />
       {/* after the camera has been moved for the frame: it goes by where that is */}
       <Underlight />
       {named.length > 0 && <FoundTags named={named} onShow={onShow} />}
@@ -1687,8 +1723,26 @@ export function Scene({
       <Redraw on={view} />
       <Redraw on={changed} />
       <Redraw on={found} />
+      <Redraw on={reference} />
       <group ref={root} rotation={MODEL_TO_WORLD}>
-        {view.grid && <Ground colors={colors} order={ORDER.ground} />}
+        {/* set in a scene, the ground is the one the scene stands on: the floor a
+            table is on, and not the table's top */}
+        {reference ? (
+          <Reference
+            loaded={reference}
+            model={loaded.box}
+            parts={loaded.parts}
+            explode={explode}
+            colors={colors}
+            occasion={SCENE}
+            order={ORDER.scene}
+            cover={anyGlass ? COVER : null}
+          >
+            {view.grid && <Ground colors={colors} order={ORDER.ground} />}
+          </Reference>
+        ) : (
+          view.grid && <Ground colors={colors} order={ORDER.ground} />
+        )}
         {loaded.parts.map((part, index) => {
           const { shown, look } = looks[index]
           if (!shown) return null

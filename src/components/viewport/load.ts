@@ -13,6 +13,7 @@ import type { Group, Model, Part } from "@/lib/model"
 import { piecesOf, waysOut } from "./apart"
 import { contoursOf, type Contours } from "./contours"
 import { shellOf } from "./shell"
+import { sharpOf, thingsOf } from "./things"
 
 /** The faces of one part that share a colour, as a single mesh. */
 export type Skin = {
@@ -438,6 +439,61 @@ export function regrouped(
   return { ...loaded, model, parts }
 }
 
+/**
+ * The surfaces in some glTF files, joined into one mesh in model mm with Z up: what a
+ * thing is drawn from that is only looked at, with no parts to it and no faces to be
+ * told apart. A reference scene is one.
+ *
+ * Every corner says which thing in the files it is of (`thing`), by number: a leg of a
+ * table, its top (see things.ts). Nothing in one file is of a thing in another. And it
+ * says whether that thing is all rounded, with no sharp edge anywhere on it (`soft`, 1
+ * where it is): the figure of a person.
+ */
+export async function loadSurfaces(
+  urls: string[]
+): Promise<THREE.BufferGeometry> {
+  const scenes = await Promise.all(
+    urls.map((url) => new GLTFLoader().loadAsync(url))
+  )
+  const faces: THREE.BufferGeometry[] = []
+  let things = 0
+  for (const { scene } of scenes) {
+    const own: THREE.BufferGeometry[] = []
+    scene.updateMatrixWorld(true)
+    scene.traverse((object) => {
+      const mesh = object as THREE.Mesh
+      if (mesh.isMesh)
+        own.push(
+          plain(mesh.geometry, TO_MODEL.clone().multiply(mesh.matrixWorld))
+        )
+    })
+    const of = thingsOf(own.map((face) => face.attributes.position.array))
+    const sharp = sharpOf(
+      own.map((face) => ({
+        corners: face.attributes.position.array,
+        facing: face.attributes.normal.array,
+      })),
+      of
+    )
+    const each = (face: THREE.BufferGeometry, value: number) =>
+      new THREE.Float32BufferAttribute(
+        new Float32Array(face.attributes.position.count).fill(value),
+        1
+      )
+    own.forEach((face, index) => {
+      face.setAttribute("thing", each(face, things + of[index]))
+      face.setAttribute("soft", each(face, sharp.has(of[index]) ? 0 : 1))
+    })
+    things += new Set(of).size
+    faces.push(...own)
+  }
+  const geometry = mergeGeometries(faces, false)
+  for (const face of faces) face.dispose()
+  if (!geometry) throw new Error("There is nothing in the files to draw.")
+  geometry.computeBoundingBox()
+  return geometry
+}
+
 /** How big the cube shown for a project with no model is, in mm a side. */
 const STAND_IN = 40
 
@@ -480,6 +536,7 @@ export function standInModel(): LoadedModel {
     worked: false,
     model: {
       title: null,
+      reference: null,
       parts: [part],
       groups: [{ id: "stand-in", label: "Nothing made yet", shell: false }],
       keepouts: [],

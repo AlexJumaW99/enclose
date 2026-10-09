@@ -94,10 +94,12 @@ export function viewportTools(
 
 /**
  * On a model's being looked over, the one thing an agent can change it with: the names
- * and groups of its parts, which `arrange` writes down and builds.
+ * and groups of its parts, which `arrange` writes down and builds. `scenes` are the
+ * reference scenes the app has, by what each is known by, for it to say which suits.
  */
 export function modelTools(
-  arrange: (given: Arrangement) => Promise<string>
+  arrange: (given: Arrangement) => Promise<string>,
+  scenes: string[] = []
 ): AppTool[] {
   return [
     appTool(
@@ -108,6 +110,12 @@ export function modelTools(
           .string()
           .describe(
             'What the thing is, in a few plain words: "a planetary clock movement".'
+          ),
+        reference: z
+          .string()
+          .optional()
+          .describe(
+            `Which of the app's reference scenes the thing is best seen in, by where it is used${scenes.length > 0 ? `: ${scenes.join(" or ")}` : ""}.`
           ),
         groups: z
           .array(

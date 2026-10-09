@@ -25,6 +25,8 @@ function resolve(css: string): THREE.Color {
 }
 
 export type ThemeColors = {
+  /** what the view is drawn over: the window's own colour behind it */
+  backdrop: THREE.Color
   foreground: THREE.Color
   muted: THREE.Color
   destructive: THREE.Color
@@ -41,6 +43,7 @@ function read(): ThemeColors {
   const style = getComputedStyle(document.documentElement)
   const token = (name: string) => resolve(style.getPropertyValue(name).trim())
   return {
+    backdrop: token("--sidebar"),
     foreground: token("--foreground"),
     muted: token("--muted-foreground"),
     destructive: token("--destructive"),

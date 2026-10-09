@@ -5,6 +5,7 @@ import path from "node:path"
 
 import type { BringingIn, ConversationSummary, Project } from "../shared/api"
 import { CONFIG_NAMES, MANIFEST_NAMES } from "../shared/manifest-format"
+import { findReference } from "./reference"
 
 type Saved = {
   id: string
@@ -223,6 +224,14 @@ export class Projects {
   private saved: Saved[] = []
   private found = new Map<string, Found>()
   private revisions = new Map<string, number>()
+  /**
+   * Where each project keeps a reference scene of its own, if it has one; how often it
+   * has been found rewritten; and what watches it. All by project.
+   */
+  private scenes = new Map<string, string>()
+  private sceneRevisions = new Map<string, number>()
+  private sceneWatchers = new Map<string, fs.FSWatcher>()
+  private sceneTimers = new Map<string, NodeJS.Timeout>()
   private watchers = new Map<string, fs.FSWatcher>()
   private timers = new Map<string, NodeJS.Timeout>()
   /** how far the making of a model from files opened into a project has got */
@@ -254,6 +263,7 @@ export class Projects {
 
   /** Find the project's model and watch its manifest, so a rebuild shows up by itself. */
   private locate(project: Saved) {
+    this.locateScene(project)
     const found = findModel(project.path)
     const before = this.found.get(project.id)?.manifest ?? null
     this.found.set(project.id, found)
@@ -297,6 +307,47 @@ export class Projects {
     this.revisions.set(id, (this.revisions.get(id) ?? 0) + 1)
   }
 
+  /**
+   * Find the reference scene a project has of its own, if it has one, and watch its
+   * manifest as the model's is watched: a scene built again shows up by itself.
+   */
+  private locateScene(project: Saved) {
+    const { id } = project
+    const found = findReference(project.path)
+    if (found === (this.scenes.get(id) ?? null)) return
+    this.sceneWatchers.get(id)?.close()
+    this.sceneWatchers.delete(id)
+    if (!found) {
+      this.scenes.delete(id)
+      return
+    }
+    this.scenes.set(id, found)
+    const bump = () =>
+      this.sceneRevisions.set(id, (this.sceneRevisions.get(id) ?? 0) + 1)
+    bump()
+    const name = path.basename(found)
+    try {
+      this.sceneWatchers.set(
+        id,
+        fs.watch(path.dirname(found), { persistent: false }, (_, changed) => {
+          if (changed !== name) return
+          clearTimeout(this.sceneTimers.get(id))
+          this.sceneTimers.set(
+            id,
+            setTimeout(() => {
+              // taken away, it is no scene any more: that is found by looking again
+              if (fs.existsSync(found)) bump()
+              else this.locateScene(project)
+              this.onChange()
+            }, 400)
+          )
+        })
+      )
+    } catch {
+      // unwatchable: the scene still loads, it just won't load again by itself
+    }
+  }
+
   list(conversations: (id: string) => ConversationSummary[]): Project[] {
     return this.saved.map((p) => {
       const manifest = this.found.get(p.id)?.manifest ?? null
@@ -310,6 +361,9 @@ export class Projects {
         // there is nothing to look over until there is a model
         lookOver: p.lookOver && manifest ? "wanted" : null,
         revision: this.revisions.get(p.id) ?? 0,
+        reference: this.scenes.has(p.id)
+          ? (this.sceneRevisions.get(p.id) ?? 0)
+          : null,
         // what can be taken back is kept elsewhere (changes.ts), and said by whoever
         // has both
         undo: null,
@@ -329,12 +383,14 @@ export class Projects {
     }
   }
 
-  get(id: string): (Saved & Found) | null {
+  get(id: string): (Saved & Found & { reference: string | null }) | null {
     const project = this.saved.find((p) => p.id === id)
     if (!project) return null
     return {
       ...project,
       ...(this.found.get(id) ?? { manifest: null, build: null }),
+      // absolute path of the manifest of its own reference scene, if it has one
+      reference: this.scenes.get(id) ?? null,
     }
   }
 
@@ -395,6 +451,12 @@ export class Projects {
     this.timers.delete(id)
     this.found.delete(id)
     this.revisions.delete(id)
+    this.sceneWatchers.get(id)?.close()
+    this.sceneWatchers.delete(id)
+    clearTimeout(this.sceneTimers.get(id))
+    this.sceneTimers.delete(id)
+    this.scenes.delete(id)
+    this.sceneRevisions.delete(id)
     this.bringing.delete(id)
     this.saved = this.saved.filter((p) => p !== project)
     // projects made before `made` was kept are known by having a name of their own
@@ -449,6 +511,8 @@ export class Projects {
         build: this.found.get(id)?.build ?? null,
       })
       this.watch(project)
+      // and so is its reference scene, if it has one of its own
+      this.locateScene(project)
       moved(from, to)
     }
     this.save()
@@ -522,5 +586,7 @@ export class Projects {
   close() {
     for (const watcher of this.watchers.values()) watcher.close()
     for (const timer of this.timers.values()) clearTimeout(timer)
+    for (const watcher of this.sceneWatchers.values()) watcher.close()
+    for (const timer of this.sceneTimers.values()) clearTimeout(timer)
   }
 }

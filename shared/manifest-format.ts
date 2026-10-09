@@ -14,6 +14,14 @@ export const MANIFEST_NAMES = [
 /** The file at the top of a project that says where its model is and how to build it. */
 export const CONFIG_NAMES = ["enclose.json", "cad-ai.json"]
 
+/**
+ * The manifest of a reference scene, and where in a project it is looked for: in a
+ * folder of that name at the top, unless the project's enclose.json says where
+ * ("reference"). kit/enclose.py writes one, and says there what is in it.
+ */
+export const REFERENCE_NAME = "enclose.reference.json"
+export const REFERENCE_FOLDER = "reference"
+
 export const MANIFEST_FORMAT = `A model is a folder holding one manifest (a JSON file named enclose.model.json) and the
 files it names. Every path in the manifest is relative to the manifest. Units are
 millimetres, Z is up.
@@ -24,6 +32,7 @@ its own.
 
 {
   "title": "Enclosure",                 // optional
+  "reference": "table",                 // optional: the reference scene of the app's that the thing is best seen in, by where it is used
   "groups": [                            // how the parts list is grouped, in this order
     { "id": "enclosure", "label": "Enclosure", "shell": true },   // the outside: see-through in glass mode, and taken apart part by part when exploded
     { "id": "inside", "label": "Electronics" },

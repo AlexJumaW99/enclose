@@ -71,6 +71,17 @@ export function viewFrom(
   return { azimuth: sign > 0 ? Math.PI : 0, polar: Math.PI / 2 }
 }
 
+/**
+ * How far round under what it looks at a camera can go and still be above the ground:
+ * as the angle down from straight above, so a quarter turn is level with what it looks
+ * at, and half a turn straight below it. `above` is how far above the ground what it
+ * looks at is, and `distance` how far from that the camera is. Looking at something
+ * higher than it is far from, it can go all the way under.
+ */
+export function lowestPolar(above: number, distance: number): number {
+  return Math.acos(Math.min(1, Math.max(-1, -above / distance)))
+}
+
 /** `to`, shifted by whole turns to be as near `from` as it can get: the short way round. */
 export function nearestTurn(from: number, to: number): number {
   const full = Math.PI * 2

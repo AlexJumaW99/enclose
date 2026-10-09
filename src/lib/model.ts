@@ -48,6 +48,11 @@ export type Download = {
 
 export type Model = {
   title: string | null
+  /**
+   * The reference scene of the app's that whoever built the model says the thing is best
+   * seen in, by what the app knows it by ("table"); null where nothing is said.
+   */
+  reference: string | null
   parts: Part[]
   groups: Group[]
   keepouts: Keepout[]
@@ -189,6 +194,7 @@ export function readModel(manifest: unknown): Model {
 
   return {
     title: text(manifest.title),
+    reference: text(manifest.reference),
     parts,
     groups,
     keepouts,

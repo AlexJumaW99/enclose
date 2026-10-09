@@ -17,7 +17,9 @@ import {
   CHANNEL,
   EFFORTS,
   MODEL_SCHEME,
+  OWN_SCENE,
   PROVIDERS,
+  SCENE_HOST,
   type GroupAsked,
   type Manner,
   type Commands,
@@ -26,6 +28,7 @@ import {
   type PartNote,
   type PermissionAnswer,
   type Project,
+  type ReferenceSource,
   type Seen,
   type Settings,
   type Undone,
@@ -50,9 +53,10 @@ import {
 import { standInName } from "./names"
 import { groupNameOf } from "./naming"
 import { folderName, makeFolder, Projects, resolveInside } from "./projects"
+import { appScenes, readScene } from "./reference"
 import { cleanEnv, expandHome, Providers } from "./providers"
 import { SettingsStore, type Vault } from "./settings"
-import { Threads, type Arranging } from "./threads"
+import { Threads, type Arranging, type Referenced } from "./threads"
 import { ToolServer } from "./tools"
 
 const HERE = import.meta.dirname
@@ -127,6 +131,36 @@ let providers: Providers
 const toolServer = new ToolServer()
 /** where the app keeps the exporter a project copies to write its model */
 const KIT = path.join(app.getAppPath(), "kit", "enclose.py")
+/** the reference scenes the app has of its own, for a model to be seen in */
+const SCENES = appScenes(path.join(app.getAppPath(), "kit", "scenes"))
+
+/**
+ * The folder a file asked for is in, by the host it is asked of: a project's model, the
+ * reference scene the project has of its own, or one of the app's.
+ */
+function servedFrom(host: string): string | null {
+  const [name, kind] = host.split(".")
+  if (kind === SCENE_HOST.app)
+    return SCENES.find((scene) => scene.id === name)?.dir ?? null
+  const project = projects.get(name)
+  const manifest =
+    kind === SCENE_HOST.own ? project?.reference : project?.manifest
+  return manifest ? path.dirname(manifest) : null
+}
+
+/** The reference scene a message is about, from what the window knows it by. */
+function referencedBy(projectId: string, scene: unknown): Referenced | null {
+  if (typeof scene !== "string") return null
+  if (scene === OWN_SCENE) {
+    const own = projects.get(projectId)?.reference
+    const name = own && readScene(own)?.name
+    return own
+      ? { name: typeof name === "string" ? name : "Reference scene", app: null }
+      : null
+  }
+  const found = SCENES.find((one) => one.id === scene)
+  return found ? { name: found.name, app: found.id } : null
+}
 
 const list = (): Project[] =>
   projects
@@ -469,7 +503,11 @@ function lookOver(id: string, seen: Seen, manner: Manner): string | null {
     // the script as the app last wrote it: nothing but that is written over
     let ours = modelScript(written.title, written.files)
     const arranging: Arranging = async (given, signal) => {
-      const arranged = arrange(read, given)
+      const arranged = arrange(
+        read,
+        given,
+        SCENES.map((scene) => scene.id)
+      )
       if (fs.readFileSync(script, "utf8") !== ours)
         throw new Error(
           `The project's ${SCRIPT} has been changed since the files were opened, so it is not written over. Tell the user the names and groups you would give the parts, and that they can ask you to put them in.`
@@ -562,10 +600,8 @@ async function openFor(paths: string[]): Promise<Project | null> {
 function wire() {
   protocol.handle(MODEL_SCHEME, async (request) => {
     const url = new URL(request.url)
-    const manifest = projects.get(url.hostname)?.manifest
-    const file =
-      manifest &&
-      resolveInside(path.dirname(manifest), decodeURIComponent(url.pathname))
+    const from = servedFrom(url.hostname)
+    const file = from && resolveInside(from, decodeURIComponent(url.pathname))
     if (!file) return new Response(null, { status: 404 })
     try {
       const data = await fs.promises.readFile(file)
@@ -698,6 +734,31 @@ function wire() {
     }
   )
   ipcMain.handle(
+    CHANNEL.referenceScenes,
+    (_, id: string): ReferenceSource[] => {
+      const project = projects.get(String(id))
+      const own = project?.reference ? readScene(project.reference) : null
+      return [
+        ...(project && own
+          ? [
+              {
+                id: OWN_SCENE,
+                own: true,
+                manifest: own,
+                baseUrl: `${MODEL_SCHEME}://${project.id}.${SCENE_HOST.own}/`,
+              },
+            ]
+          : []),
+        ...SCENES.map((scene) => ({
+          id: scene.id,
+          own: false,
+          manifest: scene.manifest,
+          baseUrl: `${MODEL_SCHEME}://${scene.id}.${SCENE_HOST.app}/`,
+        })),
+      ]
+    }
+  )
+  ipcMain.handle(
     CHANNEL.modelSaveCopies,
     async (_, id: string, files: unknown, folder: string) => {
       const manifest = projects.get(id)?.manifest
@@ -792,7 +853,8 @@ function wire() {
       text: string,
       notes: PartNote[] | null,
       objects: ObjectRef[] | null,
-      manner: Partial<Manner> | null
+      manner: Partial<Manner> | null,
+      reference: unknown
     ) => {
       // answers at once, with the conversation it went into: the turn runs for as long
       // as it runs, and reports through thread items
@@ -802,7 +864,8 @@ function wire() {
         String(text),
         Array.isArray(notes) ? notes.filter((note) => note?.part?.id) : [],
         objectsFrom(objects),
-        mannerFrom(manner)
+        mannerFrom(manner),
+        referencedBy(String(id), reference)
       )
       // the user has started on the project themselves: its model is theirs to have
       // put in order, by asking
@@ -959,6 +1022,7 @@ if (!app.requestSingleInstanceLock()) {
       launch: (id) => providers.launch(id),
       tools: toolServer,
       kit: KIT,
+      scenes: SCENES,
       // (what Claude Code keeps of a folder is in its home, wherever the user has that)
       onRenamed: (from, to) =>
         followRename(

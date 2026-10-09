@@ -1,0 +1,35 @@
+{
+ "name": "Table",
+ "detail": "29″ × 58″",
+ "stand": [
+  0.0,
+  0.0,
+  736.6
+ ],
+ "floor": 0.0,
+ "suits": "a thing that stands on a desk or a table, or is held in the hand",
+ "upTo": [
+  1000.0,
+  600.0,
+  700.0
+ ],
+ "parts": [
+  {
+   "id": "top",
+   "file": "top.glb"
+  },
+  {
+   "id": "frame",
+   "file": "frame.glb"
+  },
+  {
+   "id": "legs",
+   "file": "legs.glb"
+  },
+  {
+   "id": "person",
+   "file": "person.glb",
+   "figure": true
+  }
+ ]
+}

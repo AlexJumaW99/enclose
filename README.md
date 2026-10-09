@@ -97,6 +97,24 @@ The build needs a Python with build123d. Where there is none the project is stil
 with the files in it, and says so: ask Claude to set it up and it makes a virtual
 environment in the folder, as it does for a project started from nothing.
 
+**Screws** are parts of the model like any other, and Claude puts them in: when what it
+makes is screwed together (a lid on its box, a board on its posts), and when it is asked
+for them. It does not draw them itself. They come from a library the app keeps beside its
+exporter, [`kit/screws.py`](kit/screws.py), which a project copies in the same way: metric
+screws from M1.6 to M12 with socket, button, countersunk, pan and hexagon heads, hex nuts
+and plain washers, each to the sizes its standard gives (ISO 4762, 7380, 10642, 7045,
+4017, 4032 and 7089), in the lengths screws are sold in, and with its thread cut. It gives
+what is cut for a screw as well: the hole it passes through, the hole it screws into, and
+the recess a head sinks into. Claude chooses the screw and says which it used, in its
+reply and in the part's name ("Lid screws, M3 × 8"), since few people can tell one size
+from another by looking. Asked for a bigger or a smaller one with no size named, it asks
+which, and says what each measures.
+
+The edges of a thread are too near one another to draw: as lines they run together into
+a black band, in the view and in a blueprint. So the exporter leaves out an edge that
+winds round and round within a millimetre of the next, and a thread shows by its own
+light and shade.
+
 **Pulled apart**, a model that gives its parts no `explode` of their own comes apart by
 its groups, not part by part: the parts of a group that touch one another go as one
 piece, so a circuit board keeps its components and a switch its pins. The outside (a
@@ -215,6 +233,53 @@ Down the right-hand edge:
 - **Explode** (E) pulls the parts apart by the distances the manifest gives (or straight
   out from the middle, if it gives none), and a slider along the bottom pulls them
   further.
+- **Reference** (Cmd+/) sets the model among things of a known real size, so that how
+  big it is can be seen. A model fills the view whatever size it is, and it is easy to
+  take one for bigger than it will be in the hand. The key sets it in the scene that
+  suits it, at once, and again takes it back out: a desk 58 inches by 29, with the model
+  in the middle of its top; for a thing that stands on the floor, an empty room 12 feet
+  by 10, with a doorway in the far wall; or for a thing too big for a room, a man 5 feet
+  9 tall, standing beside it. Which of them suits is for whoever builds the model to
+  say, by where the thing is used: Claude is told to, with `reference="room"` in the
+  model's script (`"reference"` in a manifest written some other way). Where nothing is
+  said it goes by size, and a model too big for the desk is shown in the room, and one
+  too big for the room beside the person. The button brings up the list of scenes, each
+  with a picture, its name and its sizes: pick one and the model is set in it, and it is
+  the scene for that project from then on; pick the one the model is in and the model is
+  taken out.
+
+  A scene is drawn to be looked past: flat, all in one tone a little lighter than the
+  view behind it (darker, in the light theme), with a thin line round each thing in it
+  and along its edges, and nothing of it can be picked. The camera stands back to take
+  all of it in, from the side it is on, and comes back in to where it was when the model
+  is taken out; Cmd+1 and the set views frame the scene with the model for as long as it
+  is there. The grid, if it is on, is ruled on the scene's floor. The camera keeps above
+  the ground the scene stands on, as an eye would: it goes down round the model as far
+  as that ground and stops, and the view from underneath (Cmd+5) is not to be had until
+  the model is taken out. Pulled apart, the model comes apart over the scene, which goes
+  down as far as the model's lowest part does. The walls of a room are seen from inside
+  it and seen through from outside, so that none is ever in front of the model. The desk
+  has the same man to show, the measure everyone has: a button at the foot of the view,
+  with a figure on it, stands him at the far side of the desk, facing across it, and
+  takes him away again. He is there once he is asked for, in whatever project is open,
+  and the camera stands back for him as it does for a scene.
+
+  Nobody is kept to the app's scenes. With the model set in one, a button at the foot of
+  the view, **Improve reference scene in chat**, puts the scene on the message box as a
+  chip and opens the conversation. What is written then is about the scene and not the
+  model, and Claude changes it: a workbench in place of the desk, the shelf the thing is
+  to stand on. What comes of that is the project's own scene, kept in its folder and
+  built the way its model is: a `reference.py` hands shapes to the exporter
+  ([`kit/enclose.py`](kit/enclose.py)), which writes `reference/enclose.reference.json`
+  and the meshes beside it. A scene can hold a mesh that comes ready made as well
+  (`Reference.mesh`), which is how the figure of a person gets into one: it is not built
+  in a script but is a file, made from Blender Studio's public-domain body meshes
+  ([`kit/figure`](kit/figure)). The app shows that scene for the project from then on,
+  first in the list, and loads it again whenever it is rewritten. (An `enclose.json` can
+  say where it is: `"reference": "path/to/enclose.reference.json"`.) The app's own
+  scenes are written the same way, in [`kit/scenes`](kit/scenes), and are what Claude
+  starts from; `npm run scenes` builds them again after a change, with a Python that has
+  build123d.
 - **Blueprint** (B) puts the model's drawings where the view was: the model drawn flat,
   from four of its corners and then from each of its six sides, each on a sheet of
   its own, upright and four wide to five high (210 by 262.5 mm, the width of A4). A corner shows three sides at once, all turned equally from the eye (an
@@ -265,9 +330,10 @@ Down the right-hand edge:
   view can be turned between one letter and the next; a click on a part picks it out as
   ever, and that is the end of the search.
 
-Esc puts the search away if it is up, and then the parts list. After that it gets back
-out of the section, the explode, whatever is showing on its own and whatever was put out
-of sight, one press each, starting with whichever you went into last.
+Esc puts the search away if it is up, and then the parts list, or the list of reference
+scenes. After that it gets back out of the section, the explode, the reference scene,
+whatever is showing on its own and whatever was put out of sight, one press each,
+starting with whichever you went into last.
 
 Nobody arranges the groups by hand. They come from the manifest, which the project's
 build writes, and Claude is told that grouping is its job: when it adds or removes parts
@@ -420,10 +486,13 @@ and a list of every shortcut.
 ```
 electron/    the app's own process: window, project list, the line to Claude
 icons/       the app's icon, in the sizes each system asks for
-kit/         the exporter a project copies in to write its model (Python)
+kit/         the exporter a project copies in to write its model (Python), the
+             screws it can put in one, the app's own reference scenes, each drawn in
+             code and kept as built, and the figure of a person that stands in some
+             of them
 shared/      types and the manifest format, used by both sides
 src/         the window: project cards, 3D view and its tools, conversation
-scripts/     dev loop, production build, and the icon's sizes
+scripts/     dev loop, production build, the icon's sizes, and the reference scenes
 spikes/      experiments kept for their measurements
 ```
 

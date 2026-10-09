@@ -86,6 +86,12 @@ export type View = {
   blueprint: boolean
   /** whether a blueprint says how big the model is: its width, height and depth */
   dimensions: boolean
+  /**
+   * The reference scene the model is set in, by what it is known by: things of a known
+   * real size drawn round it, so that how big it is can be seen (see lib/reference).
+   * Null while it is set in none.
+   */
+  reference: string | null
 }
 
 /**
@@ -152,6 +158,8 @@ const CUTS_KEY = "enclose:cuts"
 const FINISHED_KEY = "enclose:finished"
 const COLOURS_KEY = "enclose:colours"
 const ARRANGED_KEY = "enclose:arranged"
+const REFERENCE_KEY = "enclose:reference"
+const FIGURE_KEY = "enclose:figure"
 const WAITING_KEY = "enclose:waiting"
 
 /** What was saved under a key, or under the name the app had before it was Enclose. */
@@ -239,6 +247,21 @@ function keepArranged(
   )
 }
 
+/** The reference scene picked for each project by hand, as it was kept. */
+const savedScenes = (): Record<string, string> => {
+  try {
+    const kept: unknown = JSON.parse(saved(REFERENCE_KEY) ?? "{}")
+    if (!kept || typeof kept !== "object") return {}
+    return Object.fromEntries(
+      Object.entries(kept).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string"
+      )
+    )
+  } catch {
+    return {}
+  }
+}
+
 /**
  * What was waiting to be sent when the window was last up: what was said of parts, the
  * parts called on from the view, and what was written in the message boxes. Whatever of
@@ -283,7 +306,8 @@ function savedWaiting(): Pick<State, "notes" | "drafts" | "called"> {
             (part: Partial<Called> | null): part is Called =>
               typeof part?.id === "string" &&
               typeof part.label === "string" &&
-              (part.parts === undefined || Array.isArray(part.parts))
+              (part.parts === undefined || Array.isArray(part.parts)) &&
+              (part.scene === undefined || typeof part.scene === "string")
           ),
         ]
       )
@@ -318,10 +342,12 @@ const homeView = (): View => ({
   grid: saved(GRID_KEY) === "on",
   blueprint: false,
   dimensions: saved(DIMENSIONS_KEY) === "on",
+  reference: null,
 })
 
 /** What the view can be put into, and got back out of with Esc. */
-export type Entered = "section" | "explode" | "only" | "hidden" | "blueprint"
+export type Entered =
+  "section" | "explode" | "only" | "hidden" | "blueprint" | "reference"
 
 /** Those of them that are on, in the order they were gone into: the last is the latest. */
 function enteredNow(view: View, before: Entered[]): Entered[] {
@@ -331,6 +357,7 @@ function enteredNow(view: View, before: Entered[]): Entered[] {
     only: view.only !== null,
     hidden: view.hidden.length > 0,
     blueprint: view.blueprint,
+    reference: view.reference !== null,
   }
   const still = before.filter((name) => on[name])
   const fresh = (Object.keys(on) as Entered[]).filter(
@@ -360,6 +387,18 @@ type State = {
   threadWidth: number
   /** whether the list of parts is up */
   partsOpen: boolean
+  /** whether the list of reference scenes is up, in the place the list of parts has */
+  referenceOpen: boolean
+  /**
+   * The reference scene the user has picked for each project from that list, by what
+   * the scene is known by: the one the project's model is set in from then on.
+   */
+  sceneOf: Record<string, string>
+  /**
+   * Whether the figure of a person is shown in a reference scene that has one to show:
+   * not until it is asked for, and from then on in whatever project is open.
+   */
+  figure: boolean
   /** whether the settings are over the window */
   settingsOpen: boolean
   access: Access
@@ -535,11 +574,18 @@ type State = {
   setThreadOpen(open: boolean): void
   setThreadWidth(width: number): void
   setPartsOpen(open: boolean): void
+  setReferenceOpen(open: boolean): void
+  /**
+   * Set the open project's model in a reference scene picked by hand, which is kept as
+   * the one for that project.
+   */
+  pickScene(sceneId: string): void
+  setFigure(shown: boolean): void
   setSettingsOpen(open: boolean): void
   /**
    * What Esc does: stop looking for parts by name, if they are being looked for; put the
-   * parts list away, if it is up; and otherwise get out of the last thing gone into, the
-   * blueprint among them.
+   * parts list away, if it is up, or the list of reference scenes; and otherwise get out
+   * of the last thing gone into, the blueprint and a reference scene among them.
    * False if there was nothing to do.
    */
   leave(): boolean
@@ -625,9 +671,26 @@ export type Note = PartNote & { id: string }
 /**
  * Something called on from the view for the next message: what it goes by, and is shown
  * as. A part, by its id; or a whole object, which has `parts`, the ids of all it is made
- * of, and an id made up for it.
+ * of, and an id made up for it; or the reference scene the model is set in, which has
+ * `scene`, what that scene is known by, and makes the message one about the scene.
  */
-export type Called = { id: string; label: string; parts?: string[] }
+export type Called = {
+  id: string
+  label: string
+  parts?: string[]
+  scene?: string
+}
+
+/** A part called on by name, and not a whole object or the reference scene. */
+const byName = (called: Called) =>
+  called.parts === undefined && called.scene === undefined
+
+/** The reference scene the model is set in, as something to call on. */
+export const calledScene = (sceneId: string): Called => ({
+  id: "reference-scene",
+  label: "Reference scene",
+  scene: sceneId,
+})
 
 /** A whole object as something to call on. Its parts are no other object's: one of them tells it apart. */
 export const calledAs = (object: ObjectRef): Called => ({
@@ -649,6 +712,9 @@ export const useStore = create<State>()((set, get) => ({
   threadOpen: false,
   threadWidth: savedThreadWidth(),
   partsOpen: false,
+  referenceOpen: false,
+  sceneOf: savedScenes(),
+  figure: saved(FIGURE_KEY) === "shown",
   settingsOpen: false,
   access: savedAccess(saved(ACCESS_KEY)),
   providers: [],
@@ -749,9 +815,11 @@ export const useStore = create<State>()((set, get) => ({
         view,
         cuts: kept,
         entered: enteredNow(view, state.entered),
-        // nothing is picked out of a blueprint: what was, in the view, is let go of
+        // nothing is picked out of a blueprint: what was, in the view, is let go of,
+        // and the list of scenes to set the model in is put away
         ...(patch.blueprint &&
           !state.view.blueprint && {
+            referenceOpen: false,
             selection: null,
             several: NONE,
             sweep: null,
@@ -877,20 +945,26 @@ export const useStore = create<State>()((set, get) => ({
     if (!activeId) return
     const before = called[activeId] ?? []
     // not those the message names as it is, in its own words or by a chip: an object
-    // is named only by its chip
+    // is named only by its chip, and so is the reference scene
     const unnamed = notCalledOn(
       drafts[activeId] ?? "",
-      parts.flatMap((part) => (part.parts ? [] : [part.id]))
+      parts.filter(byName).map((part) => part.id)
     )
     const fresh = parts.filter(
       (part) =>
-        (part.parts !== undefined || unnamed.includes(part.id)) &&
-        !before.some((other) => other.id === part.id)
+        (!byName(part) || unnamed.includes(part.id)) &&
+        // (the scene called on is whichever was last: one that was is called on afresh)
+        !before.some(
+          (other) => other.id === part.id && other.scene === part.scene
+        )
+    )
+    const kept = before.filter(
+      (other) => !fresh.some((part) => part.id === other.id)
     )
     set((state) => ({
       called:
         fresh.length > 0
-          ? { ...called, [activeId]: [...before, ...fresh] }
+          ? { ...called, [activeId]: [...kept, ...fresh] }
           : called,
       threadOpen: true,
       writeRequests: state.writeRequests + 1,
@@ -1012,7 +1086,26 @@ export const useStore = create<State>()((set, get) => ({
   },
 
   setPartsOpen(partsOpen) {
-    set({ partsOpen })
+    // (the list of reference scenes has the same place: one of them at a time)
+    set(partsOpen ? { partsOpen, referenceOpen: false } : { partsOpen })
+  },
+
+  setReferenceOpen(referenceOpen) {
+    set(referenceOpen ? { referenceOpen, partsOpen: false } : { referenceOpen })
+  },
+
+  pickScene(sceneId) {
+    const { activeId, sceneOf, setView } = get()
+    if (!activeId) return
+    const kept = { ...sceneOf, [activeId]: sceneId }
+    localStorage.setItem(REFERENCE_KEY, JSON.stringify(kept))
+    set({ sceneOf: kept })
+    setView({ reference: sceneId })
+  },
+
+  setFigure(figure) {
+    localStorage.setItem(FIGURE_KEY, figure ? "shown" : "hidden")
+    set({ figure })
   },
 
   setSettingsOpen(settingsOpen) {
@@ -1020,15 +1113,15 @@ export const useStore = create<State>()((set, get) => ({
   },
 
   leave() {
-    const { finding, partsOpen, entered, setView } = get()
+    const { finding, partsOpen, referenceOpen, entered, setView } = get()
     // what is being typed goes first, and then the list: both are things on top of the
     // view. What was picked in the list stays
     if (finding !== null) {
       set({ finding: null })
       return true
     }
-    if (partsOpen) {
-      set({ partsOpen: false })
+    if (partsOpen || referenceOpen) {
+      set({ partsOpen: false, referenceOpen: false })
       return true
     }
     const last = entered.at(-1)
@@ -1037,6 +1130,7 @@ export const useStore = create<State>()((set, get) => ({
     else if (last === "explode") setView({ exploded: false })
     else if (last === "hidden") setView({ hidden: NONE })
     else if (last === "blueprint") setView({ blueprint: false })
+    else if (last === "reference") setView({ reference: null })
     else setView({ only: null })
     return true
   },
@@ -1070,13 +1164,16 @@ export const useStore = create<State>()((set, get) => ({
     const called = get().called[project.id] ?? []
     const message = callingOn(
       (get().drafts[project.id] ?? "").trim(),
-      called.flatMap((part) => (part.parts ? [] : [part.id]))
+      called.filter(byName).map((part) => part.id)
     )
     const objects = called.flatMap(({ label, parts }): ObjectRef[] =>
       parts ? [{ label, parts }] : []
     )
+    // and with the reference scene called on, it is the scene the message is about
+    const reference = called.find((one) => one.scene)?.scene ?? null
     const notes = get().notes[project.id] ?? []
-    if (!message && notes.length === 0 && objects.length === 0) return
+    if (!message && notes.length === 0 && objects.length === 0 && !reference)
+      return
     // into the conversation the panel is showing; if that is a new one, this begins it
     const { open } = stackOf(
       project.conversations,
@@ -1098,7 +1195,8 @@ export const useStore = create<State>()((set, get) => ({
         message,
         notes.map(({ part, text }) => ({ part, text })),
         objects,
-        mannerIn(get(), open)
+        mannerIn(get(), open),
+        reference
       )
       .then((id) => {
         // stay with it: a conversation that has just begun is not yet the one on the

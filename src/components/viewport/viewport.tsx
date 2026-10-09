@@ -1,13 +1,15 @@
 import * as React from "react"
 import { cn } from "cn"
 import {
+  ArrowRightIcon,
   FolderPlusIcon,
+  PersonStandingIcon,
   PlusIcon,
   SquareIcon,
   TriangleAlertIcon,
 } from "lucide-react"
 
-import type { PartRef, Project } from "@shared/api"
+import { OWN_SCENE, type PartRef, type Project } from "@shared/api"
 import { Blueprint } from "@/components/blueprint/blueprint"
 import { Options } from "@/components/blueprint/options"
 import { Mark } from "@/components/mark"
@@ -15,7 +17,8 @@ import { RESTING_WIDTH } from "@/lib/mark"
 import { atWork } from "@/lib/steps"
 import { duration, useNow } from "@/lib/time"
 import { PartsPanel } from "@/components/parts-panel"
-import { Tools } from "@/components/tools"
+import { ReferencePanel } from "@/components/reference-panel"
+import { Switch, Tools } from "@/components/tools"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
@@ -43,9 +46,11 @@ import { spokenFor } from "@/lib/keys"
 import { MAC } from "@/lib/platform"
 import { notCalledOn, partsOf } from "@/lib/mentions"
 import { VIEWS } from "@/lib/orient"
+import { sceneFor, withFigure } from "@/lib/reference"
 import {
   allOf,
   calledAs,
+  calledScene,
   SPREAD,
   useStore,
   type Called,
@@ -65,6 +70,7 @@ import {
   type LoadedModel,
 } from "./load"
 import { picturesOf } from "./pictures"
+import { useLoadedReference, useReferenceScenes } from "./reference"
 import { appearance, onShow, Scene } from "./scene"
 import { Search } from "./search"
 import { ShadingPie } from "./shading-pie"
@@ -170,6 +176,72 @@ function AddToChat({
       to chat
       <PlusIcon data-icon="inline-end" />
     </Button>
+  )
+}
+
+/**
+ * With the model set in a reference scene, at the foot of the view: the scene is called
+ * on for the message to Claude, which is then about the scene and not the model, and
+ * the message is brought up to be gone on with. It is how it is found out that a scene
+ * can be changed, or another made for the project: nobody is kept to the app's own. It
+ * is there for as long as the message does not call on the scene already.
+ */
+function ImproveReference({
+  sceneId,
+  projectId,
+}: {
+  sceneId: string
+  projectId: string
+}) {
+  const called = useStore((s) => s.called[projectId] ?? NO_CALLED)
+  const sweeping = useStore((s) => s.sweep !== null)
+  const callOn = useStore((s) => s.callOn)
+  if (sweeping || called.some((one) => one.scene === sceneId)) return null
+  return (
+    <Button
+      size="lg"
+      // room either side of the words, a little less of it past the arrow
+      className="pointer-events-auto animate-in gap-2 pr-4.5 pl-5 shadow-md duration-150 fade-in slide-in-from-bottom-2"
+      onClick={() => callOn([calledScene(sceneId)])}
+    >
+      Improve reference scene in chat
+      <ArrowRightIcon
+        className="size-5"
+        size={20}
+        absoluteStrokeWidth
+        strokeWidth={1.25}
+      />
+    </Button>
+  )
+}
+
+/**
+ * Beside that, at the foot of the view, for a scene that has the figure of a person to
+ * show: the button that stands the figure in the scene, and takes it away again. A
+ * person is the measure everyone has, and is more to look at than a desk: so it is
+ * there when it is asked for, and stays asked for from one project to the next.
+ */
+function ShowFigure() {
+  const figure = useStore((s) => s.figure)
+  const setFigure = useStore((s) => s.setFigure)
+  return (
+    <div className="pointer-events-auto animate-in duration-150 fade-in slide-in-from-bottom-2">
+      <Switch
+        label="Person"
+        side="top"
+        on={figure}
+        onChange={setFigure}
+        // as tall as the button it stands beside
+        className="size-10 shadow-md"
+      >
+        <PersonStandingIcon
+          className="size-5"
+          size={20}
+          absoluteStrokeWidth
+          strokeWidth={1.25}
+        />
+      </Switch>
+    </div>
   )
 }
 
@@ -478,6 +550,68 @@ function Model({ project }: { project: Project }) {
     () => real?.parts.map((part) => part.part.id) ?? NO_PARTS,
     [real]
   )
+
+  // The model can be set in a reference scene: things of a known real size drawn round
+  // it, a desk under it or a room about it, so that how big it is can be seen. Cmd+/
+  // sets it in the scene that suits it, and again takes it back out; the list of scenes
+  // picks another, which is then the one for the project. A project's own scene comes
+  // before the app's. (There is none for the cube that stands in for a model.)
+  const scenes = useReferenceScenes(project)
+  const pickedScene = useStore((s) => s.sceneOf[project.id] ?? null)
+  const referenceOpen = useStore((s) => s.referenceOpen)
+  const suited = React.useMemo(() => {
+    if (!real || !scenes) return null
+    const { min, max } = real.box
+    return sceneFor(
+      scenes,
+      {
+        reference: real.model.reference,
+        size: max.clone().sub(min).toArray(),
+      },
+      pickedScene
+    )
+  }, [real, scenes, pickedScene])
+  const setIn = React.useMemo(
+    () =>
+      (real && scenes?.find((scene) => scene.id === view.reference)) || null,
+    [real, scenes, view.reference]
+  )
+  // with the figure of a person it has to show, once that is asked for
+  const figure = useStore((s) => s.figure)
+  const shownScene = React.useMemo(
+    () => setIn && withFigure(setIn, figure),
+    [setIn, figure]
+  )
+  const reference = useLoadedReference(shownScene)
+  const toggleReference = React.useCallback(() => {
+    const { view, setView } = useStore.getState()
+    if (view.reference !== null) setView({ reference: null })
+    else if (suited) setView({ reference: suited.id })
+  }, [suited])
+  // The scene it is set in is one there is. Where that one is gone, the project's own
+  // having been taken away, it is set in the one that suits it instead.
+  React.useEffect(() => {
+    const { view, setView } = useStore.getState()
+    if (!scenes || view.reference === null) return
+    if (!scenes.some((scene) => scene.id === view.reference))
+      setView({ reference: suited?.id ?? null })
+  }, [scenes, suited])
+  // A scene of the project's own that has just been written is the one for the project
+  // from then on. It is shown at once where a scene was showing, or where it is Claude
+  // that wrote it, at work in the project: what was asked for is there to be seen, by
+  // the user and by Claude, which looks at the view to check what it made.
+  const ownScene = scenes?.find((scene) => scene.own)?.files.join() ?? null
+  const ownSeen = React.useRef<string | null | undefined>(undefined)
+  const atWorkHere = project.conversations.some((c) => c.status !== "idle")
+  React.useEffect(() => {
+    if (!scenes) return
+    const was = ownSeen.current
+    ownSeen.current = ownScene
+    // (as it was found when the project was opened is not its having been written)
+    if (was === undefined || ownScene === null || ownScene === was) return
+    const { view, pickScene } = useStore.getState()
+    if (atWorkHere || view.reference !== null) pickScene(OWN_SCENE)
+  }, [scenes, ownScene, atWorkHere])
   // Meanwhile the view is Claude's: the camera goes round the model by itself, and
   // nothing in the view answers the hand or the keys. When it is through, the camera
   // goes back to where a model opens, as Cmd+1 would take it.
@@ -796,7 +930,8 @@ function Model({ project }: { project: Project }) {
   // listened for where the name is typed: see Search.)
   //
   // Cmd+G makes a group of the parts picked out, and Shift+Cmd+G takes them out of
-  // their groups (see above).
+  // their groups (see above). Cmd+/ sets the model in the reference scene that suits
+  // it, and again takes it back out.
   //
   // Cmd+Z takes back the last thing done to the model, a colour given by hand, parts
   // put into groups another way or what Claude did in a turn, and with Shift puts it
@@ -832,6 +967,17 @@ function Model({ project }: { project: Project }) {
         if (event.repeat) return
         if (event.shiftKey) ungroupThem()
         else groupThem()
+        return
+      }
+      if (
+        (MAC ? event.metaKey && !event.ctrlKey : event.ctrlKey) &&
+        event.key === "/"
+      ) {
+        // (on some keyboards it is typed with Shift held, and it is no other key's)
+        event.preventDefault()
+        if (event.repeat) return
+        // the scene is the view's: a blueprint is of the model alone
+        if (!useStore.getState().view.blueprint) toggleReference()
         return
       }
       if (event.shiftKey) {
@@ -916,7 +1062,15 @@ function Model({ project }: { project: Project }) {
     }
     window.addEventListener("keydown", key)
     return () => window.removeEventListener("keydown", key)
-  }, [goHome, loaded, middle, lookingOver, groupThem, ungroupThem])
+  }, [
+    goHome,
+    loaded,
+    middle,
+    lookingOver,
+    groupThem,
+    ungroupThem,
+    toggleReference,
+  ])
 
   // The camera goes to what I shows on its own, one part or several together, and
   // follows it if it is pulled out from the rest; and goes back when that is no longer
@@ -1082,6 +1236,7 @@ function Model({ project }: { project: Project }) {
         <div className={cn("absolute inset-0", blueprint && "invisible")}>
           <Scene
             loaded={loaded}
+            reference={reference}
             projectId={project.id}
             notes={notes}
             colours={colours}
@@ -1175,8 +1330,22 @@ function Model({ project }: { project: Project }) {
           )}
         />
       )}
+      {real && scenes && referenceOpen && !lookingOver && !blueprint && (
+        <ReferencePanel
+          scenes={scenes}
+          shown={view.reference}
+          // where the list of parts goes, which is never up with it: a little
+          // further from the buttons, and further in while the section's other
+          // buttons stand where it would be
+          className={cn(
+            "absolute top-1/2 max-h-[80%] -translate-y-1/2 transition-[right]",
+            view.section ? "right-38.5" : "right-17.5"
+          )}
+        />
+      )}
       {/* at the foot of the view, in the middle: what to do with the parts picked out
-          together, over how far apart the parts are pulled */}
+          together, and with the scene the model is set in, over how far apart the
+          parts are pulled */}
       {loaded && (
         <div className="pointer-events-none absolute inset-x-0 bottom-5 flex flex-col items-center gap-2.5">
           {lookingOver && <LookingOver project={project} />}
@@ -1186,6 +1355,15 @@ function Model({ project }: { project: Project }) {
             groups={loaded.model.groups}
             projectId={project.id}
           />
+          {reference && !lookingOver && !blueprint && (
+            <div className="flex items-center gap-2">
+              {reference.scene.figures.length > 0 && <ShowFigure />}
+              <ImproveReference
+                sceneId={reference.scene.id}
+                projectId={project.id}
+              />
+            </div>
+          )}
           {/* how far apart the parts are pulled: which a blueprint has beside its own
               bar, with the rest of how its sheets show the model */}
           {blueprint ? <Options /> : view.exploded && <ExplodeSlider />}

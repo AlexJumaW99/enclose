@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  lowestPolar,
   nearestAxis,
   nearestTurn,
   normalOf,
@@ -92,6 +93,29 @@ describe("viewFrom, looking straight down or up", () => {
     const { azimuth, polar } = viewFrom("z", -1)
     close(frame(azimuth, polar).up, [0, 1, 0])
     close(frame(azimuth, polar).right, [-1, 0, 0])
+  })
+})
+
+describe("lowestPolar", () => {
+  it("stops a camera level with what it looks at, when that is on the ground", () => {
+    expect(lowestPolar(0, 500)).toBeCloseTo(Math.PI / 2, 6)
+  })
+
+  it("lets it under what it looks at, by as much as that is above the ground", () => {
+    // half as high as it is far: a third of the way on from level to straight below
+    expect(lowestPolar(250, 500)).toBeCloseTo((Math.PI * 2) / 3, 6)
+    // and where that leaves it is on the ground
+    expect(250 + 500 * Math.cos(lowestPolar(250, 500))).toBeCloseTo(0, 6)
+  })
+
+  it("lets it all the way under something higher than it is far from", () => {
+    expect(lowestPolar(500, 500)).toBeCloseTo(Math.PI, 6)
+    expect(lowestPolar(900, 500)).toBeCloseTo(Math.PI, 6)
+  })
+
+  it("keeps it above something under the ground, by as much as that is under", () => {
+    expect(lowestPolar(-250, 500)).toBeCloseTo(Math.PI / 3, 6)
+    expect(lowestPolar(-900, 500)).toBeCloseTo(0, 6)
   })
 })
 

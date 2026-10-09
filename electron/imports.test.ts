@@ -192,6 +192,7 @@ describe("modelScript", () => {
   it("writes the names and groups Claude gave, each body by the id it is read under", () => {
     const script = modelScript("Clock", ["source/clock.step"], {
       what: 'a "wall" clock\\',
+      reference: null,
       groups: [
         { label: "Case", shell: true },
         { label: "Gear train", shell: false },
@@ -215,6 +216,18 @@ describe("modelScript", () => {
     // what it was taken to be is said where nothing in it can end the saying
     expect(script).toContain("It took the thing to be: a 'wall' clock'")
     expect(script.split('"""')).toHaveLength(3)
+    // with no reference scene named for it, the model names none
+    expect(script).toContain('model = Model("Clock")\n')
+  })
+
+  it("has the model name the reference scene Claude said suits it", () => {
+    const script = modelScript("Stool", ["source/stool.step"], {
+      what: "a stool",
+      reference: "room",
+      groups: [{ label: "Stool", shell: false }],
+      parts: [{ from: "solid_1", id: "seat", label: "Seat", group: "Stool" }],
+    })
+    expect(script).toContain('model = Model("Stool", reference="room")\n')
   })
 })
 
@@ -224,6 +237,22 @@ describe("arrange", () => {
     { id: "solid_2", label: "Solid 2", group: "Parts" },
     { id: "back_cover", label: "back cover", group: "Parts" },
   ]
+
+  it("keeps the reference scene named, where it is one the app has", () => {
+    const given = {
+      what: "a stool",
+      groups: [{ name: "Stool" }],
+      parts: [{ id: "solid_1", name: "Seat", group: "Stool" }],
+    }
+    const scenes = ["table", "room"]
+    expect(
+      arrange(read, { ...given, reference: "room" }, scenes).reference
+    ).toBe("room")
+    expect(
+      arrange(read, { ...given, reference: "garage" }, scenes).reference
+    ).toBeNull()
+    expect(arrange(read, given, scenes).reference).toBeNull()
+  })
 
   it("names and groups the parts as given, in the order the files have them", () => {
     expect(
@@ -238,6 +267,7 @@ describe("arrange", () => {
       })
     ).toEqual({
       what: "a pill box",
+      reference: null,
       groups: [
         { label: "Case", shell: true },
         { label: "Fixings", shell: false },

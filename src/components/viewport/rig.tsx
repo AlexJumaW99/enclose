@@ -17,13 +17,24 @@
 // with the model upside down. That is done by having the controls carry on from the
 // opposite side, which leaves the picture turned half way round about its middle, and
 // turning the picture back: the two cancel, and nothing is seen to jump.
+//
+// Set in a reference scene, a model stands on something that stands on the ground, and
+// the camera keeps above that ground, as an eye would. It goes down round what it looks
+// at as far as the ground and stops there; what it looks at stays above the ground too;
+// and it is not sent to the view from underneath.
 import * as React from "react"
 import * as THREE from "three"
 import { useFrame, useThree } from "@react-three/fiber"
 import { CameraControls, CameraControlsImpl } from "@react-three/drei"
 
 import type { Vec3 } from "@shared/api"
-import { nearestTurn, viewFrom, type Axis, type Sign } from "@/lib/orient"
+import {
+  lowestPolar,
+  nearestTurn,
+  viewFrom,
+  type Axis,
+  type Sign,
+} from "@/lib/orient"
 import { usePreferences } from "@/lib/preferences"
 import { SCROLL_PAUSE, scrollSource } from "@/lib/scroll"
 import { bridge, publishOrientation } from "./bridge"
@@ -119,6 +130,11 @@ function direct(stage: {
   lens: THREE.PerspectiveCamera
   flat: THREE.OrthographicCamera
   box: () => THREE.Box3
+  /**
+   * How high the ground is that the camera keeps above, in the model's frame: what a
+   * scene the model is set in stands on. Null where the model is set in none.
+   */
+  ground: () => number | null
   size: () => { width: number; height: number }
   /** draw with this camera from now on */
   show: (camera: THREE.PerspectiveCamera | THREE.OrthographicCamera) => void
@@ -156,6 +172,26 @@ function direct(stage: {
     scale: number
     home: { theta: number; phi: number } | null
   } | null = null
+  /**
+   * What the camera was looking at before the model was set in something to be seen
+   * beside, and at what scale: where it comes back in to when that is taken away.
+   */
+  let outside: { target: THREE.Vector3; scale: number } | null = null
+  /** the ground that what the camera looks at was last kept above; null with none */
+  let grounded: number | null = null
+
+  /**
+   * How far down round what it looks at the camera can be, as the angle from straight
+   * above, without being below the ground: all the way, where there is no ground. With
+   * no lens there is nowhere that the camera is, only a way that it looks, and it sees
+   * the ground from underneath as soon as it looks up at all.
+   */
+  const lowest = (target: THREE.Vector3, distance: number) => {
+    const ground = stage.ground()
+    if (ground === null) return Math.PI
+    if (mode === "flat") return Math.PI / 2
+    return lowestPolar(target.y - ground, distance)
+  }
 
   const reach = () => stage.box().getSize(new THREE.Vector3()).length() / 2
   /** What the set views frame: the part the camera was brought to, or else all of it. */
@@ -255,6 +291,22 @@ function direct(stage: {
     return { target, distance, scale }
   }
 
+  /** Have all of a box in the view, from the side the camera is on already. */
+  const takeIn = (box: THREE.Box3) => {
+    const { theta, phi } = heading()
+    const { width, height } = stage.size()
+    const { target, distance, scale } = fitting(
+      box,
+      theta,
+      phi,
+      width / height,
+      HOME_MARGIN
+    )
+    void controls.moveTo(target.x, target.y, target.z, true)
+    if (mode === "flat" || tie?.kind === "closing") scaleTo(scale)
+    else void controls.dollyTo(distance * narrowing, true)
+  }
+
   /** How far the user may zoom, either way. */
   const limits = () => {
     const r = reach()
@@ -352,6 +404,8 @@ function direct(stage: {
       roll,
       turn: controls.camera.quaternion.toArray(),
       target: controls.getTarget(new THREE.Vector3(), false).toArray(),
+      // where the last frame was drawn from, which the ground may have had a say in
+      from: controls.camera.position.toArray(),
     }),
 
     /**
@@ -405,9 +459,75 @@ function direct(stage: {
       if (atHome && mode === "lens") this.home(false, ratio, seen)
     },
 
+    /**
+     * What there is to see has changed size: how far the camera may go from it, and how
+     * much of the depth is drawn, are worked out from it afresh. The camera stays put.
+     */
+    resized() {
+      limits()
+      if (mode !== "flat") return
+      const r = reach()
+      flat.near = -r * 50
+      flat.far = r * 50
+      flat.updateProjectionMatrix()
+    },
+
+    /**
+     * The model has been set in something far bigger than itself to be seen beside, a
+     * reference scene, or taken out of it again: by now the stage's box is all there is
+     * to see. Set in it, the camera stands back to take the whole in, from the side it
+     * is on. Taken out, it comes back in to what it was looking at before, as near as it
+     * was then. From the view a model opens with, both are that view again, of whatever
+     * there now is to frame. And so is being set in it from the flat view from
+     * underneath, or on the way there: with a ground to keep above, that is no side to
+     * stand back on.
+     */
+    surround(on: boolean, ratio: number) {
+      controls.smoothTime = SMOOTH.turn
+      const under =
+        on &&
+        stage.ground() !== null &&
+        (mode === "flat" || tie?.kind === "closing") &&
+        heading().phi > Math.PI / 2 + THERE
+      if (under) {
+        outside ??= {
+          target: controls.getTarget(new THREE.Vector3(), true),
+          scale: scaleThen(),
+        }
+        this.home(true, ratio, seen)
+        return
+      }
+      if (atHome && mode === "lens" && tie === null) {
+        // (at home there is nothing to go back to but home)
+        if (!on) outside = null
+        this.home(true, ratio, seen)
+        return
+      }
+      if (on) {
+        // going from one such thing to another, it is still the first it comes back from
+        outside ??= {
+          target: controls.getTarget(new THREE.Vector3(), true),
+          scale: scaleThen(),
+        }
+        takeIn(stage.box())
+      } else if (outside) {
+        const { target, scale } = outside
+        outside = null
+        void controls.moveTo(target.x, target.y, target.z, true)
+        scaleTo(scale)
+      } else {
+        // it was at home when it stood back, and has been turned since: the model as
+        // it is seen from here
+        takeIn(framed())
+      }
+      stage.redraw()
+    },
+
     /** Look at the model square-on from the end of one of its axes, flat and fitted. */
     lookFrom(axis: Axis, sign: Sign) {
       const { azimuth, polar } = viewFrom(axis, sign)
+      // there is no looking up from under the ground
+      if (stage.ground() !== null && polar > Math.PI / 2 + THERE) return
       const { width, height } = stage.size()
       // what of the model shows from there, and the scale at which it fits the view
       const extent = framed().getSize(new THREE.Vector3())
@@ -565,7 +685,14 @@ function direct(stage: {
       // From where the camera is, not from where a flight was taking it: the hand takes
       // over, and what was left of the flight's turn is dropped.
       let theta = controls.azimuthAngle + way * azimuth
-      let phi = controls.polarAngle + way * polar
+      // down as far as the ground and no further: and from there, if a zoom or a pan
+      // has left the camera for the moment lower than it is drawn
+      const most = lowest(
+        controls.getTarget(new THREE.Vector3(), false),
+        controls.distance
+      )
+      let phi = Math.min(controls.polarAngle, most) + way * polar
+      if (most < Math.PI) phi = Math.min(phi, most)
       if (phi < 0 || phi > Math.PI) {
         // over the top, or under the bottom: on down the far side, the other way up
         phi = phi < 0 ? -phi : 2 * Math.PI - phi
@@ -616,6 +743,46 @@ function direct(stage: {
 
     /** Called every frame that is drawn, with the seconds since the last. */
     tick(delta: number) {
+      const ground = stage.ground()
+      if (ground !== grounded) {
+        // what the camera looks at keeps above the ground, however the view is moved
+        grounded = ground
+        controls.setBoundary(
+          ground === null
+            ? undefined
+            : new THREE.Box3(
+                new THREE.Vector3(-Infinity, ground, -Infinity),
+                new THREE.Vector3(Infinity, Infinity, Infinity)
+              )
+        )
+      }
+      if (ground !== null) {
+        // Standing back, or looking lower, would take the camera under the ground from
+        // where it is: it comes up round what it looks at instead, as far as it has to.
+        const to = heading()
+        const then = lowest(
+          controls.getTarget(new THREE.Vector3(), true),
+          to.radius
+        )
+        if (to.phi > then + THERE) void controls.rotateTo(to.theta, then, true)
+        // And on the way there it is never drawn from under it: this frame is drawn
+        // from as low as the ground lets it be, from where the camera is now.
+        const target = controls.getTarget(new THREE.Vector3(), false)
+        const most = lowest(target, controls.distance)
+        if (controls.polarAngle > most) {
+          const camera = controls.camera
+          camera.position
+            .setFromSphericalCoords(
+              controls.distance,
+              Math.max(most, THERE),
+              controls.azimuthAngle
+            )
+            .add(target)
+          camera.position.y = Math.max(camera.position.y, ground)
+          camera.lookAt(target)
+          camera.updateMatrixWorld()
+        }
+      }
       // The picture turns back upright on the way to a set view...
       if (roll !== rollTo) {
         const left = roll - rollTo
@@ -710,11 +877,24 @@ export function Rig({
   box,
   homeKey,
   circling = false,
+  around = null,
+  ground = null,
 }: {
+  /** all there is to see: the model, with whatever it is set in */
   box: THREE.Box3
   homeKey: string
   /** the camera goes slowly round the model by itself, for as long as this is so */
   circling?: boolean
+  /**
+   * What the model is set in to be seen beside, a reference scene, by a name that tells
+   * one such thing from another; null while it is set in nothing.
+   */
+  around?: string | null
+  /**
+   * How high the ground is that such a thing stands on, in the model's frame: the
+   * camera keeps above it. Null while the model is set in nothing.
+   */
+  ground?: number | null
 }) {
   const controls = React.useRef<CameraControls>(null)
   const director = React.useRef<ReturnType<typeof direct> | null>(null)
@@ -729,7 +909,14 @@ export function Rig({
   const latest = React.useRef(box)
   React.useEffect(() => {
     latest.current = box
+    director.current?.resized()
   }, [box])
+  const floor = React.useRef(ground)
+  React.useEffect(() => {
+    floor.current = ground
+    // the camera is brought above it in the frames that follow
+    invalidate()
+  }, [ground, invalidate])
 
   // the camera the view was created with has the lens; the flat one is made here
   const [lens] = React.useState(() => get().camera as THREE.PerspectiveCamera)
@@ -757,6 +944,7 @@ export function Rig({
       lens,
       flat,
       box: () => latest.current,
+      ground: () => floor.current,
       size: () => get().size,
       show: (camera) => {
         set({ camera })
@@ -810,6 +998,16 @@ export function Rig({
     shape.current = aspect
     if (!first.current) director.current?.reshape(aspect)
   }, [aspect])
+
+  // Set in a reference scene, taken out of one, or moved from one to another: the
+  // camera stands back to take all of it in, and comes back in when there is no more
+  // of it. Not when the same scene is built again, which should not move the camera.
+  const within = React.useRef(around)
+  React.useEffect(() => {
+    if (within.current === around) return
+    within.current = around
+    director.current?.surround(around !== null, shape.current)
+  }, [around])
 
   // What the hand does on the view. Fingers moving across a trackpad turn the model, a
   // pinch zooms, and so does a mouse wheel. Holding Shift pans instead: with the fingers,

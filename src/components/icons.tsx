@@ -103,6 +103,16 @@ export function SectionIcon(props: IconProps) {
   )
 }
 
+/** A thing on a table: something of a known size for it to be seen beside. */
+export function ReferenceIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M9 13V7.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1V13" />
+      <path d="M3 13h18M6 13v7.5M18 13v7.5" />
+    </Icon>
+  )
+}
+
 /** Claude's mark, in Claude's colour: whose models these are. */
 export function ClaudeIcon(props: IconProps) {
   return (

@@ -13,7 +13,7 @@ build123d and hands them over, one part at a time:
 
     model.part("body", Box(60, 40, 20), label="Body", group=case, color="#e8e8e4")
     model.part("lid", Pos(0, 0, 11) * Box(60, 40, 2), label="Lid", group=case)
-    model.part("screws", screws, label="Lid screws", group=fixings, finish="metal")
+    model.part("screws", screws, label="Lid screws, M3 × 8", group=fixings, finish="metal")
     model.write()
 
 Units are millimetres and Z is up. Each part is drawn where its shape already is, so
@@ -34,6 +34,34 @@ gives every body in them as a part to hand over, or to change first:
         model.part(found.id, found.shape, label=found.label, group=groups[found.group])
     model.write()
 
+Screws are not drawn by hand. Enclose has them in a file of its own beside this one,
+screws.py, which a project copies in as it does this: metric screws, nuts and washers
+in their standard sizes, each with its thread and with the holes that fit it. Its
+docstring shows how it is used.
+
+A project can have a reference scene of its own as well: things of a known real size
+that the app draws round the model when asked (Cmd+/), so that how big the model is can
+be seen. It is no part of the model, and a script of its own builds it, `reference.py`,
+beside the model's:
+
+    from build123d import Box, Pos
+    from enclose import Reference
+
+    scene = Reference("Workbench", detail="180 × 60 cm", stand=(0, 0, 900))
+    scene.part("top", Pos(0, 0, 880) * Box(1800, 600, 40))
+    scene.part("legs", legs)
+    scene.write()
+
+`stand` is where a model stands in the scene, in mm: the top of the bench, here.
+`write()` puts the scene in `reference/` beside the script, with
+`enclose.reference.json`, and the app shows it in place of a scene of its own.
+
+A scene can hold something that comes ready made as well, as a mesh in a glTF file: the
+figure of a person, which the app has one of, beside its own scenes' scripts. Given as
+a figure, it is for whoever is looking to show or hide, with a button under the view.
+
+    scene.mesh("person", "person.glb", at=(0, 700, 0), figure=True)
+
 Needs build123d (pip install build123d).
 """
 
@@ -42,8 +70,10 @@ from __future__ import annotations
 import array
 import copy
 import json
+import math
 import os
 import re
+import struct
 import sys
 import time
 from dataclasses import dataclass
@@ -52,9 +82,11 @@ from build123d import Color, Compound, Solid, export_gltf, export_step
 from OCP.BRep import BRep_Builder, BRep_Tool
 from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
 from OCP.BRepBndLib import BRepBndLib
+from OCP.BRepGProp import BRepGProp
 from OCP.Bnd import Bnd_Box
 from OCP.GCPnts import GCPnts_TangentialDeflection
 from OCP.GeomAbs import GeomAbs_Cylinder, GeomAbs_Line, GeomAbs_Plane
+from OCP.GProp import GProp_GProps
 from OCP.IFSelect import IFSelect_RetDone
 from OCP.Quantity import Quantity_ColorRGBA
 from OCP.STEPCAFControl import STEPCAFControl_Reader
@@ -62,16 +94,12 @@ from OCP.STEPConstruct import STEPConstruct
 from OCP.StepShape import StepShape_SolidModel
 from OCP.TCollection import TCollection_ExtendedString
 from OCP.TDataStd import TDataStd_Name
-from OCP.TDF import TDF_Label, TDF_LabelSequence
+from OCP.TDF import TDF_Label
 from OCP.TDocStd import TDocStd_Document
 from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_SHELL, TopAbs_SOLID
 from OCP.TopExp import TopExp, TopExp_Explorer
 from OCP.TopLoc import TopLoc_Location
 from OCP.TopoDS import TopoDS, TopoDS_Compound
-from OCP.TopTools import (
-    TopTools_IndexedDataMapOfShapeListOfShape,
-    TopTools_IndexedMapOfShape,
-)
 from OCP.XCAFDoc import (
     XCAFDoc_ColorCurv,
     XCAFDoc_ColorGen,
@@ -80,9 +108,43 @@ from OCP.XCAFDoc import (
     XCAFDoc_DocumentTool,
 )
 
-__all__ = ["Model", "read_step"]
+# What build123d is built on changed some of its names with its version 8, which
+# build123d 0.13 brought in: these are known by either.
+try:
+    from OCP.TDF import TDF_LabelSequence
+    from OCP.TopTools import (
+        TopTools_IndexedDataMapOfShapeListOfShape,
+        TopTools_IndexedMapOfShape,
+    )
+except ImportError:
+    import OCP.collections as _collections
+
+    TDF_LabelSequence = _collections.Sequence_TDF_Label
+    TopTools_IndexedDataMapOfShapeListOfShape = getattr(
+        _collections,
+        "IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher",
+    )
+    TopTools_IndexedMapOfShape = getattr(
+        _collections, "IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher"
+    )
+
+
+def _as(kind: str):
+    """What takes a shape for the kind it is known to be, by whichever name it has."""
+    return getattr(TopoDS, f"{kind}_s", None) or getattr(TopoDS, kind)
+
+
+_as_compound, _as_edge, _as_face, _as_solid = (
+    _as("Compound"),
+    _as("Edge"),
+    _as("Face"),
+    _as("Solid"),
+)
+
+__all__ = ["Model", "Reference", "read_step"]
 
 MANIFEST = "enclose.model.json"
+REFERENCE = "enclose.reference.json"
 
 
 def _slug(text: str) -> str:
@@ -120,6 +182,28 @@ def _same_surface(f1, f2) -> bool:
     return False
 
 
+def _wound_fine(points, faces) -> bool:
+    """An edge that goes round and round with less than a millimetre between it and the
+    next, as the edges of a screw's thread do. Drawn, such lines run together into a
+    black band. Left out, the thread still shows, by its own light and shade."""
+    if len(points) < 12:
+        return False
+    length = sum(a.Distance(b) for a, b in zip(points, points[1:]))
+    box = Bnd_Box()
+    for point in points:
+        box.Add(point)
+    # round and round: several times as long as the room it is in is across
+    if length * length < 25 * box.SquareExtent():
+        return False
+    # and near the next line: one of the faces it bounds is that narrow a ribbon
+    for face in (faces.First(), faces.Last()):
+        surface = GProp_GProps()
+        BRepGProp.SurfaceProperties_s(face, surface)
+        if surface.Mass() < length:
+            return True
+    return False
+
+
 def _write_edges(shape, path: str) -> int:
     """A part's real edges - the boundaries between its faces, as a CAD program draws
     them - as line segments: float32 x1 y1 z1 x2 y2 z2, in mm."""
@@ -127,16 +211,18 @@ def _write_edges(shape, path: str) -> int:
     TopExp.MapShapesAndAncestors_s(shape.wrapped, TopAbs_EDGE, TopAbs_FACE, by_edge)
     flat = array.array("f")
     for i in range(1, by_edge.Extent() + 1):
-        edge = TopoDS.Edge_s(by_edge.FindKey(i))
+        edge = _as_edge(by_edge.FindKey(i))
         faces = by_edge.FindFromIndex(i)
         if BRep_Tool.Degenerated_s(edge):
             continue
-        if faces.Extent() == 1 and BRep_Tool.IsClosed_s(
-            edge, TopoDS.Face_s(faces.First())
+        # the seam where a round face closes on itself: one face, which may be listed
+        # twice, once for each side of the seam
+        if faces.First().IsSame(faces.Last()) and BRep_Tool.IsClosed_s(
+            edge, _as_face(faces.First())
         ):
-            continue  # the seam where a round face closes on itself
+            continue
         if faces.Extent() == 2 and _same_surface(
-            TopoDS.Face_s(faces.First()), TopoDS.Face_s(faces.Last())
+            _as_face(faces.First()), _as_face(faces.Last())
         ):
             continue
         curve = BRepAdaptor_Curve(edge)
@@ -148,6 +234,8 @@ def _write_edges(shape, path: str) -> int:
         else:
             walk = GCPnts_TangentialDeflection(curve, 0.2, 0.02)
             points = [walk.Value(k) for k in range(1, walk.NbPoints() + 1)]
+        if _wound_fine(points, faces):
+            continue
         for a, b in zip(points, points[1:]):
             flat.extend((a.X(), a.Y(), a.Z(), b.X(), b.Y(), b.Z()))
     with open(path, "wb") as file:
@@ -303,9 +391,9 @@ def _read(file: str) -> list[tuple[list[str], str | None, str | None, object]] |
             own = names[index] if index else None
             moved = piece.Moved(place)
             shape = (
-                Solid(TopoDS.Solid_s(moved))
+                Solid(_as_solid(moved))
                 if piece.ShapeType() == TopAbs_SOLID
-                else Compound(TopoDS.Compound_s(moved))
+                else Compound(_as_compound(moved))
             )
             colour = colour_of(piece, label, used)
             if len(pieces) == 1:
@@ -365,11 +453,22 @@ def read_step(*files: str) -> list[Found]:
 class Model:
     """What a project is made of, gathered up to be written where Enclose looks for it."""
 
-    def __init__(self, title: str | None = None, out: str = "build", fine: bool = False):
+    def __init__(
+        self,
+        title: str | None = None,
+        out: str = "build",
+        fine: bool = False,
+        reference: str | None = None,
+    ):
         """`out` is relative to the script being run. `fine` makes smoother curves and
-        bigger files: worth it for small round things, not for a whole enclosure."""
+        bigger files: worth it for small round things, not for a whole enclosure.
+        `reference` names the one of the app's reference scenes that the thing is best
+        seen in, by where it is used: "table" for what stands on a desk or is held in
+        the hand, "room" for what stands on the floor. Leave it out and the app goes by
+        how big the model is."""
         self.title = title
         self.fine = fine
+        self.reference = reference
         here = os.path.dirname(os.path.abspath(sys.argv[0] or "."))
         self.out = out if os.path.isabs(out) else os.path.join(here, out)
         self._groups: list[dict] = []
@@ -506,6 +605,7 @@ class Model:
 
         manifest = {
             "title": self.title,
+            **({"reference": self.reference} if self.reference else {}),
             "groups": self._groups,
             "parts": self._parts,
             "keepouts": self._keepouts,
@@ -518,4 +618,182 @@ class Model:
             json.dump(manifest, file, indent=1)
         os.replace(path + ".part", path)
         print(f"wrote {len(self._parts)} parts to {os.path.relpath(self.out)}")
+        return path
+
+
+@dataclass
+class _Mesh:
+    """A mesh that comes ready made, and where it goes in a scene."""
+
+    path: str
+    at: tuple[float, float, float]
+    turn: float
+    figure: bool
+
+
+def _place_mesh(mesh: _Mesh, to: str) -> None:
+    """Copy a binary glTF file, with all that is in it moved to its place in a scene:
+    under one more node, which is where a glTF file says such a thing."""
+    with open(mesh.path, "rb") as file:
+        data = file.read()
+    if data[:4] != b"glTF" or len(data) < 20:
+        raise ValueError(f"not a binary glTF file (.glb): {mesh.path}")
+    length, kind = struct.unpack_from("<II", data, 12)
+    if kind != 0x4E4F534A:
+        raise ValueError(f"not a binary glTF file (.glb): {mesh.path}")
+    doc = json.loads(data[20 : 20 + length])
+    rest = data[20 + length :]
+    scenes = doc.get("scenes") or []
+    if not scenes or not doc.get("nodes"):
+        raise ValueError(f"there is nothing in the glTF file: {mesh.path}")
+    scene = scenes[doc.get("scene", 0)]
+    x, y, z = (float(v) for v in mesh.at)
+    half = math.radians(float(mesh.turn)) / 2
+    doc["nodes"].append(
+        {
+            "children": scene.get("nodes", []),
+            # glTF is in metres with Y up: the scene's upright is its Y, its front its Z
+            "translation": [x / 1000, z / 1000, -y / 1000],
+            "rotation": [0.0, math.sin(half), 0.0, math.cos(half)],
+        }
+    )
+    scene["nodes"] = [len(doc["nodes"]) - 1]
+    body = json.dumps(doc, separators=(",", ":")).encode()
+    body += b" " * (-len(body) % 4)
+    with open(to, "wb") as file:
+        file.write(b"glTF")
+        file.write(struct.pack("<II", 2, 12 + 8 + len(body) + len(rest)))
+        file.write(struct.pack("<II", len(body), 0x4E4F534A))
+        file.write(body)
+        file.write(rest)
+
+
+class Reference:
+    """A reference scene: things of a known real size for a model to be seen beside, so
+    that how big the model is can be told. The app draws a scene plainly, all in one
+    quiet tone with a thin line round each thing in it, and stands the model in it."""
+
+    def __init__(
+        self,
+        name: str,
+        detail: str = "",
+        *,
+        stand: tuple[float, float, float] = (0.0, 0.0, 0.0),
+        against: tuple[int, int] = (0, 0),
+        floor: float = 0.0,
+        out: str = "reference",
+        fine: bool = False,
+        suits: str | None = None,
+        up_to: tuple[float, float, float] | None = None,
+    ):
+        """`name` is what the scene goes by in the app's list, and `detail` what the
+        list says under it: the sizes that make it something to measure by, as a person
+        would say them ("180 × 60 cm"). `stand` is where a model stands in the scene, in
+        mm: the middle of the model's underside is put there, so it is the top of a
+        table, or a place on the floor of a room. `against` is for a model that is to
+        stand beside something, clear of it whatever its own size: (-1, 0) puts the
+        model's -X side at `stand` in place of its middle, (0, 1) its +Y side. `floor`
+        is how high up the ground is that the scene itself stands on, which is where the
+        app rules its grid. `out` is relative to the script being run.
+
+        The last two are for the scenes the app has of its own, which it chooses among:
+        `suits` says what kind of thing the scene is for, and `up_to` how big a model
+        it is for, at the most, along x, y and z."""
+        self.name = name
+        self.detail = detail
+        self.stand = stand
+        self.against = against
+        self.floor = floor
+        self.fine = fine
+        self.suits = suits
+        self.up_to = up_to
+        here = os.path.dirname(os.path.abspath(sys.argv[0] or "."))
+        self._here = here
+        self.out = out if os.path.isabs(out) else os.path.join(here, out)
+        # what is in it, in the order it was put there: a shape, or a mesh and its place
+        self._things: dict[str, object] = {}
+
+    def part(self, id: str, shape) -> None:
+        """Something in the scene: a build123d shape, in mm with Z up, where it is in
+        the scene. A solid is seen from every side. A face on its own (a Rectangle, put
+        where it goes) is seen from the side it faces and seen through from behind,
+        which is how a wall is made that does not hide the model from outside the room.
+
+        Keep to a few plain shapes, at their true sizes: a scene is there to measure
+        by, and the less there is in it to look at, the better it does that."""
+        if id in self._things:
+            raise ValueError(f'two parts share the id "{id}"')
+        self._things[id] = _shape(shape)
+
+    def mesh(
+        self,
+        id: str,
+        file: str,
+        *,
+        at: tuple[float, float, float] = (0.0, 0.0, 0.0),
+        turn: float = 0.0,
+        figure: bool = False,
+    ) -> None:
+        """Something in the scene that is not built here but comes ready made, as a
+        mesh in a glTF file (.glb): the figure of a person, a thing that was scanned.
+        The file is as a 3D program writes one, in metres with Y up, and true to size.
+        `at` is where its origin goes in the scene, in mm, and `turn` how far round it
+        is turned about the upright, in degrees: at none, what faces the front in the
+        file (its +Z) faces the front of the scene (-Y). `file` is relative to the
+        script being run, and is copied into the scene as it is written.
+
+        `figure` says that it is the figure of a person, there to be shown or not: the
+        app leaves it out until whoever is looking asks for it, with a button under the
+        view, and takes it away again the same way."""
+        if id in self._things:
+            raise ValueError(f'two parts share the id "{id}"')
+        path = file if os.path.isabs(file) else os.path.join(self._here, file)
+        if not os.path.isfile(path):
+            raise FileNotFoundError(f'the mesh "{file}" is not there: {path}')
+        self._things[id] = _Mesh(path, at, turn, figure)
+
+    def write(self) -> str:
+        """Write the meshes and then the manifest, which is what makes the app load
+        the scene again. Returns the path of the manifest."""
+        if not self._things:
+            raise ValueError("a reference scene needs at least one part")
+        os.makedirs(self.out, exist_ok=True)
+        linear, angular = (0.02, 0.15) if self.fine else (0.08, 0.5)
+        parts = []
+        for id, thing in self._things.items():
+            to = os.path.join(self.out, f"{id}.glb")
+            part = {"id": id, "file": f"{id}.glb"}
+            if isinstance(thing, _Mesh):
+                _place_mesh(thing, to)
+                if thing.figure:
+                    part["figure"] = True
+            else:
+                wrapped = Compound(children=[copy.copy(thing)])
+                wrapped.label = id
+                export_gltf(
+                    wrapped,
+                    to,
+                    binary=True,
+                    linear_deflection=linear,
+                    angular_deflection=angular,
+                )
+            parts.append(part)
+        against = [int(v) for v in self.against]
+        manifest = {
+            "name": self.name,
+            "detail": self.detail,
+            "stand": [round(float(v), 3) for v in self.stand],
+            **({"against": against} if any(against) else {}),
+            "floor": round(float(self.floor), 3),
+            **({"suits": self.suits} if self.suits else {}),
+            **({"upTo": [float(v) for v in self.up_to]} if self.up_to else {}),
+            "parts": parts,
+        }
+        # last, and all at once, as a model's is
+        path = os.path.join(self.out, REFERENCE)
+        with open(path + ".part", "w") as file:
+            json.dump(manifest, file, indent=1, ensure_ascii=False)
+            file.write("\n")
+        os.replace(path + ".part", path)
+        print(f"wrote the reference scene to {os.path.relpath(self.out)}")
         return path

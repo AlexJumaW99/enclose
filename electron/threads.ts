@@ -46,6 +46,7 @@ import {
 } from "./conversations"
 import type { Projects } from "./projects"
 import type { Launch } from "./providers"
+import type { AppScene } from "./reference"
 import {
   MODEL,
   modelTools,
@@ -99,6 +100,8 @@ export type ThreadsDeps = {
   tools: ToolServer
   /** where the app keeps the exporter a project copies to write its model */
   kit: string
+  /** the reference scenes the app has of its own, for a model to be seen in */
+  scenes: AppScene[]
   /** a project's folder was renamed, from this path to that */
   onRenamed: (from: string, to: string) => void
   /** ask the window something about the viewport it is showing */
@@ -308,6 +311,51 @@ const QUESTIONS = [
   "- Never ask what you can sensibly decide yourself (wall thickness, fillets, how it will be made, how the parts are grouped), or what the message, the model or the project's files already say. A question left unanswered is left to you: go by your best guess and say what it was.",
 ]
 
+/** What the library of screws is called, beside the exporter in the app and in a project. */
+const SCREWS = "screws.py"
+
+/**
+ * What an agent is told of screws: that they are parts of the model, that they come out
+ * of the app's library in the sizes they are sold in, and what the user is told of them.
+ * A screw's size is a name few people know: so which one was used is said, and one that
+ * is to be another size and is not named is asked after (`canAsk`), not guessed at.
+ */
+export function fastening(kit: string, canAsk: boolean): string[] {
+  const library = path.join(path.dirname(kit), SCREWS)
+  return [
+    `- What is screwed together has its screws in the model, as parts, and not only the holes for them: a lid on its box, a board on its posts. Put them in when you make such a thing, and whenever the user asks for screws. They come from the app's library, never drawn by you: ${SCREWS}, which has metric screws, nuts and washers in the sizes they are sold in, each with its thread and with the holes that fit it. Copy it into the project (cp "${library}" ${SCREWS}), leave it as it is, and read its docstring for how it is used. Where the project has an enclose.py, copy the app's in again with it (cp "${kit}" enclose.py): an older one draws a thread as a black band.`,
+    '- Choose the screw as someone who makes such things would, without asking: its size by how big the thing is and what it holds, its length by what it passes through and screws into, its head by where it sits. Make both of those parts to suit it, with the holes the library gives, and give it something to screw into where there is nothing. The screws that do one job are one part, of bare metal (finish="metal"), in a group for the fasteners, and its label says the job and the size: "Lid screws, M3 × 8".',
+    '- The user cannot tell one size of screw from another by looking, and has to buy them. So say in the short reply which you used and how many ("held by four M3 × 8 countersunk screws"), and in the details what to ask for, by the name the library gives it, with what turns it.',
+    canAsk
+      ? '- When the user wants the screws bigger, smaller or of another kind and names none, ask which before you change anything. Few people know that M2, M2.5 and M3 are sizes at all, so offer the ones either side of what is there, each by its name with what it measures in its description ("2.5 mm thread, 4.5 mm head: one size down"), and say which is there now.'
+      : "- When the user wants the screws bigger or smaller and names no size, go one size up or down, and say which it is now with what it measures, so that they can ask for another.",
+  ]
+}
+
+/**
+ * What an agent is told of reference scenes: what one is, which the app has for it to
+ * choose among, and how a project comes by one of its own.
+ */
+function referring(
+  tool: (set: string, name: string) => string,
+  kit: string,
+  scenes: AppScene[]
+): string[] {
+  if (scenes.length === 0) return []
+  const suited = scenes
+    .map((scene) => `${scene.id} for ${scene.suits}`)
+    .join("; ")
+  const scripts = scenes
+    .map((scene) => `${scene.id} is "${scene.script}"`)
+    .join(", ")
+  return [
+    `- The user can have the model shown in a reference scene (Cmd+/): things of a known real size drawn round it, plainly and all in one quiet tone, so that how big the model really is can be seen. A desk it stands on, a room it stands in, a person it stands beside. A scene is no part of the model: it is not in the model's manifest, and ${tool(VIEWPORT, "parts")} does not list it. When one shows in a screenshot, under or behind the model, take no account of it unless it is what you were asked about.`,
+    `- The app has scenes of its own to show a model in: ${suited}. Say which suits the thing whenever you make a model, or change what it is: the reference argument of enclose.Model (reference="${scenes.at(-1)!.id}"), or "reference" at the top of a manifest that is written some other way. Go by where the thing is used, not by how big it is: left unsaid, the app goes by size alone, and stands a small stool on the table.`,
+    `- A project can have a reference scene of its own, which the app then shows its model in, in place of the app's: a workbench in place of the desk, the shelf the thing is to stand on, the machine it fits. It is built the way the model is, by a script of its own: reference.py, at the top of the project, hands its shapes to enclose.Reference and writes reference/enclose.reference.json, which the app loads again whenever it is rewritten. The docstrings in enclose.py show how; an enclose.py with no Reference in it, or none that takes a mesh, is an older copy, to be replaced with the app's (cp "${kit}" enclose.py). The app's own scenes are written the same way and are what to start from: ${scripts}. The figure of a person in some of them is not built in the script but comes ready made, a mesh in person.glb beside it, which enclose.Reference takes as it is (mesh): a scene that keeps the figure wants that file copied in beside its own script. Given as a figure (figure=True) it is the user's to show or hide, with a button under the view, and is hidden until they ask for it: it may well not be in a screenshot.`,
+    "- A message that holds a <reference> block is about the reference scene the user has on screen, which the block names, and not about the model: leave the model as it is. Change the project's reference.py; where the project has none, copy in the script of the scene the block names and change that. Run it with the Python the model is built with, then take a screenshot and check the scene before you report it. What makes a scene worth having is that its sizes are real: take each from what the user says or from the standard for the thing, never from what looks right, and give the ones that matter in its detail. Keep it to a few plain shapes, since nothing in it should draw the eye from the model, and see that the model still stands where it should (stand).",
+  ]
+}
+
 /** What an agent is told about where it is, on top of its own instructions. */
 function guide(
   provider: ProviderId,
@@ -315,6 +363,8 @@ function guide(
   manifest: string | null,
   build: string | null,
   kit: string,
+  /** the reference scenes the app has of its own */
+  scenes: AppScene[],
   /** what the project goes by, when that is not its folder's name */
   called: string | null,
   /** that name is only a stand-in, until the model gives the project one */
@@ -351,8 +401,10 @@ function guide(
     "- Grouping the parts is your job, not the user's. Whenever you add, split, merge or remove parts, put each one in the group a person would look for it in, by what it belongs to or what it does (the enclosure, the electronics, the fasteners), and add a group when none fits. Keep group and part labels short and plain. Do this without being asked and without asking. Regroup only when the user asks for a different arrangement, or when the model has changed so much that the old one no longer makes sense; if the user arranges the groups themselves, keep to their arrangement.",
     "- When the user pulls the model apart (Explode), a model that gives its parts no explode of their own comes apart by its groups. The parts of a group that touch one another go as one piece, so that a circuit board keeps its components and a switch its pins. The parts of the outside (a group made with shell=True) each go their own way, and so do parts in no group. So keep what is one object in one group, and make the group that encloses the rest the outside.",
     `- Colour is the app's job. It draws every part in one of its own colours (${PALETTE_NAMES.join(", ")}), and a part given no colour takes the one that falls to its group, so parts that belong together match and groups differ. Leave colour out unless the user asks for one or parts within a group need telling apart; then name one of those. Any other colour is drawn as the nearest of them, unless it is a grey, white or black, which is drawn as it is.`,
+    ...referring(tool, kit, scenes),
     ...SIZES,
     ...(canAsk ? QUESTIONS : []),
+    ...fastening(kit, canAsk),
   ]
   if (manifest) {
     lines.push(
@@ -383,7 +435,7 @@ function guide(
       '  3. Find a Python that has build123d: try python3 -c "import build123d". If it has not, make a virtual environment in the folder (python3 -m venv .venv, then .venv/bin/pip install build123d; or uv if it is installed) and use that one.',
       '  4. Write enclose.json at the top of the folder, naming the model and the build command: { "model": "build/enclose.model.json", "build": "python3 model.py" }, with the Python you found. Paths in it are relative to the folder, never absolute.',
       "  5. Run the build. The model shows in the app by itself once build/enclose.model.json is written. Then take a screenshot and check the result before you report it.",
-      "- Keep the folder plain: model.py, enclose.py, enclose.json, and build/, which is output and never edited by hand (if the folder is a git repository, ignore build/ and .venv/).",
+      `- Keep the folder plain: model.py, enclose.py, enclose.json, ${SCREWS} where the thing has screws, and build/, which is output and never edited by hand (if the folder is a git repository, ignore build/ and .venv/).`,
       "- Start with the simplest thing that is what they asked for, show it, and say in a sentence or two what you assumed (sizes, wall thickness) so that they can correct it.",
       "",
       "A project that cannot use build123d can write the model's files some other way, as long as they come out in this format:",
@@ -394,21 +446,29 @@ function guide(
   return lines.join("\n")
 }
 
+/**
+ * The reference scene a message is about: what it goes by, and, where it is one of the
+ * app's own and not the project's, what the app knows it by.
+ */
+export type Referenced = { name: string; app: string | null }
+
 /** What Claude has not been told of what was taken back of its turns, and put back. */
 export type Told = { undone: string[]; redone: string[] }
 const NOT_TOLD: Told = { undone: [], redone: [] }
 
 /**
  * The message as Claude gets it: which of its turns have had what they did taken back
- * since it last heard, or put back; the whole objects the message is about; what was
- * said of parts of the model; and then the message. A message that is a command leads
- * with it, or Claude Code would not know it for one.
+ * since it last heard, or put back; the reference scene the message is about, if it is
+ * about that and not the model; the whole objects it is about; what was said of parts
+ * of the model; and then the message. A message that is a command leads with it, or
+ * Claude Code would not know it for one.
  */
 export function withNotes(
   text: string,
   notes: PartNote[],
   objects: ObjectRef[] = [],
-  told: Told = NOT_TOLD
+  told: Told = NOT_TOLD,
+  reference: Referenced | null = null
 ): string {
   const turned = (["undone", "redone"] as const).flatMap((how) =>
     told[how].length > 0
@@ -423,7 +483,21 @@ export function withNotes(
         ]
       : []
   )
-  if (notes.length === 0 && objects.length === 0 && turned.length === 0)
+  // in one line, and nothing in it that would end the name early
+  const named = (name: string) => name.replace(/"/g, "'").replace(/\s+/g, " ")
+  const scene = reference
+    ? [
+        reference.app
+          ? `<reference scene="${named(reference.name)}" of="the app" known-as="${reference.app}" />`
+          : `<reference scene="${named(reference.name)}" of="this project" />`,
+      ]
+    : []
+  if (
+    notes.length === 0 &&
+    objects.length === 0 &&
+    turned.length === 0 &&
+    scene.length === 0
+  )
     return text
   const at = (v: number[] | null) =>
     v ? v.map((n) => n.toFixed(2)).join(", ") : "unknown"
@@ -450,7 +524,7 @@ export function withNotes(
           "</comments>",
         ]
       : []
-  const ahead = [turned, called, comments]
+  const ahead = [turned, scene, called, comments]
     .filter((block) => block.length > 0)
     .flatMap((block, index) => (index > 0 ? ["", ...block] : block))
   return (text.startsWith("/") ? [text, "", ...ahead] : [...ahead, "", text])
@@ -472,7 +546,9 @@ export function lookOverAsked(
   seen: Seen,
   files: string[],
   /** what the agent it is put to knows the app's tools as */
-  tool: (set: string, name: string) => string = toolName
+  tool: (set: string, name: string) => string = toolName,
+  /** the reference scenes the app has, for it to say which the thing is best seen in */
+  scenes: Pick<AppScene, "id" | "suits">[] = []
 ): Content {
   const mm = (v: number[]) => v.map((n) => Math.round(n * 10) / 10).join(" × ")
   const at = (v: number[]) => v.map((n) => Math.round(n * 10) / 10).join(", ")
@@ -530,6 +606,11 @@ export function lookOverAsked(
         "",
         `Work out what the thing is, what each part is, and where a person would look for it. Then call ${tool(MODEL, "arrange")} once, with all of it:`,
         "- what: what the thing is, in a few plain words.",
+        ...(scenes.length > 0
+          ? [
+              `- reference: which of the app's reference scenes the thing is best seen in, which the user can have drawn round the model to judge its size by: ${scenes.map((scene) => `${scene.id} for ${scene.suits}`).join("; ")}. Go by where the thing is used, not by how big it is.`,
+            ]
+          : []),
         "- groups: the groups, in the order the list of parts is to show them. Group the parts by what they belong to or what they do (the case, the mechanism, the electronics, the fasteners). Most models want two to six groups; a handful of parts can be one. Mark as outside any group that encloses the rest, so that the app can show what is inside through it. When the user pulls the model apart, the outside comes apart part by part, and in every other group the parts that touch one another stay together as one object: so keep what is one object in one group (a circuit board with the components on it, a switch with its pins), and never in the outside.",
         '- parts: every part by its id as listed above, with the name it is to go by and its group. Keep a name the file gave where it is a good one, tidied to sentence case ("back cover" becomes "Back cover"). Give a new one where the file\'s says nothing ("Solid 12", "Body3"), from the part\'s shape and its place: say what it is ("Lid", "M3 screw"), or failing that what it looks like ("Round spacer"), never a guess passed off as known. Names are short and plain, and no two parts share one: parts that are alike are numbered ("Planet gear 1", "Planet gear 2").',
         "",
@@ -554,7 +635,12 @@ function wordsOf(item: Extract<ThreadItem, { kind: "user" | "assistant" }>) {
   // nothing but what was said of parts: or, with nothing said at all, what it is about
   const said = (item.notes ?? []).map((note) => note.text)
   return (
-    said.length > 0 ? said : (item.objects ?? []).map((one) => one.label)
+    said.length > 0
+      ? said
+      : [
+          ...(item.reference ? [item.reference] : []),
+          ...(item.objects ?? []).map((one) => one.label),
+        ]
   ).join(" · ")
 }
 
@@ -783,10 +869,13 @@ export class Threads {
     text: string,
     notes: PartNote[],
     objects: ObjectRef[],
-    manner: Manner
+    manner: Manner,
+    /** the reference scene on screen, when that is what the message is about */
+    reference: Referenced | null = null
   ): string | null {
     return this.begin(projectId, conversationId, text, notes, objects, manner, {
-      content: (told) => withNotes(text, notes, objects, told),
+      content: (told) => withNotes(text, notes, objects, told, reference),
+      reference: reference?.name,
     })
   }
 
@@ -819,7 +908,8 @@ export class Threads {
       content: lookOverAsked(
         TAKES_PICTURES[manner.provider] ? seen : { ...seen, pictures: [] },
         files,
-        knownAs(manner.provider)
+        knownAs(manner.provider),
+        this.deps.scenes
       ),
       arrange,
     })
@@ -838,7 +928,12 @@ export class Threads {
     notes: PartNote[],
     objects: ObjectRef[],
     manner: Manner,
-    asked: { content: Content | ((told: Told) => Content); arrange?: Arranging }
+    asked: {
+      content: Content | ((told: Told) => Content)
+      arrange?: Arranging
+      /** what the reference scene the message is about goes by, if it is about one */
+      reference?: string
+    }
   ): string | null {
     const project = this.deps.projects.get(projectId)
     const book = this.book(projectId)
@@ -871,6 +966,7 @@ export class Threads {
       part: null,
       ...(notes.length > 0 ? { notes } : {}),
       ...(objects.length > 0 ? { objects } : {}),
+      ...(asked.reference ? { reference: asked.reference } : {}),
       ...(asked.arrange ? { lookOver: true as const } : {}),
     }
     this.put(projectId, conversation, said)
@@ -920,6 +1016,7 @@ export class Threads {
       project.manifest,
       project.build,
       this.deps.kit,
+      this.deps.scenes,
       project.name ?? null,
       project.standIn === true,
       // The tool that asks the user things is Claude Code's, and the app has a form for
@@ -934,7 +1031,12 @@ export class Threads {
     const tools: Record<string, AppTool[]> = {
       [VIEWPORT]: viewportTools((kind) => this.deps.viewport(projectId, kind)),
       ...(arrange
-        ? { [MODEL]: modelTools((given) => arrange(given, abort.signal)) }
+        ? {
+            [MODEL]: modelTools(
+              (given) => arrange(given, abort.signal),
+              this.deps.scenes.map((scene) => scene.id)
+            ),
+          }
         : {}),
     }
 

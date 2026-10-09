@@ -10,6 +10,7 @@ import {
 
 import type { ConversationSummary, Project, ThreadItem } from "@shared/api"
 import { Composer } from "@/components/composer"
+import { ReferenceIcon } from "@/components/icons"
 import { QuestionCard } from "@/components/question"
 import { Reply } from "@/components/reply"
 import { Steps } from "@/components/steps"
@@ -59,6 +60,13 @@ function UserMessage({ item }: { item: Of<"user"> }) {
         <Badge variant="outline">
           <BoxIcon data-icon="inline-start" />
           {goesBy(item.part)}
+        </Badge>
+      )}
+      {/* it was about the reference scene the model was set in, and not the model */}
+      {item.reference && (
+        <Badge variant="outline" title={item.reference}>
+          <ReferenceIcon data-icon="inline-start" />
+          Reference scene
         </Badge>
       )}
       {/* the whole objects it is about, each by what it goes by */}

@@ -40,6 +40,10 @@ const api: CadApi = {
     saveDrawings: (folder, drawings) =>
       ipcRenderer.invoke(CHANNEL.modelSaveDrawings, folder, drawings),
   },
+  reference: {
+    scenes: (projectId) =>
+      ipcRenderer.invoke(CHANNEL.referenceScenes, projectId),
+  },
   changes: {
     undo: (projectId) => ipcRenderer.invoke(CHANNEL.changesUndo, projectId),
     redo: (projectId) => ipcRenderer.invoke(CHANNEL.changesRedo, projectId),
@@ -47,7 +51,15 @@ const api: CadApi = {
   thread: {
     items: (projectId, conversationId) =>
       ipcRenderer.invoke(CHANNEL.threadItems, projectId, conversationId),
-    send: (projectId, conversationId, text, notes, objects, manner) =>
+    send: (
+      projectId,
+      conversationId,
+      text,
+      notes,
+      objects,
+      manner,
+      reference
+    ) =>
       ipcRenderer.invoke(
         CHANNEL.threadSend,
         projectId,
@@ -55,7 +67,8 @@ const api: CadApi = {
         text,
         notes,
         objects,
-        manner
+        manner,
+        reference ?? null
       ),
     lookOver: (projectId, seen, manner) =>
       ipcRenderer.invoke(CHANNEL.threadLookOver, projectId, seen, manner),

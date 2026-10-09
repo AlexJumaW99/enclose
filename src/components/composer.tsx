@@ -21,7 +21,7 @@ import type {
   Provider,
   ProviderId,
 } from "@shared/api"
-import { ProviderIcon } from "@/components/icons"
+import { ProviderIcon, ReferenceIcon } from "@/components/icons"
 import { MentionMenu, type Choice } from "@/components/mention-menu"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -372,8 +372,10 @@ const OFF =
  * what has been said of parts. A chip for each, in one row that scrolls sideways when
  * there are more than fit, so that however many there are the box is no taller for
  * them. A part called on is a chip of its name, and so is a whole object, which is one
- * chip however many parts it is made of. What was said of a part is a chip that says
- * which part and how it begins; pressed, it opens that again beside the part.
+ * chip however many parts it is made of. The reference scene the model is set in is a
+ * chip too, and with it on the box the message is about the scene. What was said of a
+ * part is a chip that says which part and how it begins; pressed, it opens that again
+ * beside the part.
  */
 function Waiting({ called, notes }: { called: Called[]; notes: Note[] }) {
   const write = useStore((state) => state.write)
@@ -389,14 +391,18 @@ function Waiting({ called, notes }: { called: Called[]; notes: Note[] }) {
             data-called={part.id}
             variant="secondary"
             title={
-              part.parts
-                ? `The whole of it: ${part.parts.length} parts`
-                : `@${part.id}`
+              part.scene
+                ? "This message is about the reference scene, not the model"
+                : part.parts
+                  ? `The whole of it: ${part.parts.length} parts`
+                  : `@${part.id}`
             }
             className="h-6 max-w-44 shrink-0 gap-1 pr-1"
           >
-            {/* a whole object has the sign the list of parts has */}
+            {/* a whole object has the sign the list of parts has, and the scene the
+                sign of its own button */}
             {part.parts && <BoxesIcon className="shrink-0" />}
+            {part.scene && <ReferenceIcon className="shrink-0" />}
             <span className="truncate">{part.label}</span>
             <button
               type="button"

@@ -147,12 +147,13 @@ export function sortOpened(
 }
 
 /**
- * What Claude makes of a model on looking it over: what the thing is, the groups its
- * parts go in, and each part, by the id it was read under, with the name it is to go by
- * and its group.
+ * What Claude makes of a model on looking it over: what the thing is, which of the app's
+ * reference scenes it is best seen in, the groups its parts go in, and each part, by the
+ * id it was read under, with the name it is to go by and its group.
  */
 export type Arrangement = {
   what: string
+  reference?: string
   groups: { name: string; outside?: boolean }[]
   parts: { id: string; name: string; group: string }[]
 }
@@ -160,6 +161,8 @@ export type Arrangement = {
 /** The same, made fit to write a model.py with. */
 export type Arranged = {
   what: string
+  /** the reference scene of the app's that suits the thing, where one was named */
+  reference: string | null
   groups: { label: string; shell: boolean }[]
   /** `from` is the id a part is read from the files under; `id` the one it has here */
   parts: { from: string; id: string; label: string; group: string }[]
@@ -186,12 +189,14 @@ const slug = (text: string) =>
 /**
  * Put a model's parts in the order Claude gave: each under its new name, in its group.
  * `read` is the parts as the files gave them. A part Claude left out stays as it was
- * read. Throws, in words for Claude to mend what it gave by, when that cannot be gone
+ * read. `scenes` are the reference scenes the app has, by what each is known by: one
+ * that is none of them is left out, and the app goes by the model's size. Throws, in words for Claude to mend what it gave by, when that cannot be gone
  * by: a part that is not one of the model's, or one with no name or no group.
  */
 export function arrange(
   read: { id: string; label: string; group: string }[],
-  given: Arrangement
+  given: Arrangement,
+  scenes: string[] = []
 ): Arranged {
   const wanted = new Map<string, { label: string; group: string }>()
   for (const part of Array.isArray(given.parts) ? given.parts : []) {
@@ -235,6 +240,7 @@ export function arrange(
   })
   return {
     what: named(given.what),
+    reference: scenes.find((scene) => scene === given.reference) ?? null,
     // a group with nothing put in it is not listed
     groups: [...groups.values()].filter((group) =>
       parts.some((part) => part.group === group.label)
@@ -303,7 +309,9 @@ export function modelScript(
     "",
     "from enclose import Model, read_step",
     "",
-    `model = Model(${py(title)})`,
+    arranged.reference
+      ? `model = Model(${py(title)}, reference=${py(arranged.reference)})`
+      : `model = Model(${py(title)})`,
     "",
     "# The groups the parts are listed under, in the order the list shows them.",
     "groups = {",

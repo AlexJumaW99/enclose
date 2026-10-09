@@ -76,6 +76,12 @@ export type Project = {
   lookOver: "wanted" | "underway" | null
   /** goes up each time the manifest is rewritten, so the window knows to reload */
   revision: number
+  /**
+   * Whether it has a reference scene of its own, in its folder, for its model to be seen
+   * in: null if not, and otherwise a number that goes up each time the scene is
+   * rewritten, so the window knows to load it again.
+   */
+  reference: number | null
   /** the latest thing Claude did to its files that can be taken back, and put back */
   undo: Undoable | null
   redo: Undoable | null
@@ -138,6 +144,11 @@ export type ThreadItem =
        * each as one thing, and not as the parts it is made of.
        */
       objects?: ObjectRef[]
+      /**
+       * The message is about the reference scene the model was shown in, and not about
+       * the model: this is what the scene goes by.
+       */
+      reference?: string
       /**
        * Not said by the user: asked by the app itself of files just opened, that Claude
        * look their model over.
@@ -349,6 +360,24 @@ export type ModelSource = {
   baseUrl: string
 }
 
+/**
+ * A reference scene, as the window is handed it: things of a known real size for a
+ * model to be seen beside, so that how big the model is can be told. It is one of the
+ * app's own, known by its name ("table"), or the one the project has in its folder.
+ */
+export type ReferenceSource = {
+  id: string
+  /** the project's own, and not one of the app's */
+  own: boolean
+  /** the scene's manifest, parsed but not yet checked */
+  manifest: unknown
+  /** prefix for every file the manifest names */
+  baseUrl: string
+}
+
+/** What a project's own reference scene is known by, among the app's. */
+export const OWN_SCENE = "own"
+
 export type ViewportRequest = {
   id: number
   projectId: string
@@ -429,6 +458,14 @@ export type CadApi = {
       drawings: { name: string; svg: string }[]
     ): Promise<boolean>
   }
+  reference: {
+    /**
+     * The reference scenes a project's model can be seen in: its own first, if it has
+     * one, and then the app's, from those for the smallest things to those for the
+     * biggest.
+     */
+    scenes(projectId: string): Promise<ReferenceSource[]>
+  }
   thread: {
     items(projectId: string, conversationId: string): Promise<ThreadItem[]>
     /**
@@ -441,7 +478,12 @@ export type CadApi = {
       text: string,
       notes: PartNote[],
       objects: ObjectRef[],
-      manner: Manner
+      manner: Manner,
+      /**
+       * the reference scene on screen, by what it is known by, when that is what the
+       * message is about
+       */
+      reference?: string | null
     ): Promise<string | null>
     /**
      * Have Claude look over the model of files just opened, from what the view shows of
@@ -527,6 +569,7 @@ export const CHANNEL = {
   modelSaveDrawing: "model:save-drawing",
   modelSaveDrawings: "model:save-drawings",
   modelNameGroup: "model:name-group",
+  referenceScenes: "reference:scenes",
   threadItems: "thread:items",
   threadSend: "thread:send",
   threadLookOver: "thread:look-over",
@@ -550,5 +593,10 @@ export const CHANNEL = {
   viewportResponse: "viewport:response",
 } as const
 
-/** The scheme the window loads model files through: cad-model://<project id>/<file>. */
+/**
+ * The scheme the window loads model files through: cad-model://<project id>/<file>.
+ * The files of a reference scene come the same way, from a host that says whose it is:
+ * <project id>.reference for a project's own, and <name>.scene for one of the app's.
+ */
 export const MODEL_SCHEME = "cad-model"
+export const SCENE_HOST = { own: "reference", app: "scene" } as const

@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest"
 
 import type { Seen } from "../shared/api"
-import { answersTo, lookOverAsked, questionsOf, withNotes } from "./threads"
+import {
+  answersTo,
+  fastening,
+  lookOverAsked,
+  questionsOf,
+  withNotes,
+} from "./threads"
 
 const part = (id: string, label = id): Seen["parts"][number] => ({
   id,
@@ -30,6 +36,28 @@ function read(seen: Seen, files = ["source/box.step"]) {
 }
 
 describe("lookOverAsked", () => {
+  it("asks which reference scene suits the thing, of the ones the app has", () => {
+    const content = lookOverAsked(
+      { pictures: [], parts: [part("solid_1")] },
+      ["source/stool.step"],
+      undefined,
+      [
+        { id: "table", suits: "a thing that stands on a desk" },
+        { id: "room", suits: "a thing that stands on the floor" },
+      ]
+    )
+    const words = (typeof content === "string" ? [] : content)
+      .flatMap((block) => (block.type === "text" ? [block.text] : []))
+      .join("\n")
+    expect(words).toContain(
+      "table for a thing that stands on a desk; room for a thing that stands on the floor"
+    )
+    // and with none to choose among, it is not asked
+    expect(
+      read({ pictures: [], parts: [part("solid_1")] }).words
+    ).not.toContain("- reference:")
+  })
+
   it("shows each picture under what it is, then lists the parts", () => {
     const { kinds, words } = read({
       pictures: [picture("the model put together."), picture("pulled apart.")],
@@ -113,6 +141,33 @@ describe("withNotes", () => {
     )
   })
 
+  it("says which reference scene a message is about, and whose it is", () => {
+    expect(
+      withNotes("Make it a workbench", [], [], undefined, {
+        name: "Table",
+        app: "table",
+      })
+    ).toBe(
+      [
+        '<reference scene="Table" of="the app" known-as="table" />',
+        "",
+        "Make it a workbench",
+      ].join("\n")
+    )
+    expect(
+      withNotes("Add a vice", [], [], undefined, {
+        name: 'My "bench"',
+        app: null,
+      })
+    ).toBe(
+      [
+        '<reference scene="My \'bench\'" of="this project" />',
+        "",
+        "Add a vice",
+      ].join("\n")
+    )
+  })
+
   it("puts them ahead of what was said of parts, and both after a command", () => {
     const said = withNotes(
       "and tidy up",
@@ -173,6 +228,24 @@ describe("withNotes", () => {
     ).toContain(
       '<comment object="Main board" parts="pcb chip socket" part="Chip" id="chip" point='
     )
+  })
+})
+
+describe("fastening", () => {
+  it("says where the library of screws is: beside the exporter", () => {
+    const told = fastening("/app/kit/enclose.py", true).join("\n")
+    expect(told).toContain('cp "/app/kit/screws.py" screws.py')
+    // and the exporter that draws a thread as it should goes in with it
+    expect(told).toContain('cp "/app/kit/enclose.py" enclose.py')
+  })
+
+  it("has a size that was not named asked after, where there is a way to ask", () => {
+    const asking = fastening("/app/kit/enclose.py", true)
+    const telling = fastening("/app/kit/enclose.py", false)
+    expect(asking.at(-1)).toContain("ask which before you change anything")
+    expect(telling.at(-1)).toContain("go one size up or down")
+    // the rest is the same, whoever is told it
+    expect(asking.slice(0, -1)).toEqual(telling.slice(0, -1))
   })
 })
 

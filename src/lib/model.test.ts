@@ -39,6 +39,13 @@ describe("readModel", () => {
     expect(model.keepoutsLabel).toBe("Keep-outs")
   })
 
+  it("reads the reference scene a model names, where it names one", () => {
+    expect(readModel({ reference: "room", parts: [part("a")] }).reference).toBe(
+      "room"
+    )
+    expect(readModel({ parts: [part("a")] }).reference).toBeNull()
+  })
+
   it("lists a group that a part names but nobody declared", () => {
     const model = readModel({
       // "control": "shell" is how the first version of the format marked the outside

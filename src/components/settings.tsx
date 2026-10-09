@@ -332,6 +332,7 @@ const KEYS: { title: string; rows: [string, string[]][] }[] = [
       ["Section", ["S"]],
       ["Section axis", ["X", "Y", "Z"]],
       ["Explode", ["E"]],
+      ["Reference", [CMD, "/"]],
       ["Isolate the selection", ["I"]],
       ["Hide the selection, or show everything", ["H"]],
       ["Blueprint", ["B"]],
