@@ -80,6 +80,13 @@ const MARGIN = 1.35
 const LEAST_CLEAR = 240
 /** And when the view it opens with is: less, since that one is seen from a corner. */
 const HOME_MARGIN = 1.18
+/**
+ * How big a model is seen while Claude looks it over, and the camera goes round it by
+ * itself, as a share of how big it opens: the camera stands further back to watch. So
+ * that when Claude is through, and the camera goes back to where a model opens, the view
+ * comes in to the model as it does.
+ */
+const WATCHING = 0.75
 
 const { ACTION } = CameraControlsImpl
 
@@ -124,6 +131,8 @@ function direct(stage: {
   let tie: Tie | null = null
   /** true until the user moves the camera themselves */
   let atHome = true
+  /** how big the model is seen from where the camera stands, as a share of how it opens */
+  let seen = 1
   /** counts the times the camera was sent to a set view */
   let sent = 0
   /** the scale the flat view is at, or on its way to, in pixels per mm */
@@ -345,9 +354,13 @@ function direct(stage: {
       target: controls.getTarget(new THREE.Vector3(), false).toArray(),
     }),
 
-    /** The view a model opens with, framing all of it. */
-    home(animate: boolean, ratio: number) {
+    /**
+     * The view a model opens with, framing all of it: or from further back than that,
+     * where the model is seen `small` times as big.
+     */
+    home(animate: boolean, ratio: number, small = 1) {
       ++sent
+      seen = small
       const toward = toWorld(HOME_DIRECTION)
       const polar = Math.acos(toward.y)
       // stand back just far enough that all of what is framed is in the view
@@ -382,14 +395,14 @@ function direct(stage: {
         animate
       )
       void controls.moveTo(target.x, target.y, target.z, animate)
-      void controls.dollyTo(distance * narrowing, animate)
+      void controls.dollyTo((distance / small) * narrowing, animate)
       atHome = true
       stage.redraw()
     },
 
     /** The view changed shape: keep the model framed, unless the user chose their own view. */
     reshape(ratio: number) {
-      if (atHome && mode === "lens") this.home(false, ratio)
+      if (atHome && mode === "lens") this.home(false, ratio, seen)
     },
 
     /** Look at the model square-on from the end of one of its axes, flat and fitted. */
@@ -769,14 +782,28 @@ export function Rig({
     }
   }, [lens, flat, get, set, invalidate])
 
-  // reframes when a different model opens or home is asked for - not when the same
-  // model is rebuilt, which should not move the camera
+  // Not for whoever has asked for less to move: the camera going round by itself, and
+  // its standing back to do it.
+  const still = React.useMemo(
+    () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    []
+  )
+  const watching = circling && !still
+
+  // Reframes when a different model opens or home is asked for - not when the same
+  // model is rebuilt, which should not move the camera. And when the camera begins to go
+  // round by itself, or is through: it watches from a little further back, and comes in
+  // again to where a model opens when there is no more to watch.
   const first = React.useRef(true)
   const shape = React.useRef(aspect)
   React.useEffect(() => {
-    director.current?.home(!first.current, shape.current)
+    director.current?.home(
+      !first.current,
+      shape.current,
+      watching ? WATCHING : 1
+    )
     first.current = false
-  }, [homeKey])
+  }, [homeKey, watching])
 
   // the view changed shape: a panel opened, or the window was resized
   React.useEffect(() => {
@@ -918,15 +945,11 @@ export function Rig({
   }, [gl])
 
   // Going round by itself: a little further each frame, the way a drag would take it,
-  // and gently into it. Not for whoever has asked for less to move.
+  // and gently into it.
   const round = React.useRef(0)
-  const still = React.useMemo(
-    () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-    []
-  )
   useFrame((_, delta) => {
     const step = Math.min(delta, STEP)
-    if (circling && !still) {
+    if (watching) {
       round.current += step
       const pace = Math.min(1, round.current / CIRCLE.ease)
       director.current?.orbit(CIRCLE.rate * pace * pace * step, 0)

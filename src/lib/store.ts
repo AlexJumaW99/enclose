@@ -11,6 +11,7 @@ import {
 import { finishedNow, stackOf, type Stack } from "@/lib/conversations"
 import { cutsOf, readCuts } from "@/lib/cuts"
 import { mannerOf, savedAccess } from "@/lib/manner"
+import { answering, offeredModels, usable } from "@/lib/providers"
 import { callingOn, notCalledOn } from "@/lib/mentions"
 import { usePreferences } from "@/lib/preferences"
 import {
@@ -29,15 +30,18 @@ import { PALETTE, type PaletteName } from "@shared/palette"
 
 import {
   EFFORTS,
+  PROVIDERS,
   type Access,
-  type ClaudeStatus,
   type Commands,
+  type ConversationSummary,
   type Effort,
-  type ModelChoice,
   type ObjectRef,
   type PartNote,
   type PartRef,
   type Project,
+  type Provider,
+  type ProviderId,
+  type ProviderSettings,
   type Seen,
   type ThreadItem,
   type Vec3,
@@ -125,8 +129,21 @@ const NONE: string[] = []
 
 const ACTIVE_KEY = "enclose:project"
 const ACCESS_KEY = "enclose:access"
+const PROVIDER_KEY = "enclose:provider"
 const MODEL_KEY = "enclose:model"
 const EFFORT_KEY = "enclose:effort"
+/**
+ * What is kept of one agent is kept under its name: all but Claude Code's, which was
+ * kept before there were others.
+ */
+const keyOf = (key: string, provider: ProviderId) =>
+  provider === "claude" ? key : `${key}:${provider}`
+/** Something of each agent, by agent. */
+const each = <Value>(of: (provider: ProviderId) => Value) =>
+  Object.fromEntries(PROVIDERS.map((id) => [id, of(id)])) as Record<
+    ProviderId,
+    Value
+  >
 const MODE_KEY = "enclose:mode"
 const GRID_KEY = "enclose:grid"
 const DIMENSIONS_KEY = "enclose:dimensions"
@@ -346,15 +363,16 @@ type State = {
   /** whether the settings are over the window */
   settingsOpen: boolean
   access: Access
-  /** the model picked to answer, as Claude Code knows it; null leaves it to Claude Code */
-  model: string | null
-  /** how hard it is to think; null leaves that to Claude Code too */
-  effort: Effort | null
-  /** the models Claude Code offers, once it has said */
-  models: ModelChoice[]
+  /** the agents there are, once the app has said: Claude Code, Codex, Grok */
+  providers: Provider[]
+  /** whose agent a conversation is begun with: one carried on keeps the one it has */
+  provider: ProviderId
+  /** the model picked of each agent's, as it knows it; null leaves it to the agent */
+  model: Record<ProviderId, string | null>
+  /** how hard each is to think; null leaves that to the agent too */
+  effort: Record<ProviderId, Effort | null>
   /** what Claude Code can be called on for in each project's folder, once it has said */
   commands: Record<string, Commands>
-  claude: ClaudeStatus | null
   view: View
   /** the cut each project was last left with: where cutting it open again starts from */
   cuts: Record<string, Section>
@@ -526,8 +544,9 @@ type State = {
    */
   leave(): boolean
   setAccess(access: Access): void
-  setModel(model: string | null): void
-  setEffort(effort: Effort | null): void
+  setProvider(provider: ProviderId): void
+  setModel(provider: ProviderId, model: string | null): void
+  setEffort(provider: ProviderId, effort: Effort | null): void
   /** Send what is in the open project's message box, with what has been said of its parts. */
   send(): void
   /**
@@ -632,11 +651,14 @@ export const useStore = create<State>()((set, get) => ({
   partsOpen: false,
   settingsOpen: false,
   access: savedAccess(saved(ACCESS_KEY)),
-  model: saved(MODEL_KEY) || null,
-  effort: EFFORTS.find((effort) => effort === saved(EFFORT_KEY)) ?? null,
-  models: [],
+  providers: [],
+  provider: PROVIDERS.find((one) => one === saved(PROVIDER_KEY)) ?? "claude",
+  model: each((id) => saved(keyOf(MODEL_KEY, id)) || null),
+  effort: each(
+    (id) =>
+      EFFORTS.find((effort) => effort === saved(keyOf(EFFORT_KEY, id))) ?? null
+  ),
   commands: {},
-  claude: null,
   view: homeView(),
   cuts: readCuts(saved(CUTS_KEY)),
   entered: [],
@@ -1024,18 +1046,23 @@ export const useStore = create<State>()((set, get) => ({
     set({ access })
   },
 
-  setModel(model) {
-    localStorage.setItem(MODEL_KEY, model ?? "")
-    set({ model })
+  setProvider(provider) {
+    localStorage.setItem(PROVIDER_KEY, provider)
+    set({ provider })
   },
 
-  setEffort(effort) {
-    localStorage.setItem(EFFORT_KEY, effort ?? "")
-    set({ effort })
+  setModel(provider, model) {
+    localStorage.setItem(keyOf(MODEL_KEY, provider), model ?? "")
+    set((state) => ({ model: { ...state.model, [provider]: model } }))
+  },
+
+  setEffort(provider, effort) {
+    localStorage.setItem(keyOf(EFFORT_KEY, provider), effort ?? "")
+    set((state) => ({ effort: { ...state.effort, [provider]: effort } }))
   },
 
   send() {
-    const { activeId, access, model, effort, models, projects, picked } = get()
+    const { activeId, projects, picked } = get()
     const project = projects.find((p) => p.id === activeId)
     if (!project) return
     // the parts called on from the view go ahead of what is written, by name: and the
@@ -1071,7 +1098,7 @@ export const useStore = create<State>()((set, get) => ({
         message,
         notes.map(({ part, text }) => ({ part, text })),
         objects,
-        mannerOf(models, model, effort, access)
+        mannerIn(get(), open)
       )
       .then((id) => {
         // stay with it: a conversation that has just begun is not yet the one on the
@@ -1082,22 +1109,59 @@ export const useStore = create<State>()((set, get) => ({
   },
 
   async lookOver(projectId, seen) {
-    const { access, model, effort, models } = get()
     const id = await window.cad.thread.lookOver(
       projectId,
       seen,
-      mannerOf(models, model, effort, access)
+      mannerIn(get(), null)
     )
     // what comes of it is what the conversation panel shows, when it is brought up
     if (id) set((state) => ({ picked: { ...state.picked, [projectId]: id } }))
   },
 }))
 
-/** Ask Claude Code what models it has, if it has not yet said. */
-export async function askModels() {
-  if (useStore.getState().models.length > 0) return
-  const models = await window.cad.claude.models()
-  if (models.length > 0) useStore.setState({ models })
+/**
+ * How a message said in a conversation will be answered, from what is picked: by the
+ * agent the conversation is had with, or the one picked for a new one (null).
+ */
+function mannerIn(
+  state: Pick<State, "providers" | "provider" | "model" | "effort" | "access">,
+  conversation: Pick<ConversationSummary, "provider"> | null
+) {
+  const provider = answering(state.providers, state.provider, conversation)
+  return mannerOf(
+    provider,
+    offeredModels(state.providers.find((one) => one.id === provider)),
+    state.model[provider],
+    state.effort[provider],
+    state.access
+  )
+}
+
+/** Change what is chosen about one of the agents. */
+export async function changeProvider(
+  id: ProviderId,
+  patch: Partial<ProviderSettings>
+) {
+  useStore.setState({ providers: await window.cad.providers.change(id, patch) })
+}
+
+/** Have the agents looked at again: what is installed, who is signed in, what models. */
+export async function checkProviders() {
+  useStore.setState({ providers: await window.cad.providers.check() })
+}
+
+/** The agents are being looked at again, for one that had not said what models it has. */
+let asking: Promise<unknown> | null = null
+
+/**
+ * Have the agents looked at again if the one that is to answer has not said what models
+ * it has: it may not have been ready when the app started.
+ */
+export async function askModels(provider: ProviderId) {
+  const one = useStore.getState().providers.find((p) => p.id === provider)
+  if (!one || !usable(one) || one.models.length > 0 || one.checking) return
+  asking ??= checkProviders().finally(() => (asking = null))
+  await asking
 }
 
 /** How long what Claude Code said it has in a folder is taken as still so, in ms. */
@@ -1229,8 +1293,10 @@ export function connect() {
     reconcile(projects)
     useStore.setState({ ready: true })
   })
-  void cad.claude.status().then((claude) => useStore.setState({ claude }))
-  void askModels()
+  cad.providers.onChange((providers) => useStore.setState({ providers }))
+  void cad.providers
+    .list()
+    .then((providers) => useStore.setState({ providers }))
 }
 
 // lets a script drive the app when it is being checked without a person at it

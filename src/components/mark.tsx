@@ -6,11 +6,13 @@ import {
   ends,
   EXTENT,
   letter,
+  LETTER_WIDTH,
   LOOP,
   MARK,
   REST,
   rests,
   viewAt,
+  type Axis,
   type View,
 } from "@/lib/mark"
 
@@ -39,6 +41,47 @@ function useTurning(moving: boolean): View {
   return view
 }
 
+/** How long the bar of a minus is, and how far it stands from its letter: shares of the height. */
+const MINUS = { bar: 0.4, gap: 0.22 }
+
+/**
+ * An axis' letter as the mark draws it, `height` tall with its middle at (x, y): for
+ * wherever the axes are named. With a `minus` before it, it names the end an axis points
+ * away from: that bar is not the mark's, which letters only the ends it points to.
+ */
+export function Letter({
+  axis,
+  x,
+  y,
+  height,
+  minus = false,
+  ...props
+}: {
+  axis: Axis
+  x: number
+  y: number
+  height: number
+  minus?: boolean
+} & Omit<React.SVGProps<SVGPathElement>, "x" | "y" | "height">) {
+  const stroke = MARK.labelWeight * height
+  const bar = minus ? MINUS.bar * height : 0
+  const before = minus ? bar + MINUS.gap * height : 0
+  // the two are set round the middle together
+  const left = x - (before + LETTER_WIDTH * height) / 2
+  return (
+    <path
+      d={
+        (minus ? `M${left} ${y}h${bar}` : "") +
+        letter(axis, x + before / 2, y, height, stroke, MARK.labelRise * height)
+      }
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={stroke}
+      {...props}
+    />
+  )
+}
+
 /**
  * The Enclose mark: the model's three axes as a camera sees them, a filled dot with its
  * letter at the end each one points to and an outlined dot at the end it points away
@@ -59,8 +102,6 @@ export function Mark({
   className?: string
 }) {
   const view = useTurning(moving)
-  const height = MARK.labelSize * 2 * MARK.dot
-  const stroke = MARK.labelWeight * height
   return (
     <svg
       viewBox={`${-EXTENT} ${-EXTENT} ${2 * EXTENT} ${2 * EXTENT}`}
@@ -82,11 +123,12 @@ export function Mark({
               strokeLinecap="round"
             />
             <circle cx={cx} cy={cy} r={MARK.dot} fill="currentColor" />
-            <path
-              d={letter(axis, cx, cy, height, stroke, MARK.labelRise * height)}
-              fill="none"
+            <Letter
+              axis={axis}
+              x={cx}
+              y={cy}
+              height={MARK.labelSize * 2 * MARK.dot}
               stroke={ink}
-              strokeWidth={stroke}
             />
           </g>
         ) : (

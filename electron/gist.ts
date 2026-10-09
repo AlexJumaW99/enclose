@@ -6,8 +6,8 @@ import os from "node:os"
 
 import { query } from "@anthropic-ai/claude-agent-sdk"
 
-import type { ClaudeStatus } from "../shared/api"
-import { claudeEnv } from "./claude"
+import { running } from "./claude"
+import type { Launch } from "./providers"
 
 /** A message of more letters than this, once it is in one line, is summed up. */
 export const GIST_FROM = 64
@@ -56,7 +56,7 @@ export function tidy(answer: string): string | null {
  * or would not say.
  */
 export async function gistOf(
-  claude: ClaudeStatus,
+  claude: Launch | null,
   by: "user" | "assistant",
   text: string
 ): Promise<string | null> {
@@ -81,11 +81,11 @@ export async function gistOf(
  * to do, and `prompt` what it is to do it with.
  */
 export async function askOnce(
-  claude: ClaudeStatus,
+  claude: Launch | null,
   told: string,
   prompt: string
 ): Promise<string | null> {
-  if (!claude.path) return null
+  if (!claude) return null
   const abort = new AbortController()
   const timer = setTimeout(() => abort.abort(), TIMEOUT_MS)
   try {
@@ -93,8 +93,7 @@ export async function askOnce(
       prompt,
       options: {
         cwd: os.tmpdir(),
-        pathToClaudeCodeExecutable: claude.path,
-        env: claudeEnv(),
+        ...running(claude),
         abortController: abort,
         // the quickest model, answering straight off, with nothing to do it with but
         // what it is given, and none of it kept

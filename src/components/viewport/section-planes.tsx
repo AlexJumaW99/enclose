@@ -2,6 +2,7 @@ import * as THREE from "three"
 import { cn } from "cn"
 
 import type { Vec3 } from "@shared/api"
+import { Letter } from "@/components/mark"
 import { nearestAxis, normalOf, turnTo, type Axis } from "@/lib/orient"
 import { useStore } from "@/lib/store"
 import { bridge, useOrientation } from "./bridge"
@@ -10,6 +11,8 @@ import { bridge, useOrientation } from "./bridge"
 const H = 0.4
 /** How large the cube is drawn in the widget's 100-unit square. */
 const SIZE = 50
+/** How tall its letters are: as on the axes alongside. */
+const LETTER = 8.4
 
 // Three walls of a box, meeting at the corner furthest from where the camera starts:
 // one square across each axis.
@@ -125,21 +128,17 @@ export function SectionPlanes({
                   : "fill-foreground stroke-foreground [fill-opacity:0.12] [stroke-opacity:0.4] group-hover/wall:[fill-opacity:0.28]"
               )}
             />
-            <text
+            <Letter
+              axis={axis}
               x={x}
               y={y}
-              textAnchor="middle"
-              dominantBaseline="central"
-              fontSize={12}
-              fontWeight={700}
+              height={LETTER}
               className={
                 chosen
-                  ? "fill-primary-foreground"
-                  : "fill-foreground opacity-60"
+                  ? "stroke-primary-foreground"
+                  : "stroke-foreground opacity-60"
               }
-            >
-              {axis.toUpperCase()}
-            </text>
+            />
           </g>
         )
       })}

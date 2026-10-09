@@ -37,6 +37,8 @@ const api: CadApi = {
       ipcRenderer.invoke(CHANNEL.modelSaveCopies, projectId, files, folder),
     saveDrawing: (name, svg) =>
       ipcRenderer.invoke(CHANNEL.modelSaveDrawing, name, svg),
+    saveDrawings: (folder, drawings) =>
+      ipcRenderer.invoke(CHANNEL.modelSaveDrawings, folder, drawings),
   },
   changes: {
     undo: (projectId) => ipcRenderer.invoke(CHANNEL.changesUndo, projectId),
@@ -62,11 +64,18 @@ const api: CadApi = {
       ipcRenderer.invoke(CHANNEL.threadRename, projectId, conversationId, name),
     answer: (projectId, permissionId, answer) =>
       ipcRenderer.invoke(CHANNEL.threadAnswer, projectId, permissionId, answer),
+    tell: (projectId, questionId, answers) =>
+      ipcRenderer.invoke(CHANNEL.threadTell, projectId, questionId, answers),
     onItem: (listener) => on(CHANNEL.threadItem, listener),
   },
+  providers: {
+    list: () => ipcRenderer.invoke(CHANNEL.providersList),
+    change: (id, patch) =>
+      ipcRenderer.invoke(CHANNEL.providersChange, id, patch),
+    check: () => ipcRenderer.invoke(CHANNEL.providersCheck),
+    onChange: (listener) => on(CHANNEL.providersChanged, listener),
+  },
   claude: {
-    status: () => ipcRenderer.invoke(CHANNEL.claudeStatus),
-    models: () => ipcRenderer.invoke(CHANNEL.claudeModels),
     commands: (projectId) =>
       ipcRenderer.invoke(CHANNEL.claudeCommands, projectId),
   },

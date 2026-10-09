@@ -89,13 +89,13 @@ export function ends({ azimuth, elevation }: View) {
 type Point = [x: number, y: number]
 
 /** All three are as wide: this share of their height. */
-const WIDTH = 0.8
+export const LETTER_WIDTH = 0.8
 
 const LETTERS: Record<Axis, (h: number, s: number, rise: number) => Point[][]> =
   {
     x(h, s, rise) {
       const left = s / 2
-      const right = WIDTH * h - s / 2
+      const right = LETTER_WIDTH * h - s / 2
       return [
         [
           [left, 0],
@@ -113,8 +113,8 @@ const LETTERS: Record<Axis, (h: number, s: number, rise: number) => Point[][]> =
     },
     y(h, s, rise) {
       const left = s / 2
-      const right = WIDTH * h - s / 2
-      const middle = (WIDTH * h) / 2
+      const right = LETTER_WIDTH * h - s / 2
+      const middle = (LETTER_WIDTH * h) / 2
       // the arms meet the stem half way down, and both carry on down it
       return [
         [
@@ -133,7 +133,7 @@ const LETTERS: Record<Axis, (h: number, s: number, rise: number) => Point[][]> =
     },
     z(h, s, rise) {
       const left = s / 2
-      const right = WIDTH * h - s / 2
+      const right = LETTER_WIDTH * h - s / 2
       const top = s / 2
       const bottom = h - s / 2
       // the uprights hang from the bars, so they cannot be shorter than the bars are thick
@@ -145,7 +145,7 @@ const LETTERS: Record<Axis, (h: number, s: number, rise: number) => Point[][]> =
           [right, turn],
           [left, h - turn],
           [left, bottom],
-          [WIDTH * h, bottom],
+          [LETTER_WIDTH * h, bottom],
         ],
       ]
     },
@@ -165,7 +165,7 @@ export function letter(
   stroke: number,
   rise: number
 ): string {
-  const left = cx - (WIDTH * height) / 2
+  const left = cx - (LETTER_WIDTH * height) / 2
   const top = cy - height / 2
   return LETTERS[axis](height, stroke, rise)
     .map((line) =>

@@ -2,6 +2,8 @@ import * as React from "react"
 import * as THREE from "three"
 import { cn } from "cn"
 
+import { Letter } from "@/components/mark"
+import { MARK } from "@/lib/mark"
 import {
   AXES,
   UNIT,
@@ -110,6 +112,7 @@ export function AxisGizmo({ className }: { className?: string }) {
       {ends.map(({ axis, sign, key, x, y, depth }) => {
         const front = sign > 0
         const lit = hot === key
+        const r = front ? 10.5 : 8.5
         // the same view has a name and a shortcut
         const view = VIEWS.findIndex((v) => v.axis === axis && v.sign === sign)
         return (
@@ -134,7 +137,7 @@ export function AxisGizmo({ className }: { className?: string }) {
             <circle
               cx={x}
               cy={y}
-              r={front ? 10.5 : 8.5}
+              r={r}
               fill={
                 lit
                   ? "white"
@@ -146,19 +149,17 @@ export function AxisGizmo({ className }: { className?: string }) {
               strokeWidth={front ? 0 : 1.75}
             />
             {(front || lit) && (
-              <text
+              // the logo's letters, as big on their dots as it has them
+              <Letter
+                axis={axis}
                 x={x}
                 y={y}
-                textAnchor="middle"
-                dominantBaseline="central"
-                fontSize={front ? 12 : 8.5}
-                fontWeight={700}
-                fill="black"
+                height={MARK.labelSize * 2 * r}
+                minus={!front}
+                stroke="black"
                 // lets the press through to the dot under the letter
                 pointerEvents="none"
-              >
-                {front ? axis.toUpperCase() : `-${axis.toUpperCase()}`}
-              </text>
+              />
             )}
           </g>
         )

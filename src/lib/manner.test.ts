@@ -58,17 +58,20 @@ describe("chosenEffort", () => {
 
 describe("mannerOf", () => {
   it("squares what is picked with what is offered", () => {
-    expect(mannerOf(MODELS, "opus", "high", "auto")).toEqual({
+    expect(mannerOf("claude", MODELS, "opus", "high", "auto")).toEqual({
+      provider: "claude",
       model: "opus",
       effort: "high",
       access: "auto",
     })
-    expect(mannerOf(MODELS, "haiku", "high", "full")).toEqual({
+    expect(mannerOf("claude", MODELS, "haiku", "high", "full")).toEqual({
+      provider: "claude",
       model: "haiku",
       effort: null,
       access: "full",
     })
-    expect(mannerOf(MODELS, "gone", "max", "edits")).toEqual({
+    expect(mannerOf("grok", MODELS, "gone", "max", "edits")).toEqual({
+      provider: "grok",
       model: null,
       effort: null,
       access: "edits",
@@ -76,7 +79,8 @@ describe("mannerOf", () => {
   })
 
   it("lets what was picked stand while nothing is known of the models", () => {
-    expect(mannerOf([], "opus", "max", "supervised")).toEqual({
+    expect(mannerOf("codex", [], "opus", "max", "supervised")).toEqual({
+      provider: "codex",
       model: "opus",
       effort: "max",
       access: "supervised",

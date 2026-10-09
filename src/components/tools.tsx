@@ -31,6 +31,13 @@ import { sectionFacing } from "./viewport/section-planes"
 const ROUND =
   "glass size-9 bg-background/60 px-0 shadow-sm ring-1 ring-foreground/10"
 
+/**
+ * How far the two buttons that stand beside the Section's while the model is cut open
+ * reach from it, in px: each as wide as a button, with the room kept between buttons,
+ * and a little more for a name to stand clear of them.
+ */
+const BESIDE = 2 * 36 + 2 * 6 + 4
+
 /** Buttons that belong together, one under the other. */
 function Stack({ className, ...props }: React.ComponentProps<"div">) {
   return (
@@ -93,6 +100,7 @@ function Switch({
   opens,
   shortcut,
   side = "left",
+  away,
   on,
   onChange,
   disabled,
@@ -107,6 +115,8 @@ function Switch({
   shortcut?: string
   /** where the tooltip goes, when something else has the left */
   side?: Side
+  /** how far from the button it goes, in px, when something stands between */
+  away?: number
   on: boolean
   onChange: (on: boolean) => void
   children: React.ReactNode
@@ -135,7 +145,11 @@ function Switch({
         <span className="sr-only">{label}</span>
       </TooltipTrigger>
       {/* a little room on the right, or the arrow bites into the key */}
-      <TooltipContent side={side} className="has-data-[slot=kbd]:pr-2.5">
+      <TooltipContent
+        side={side}
+        sideOffset={away}
+        className="has-data-[slot=kbd]:pr-2.5"
+      >
         {label}
         {shortcut && <Kbd>{shortcut}</Kbd>}
       </TooltipContent>
@@ -203,6 +217,28 @@ export function Tools({
       {/* how the model is looked at */}
       {loaded && !locked && (
         <Stack className="absolute top-1/2 right-3 -translate-y-1/2">
+          {/* lit while the list is up, and while not all of the model is showing:
+              something picked in the list is all that is, or parts are out of sight.
+              Pressing it brings the list back, to pick again or to bring them back */}
+          <Switch
+            label="Parts"
+            shortcut="P"
+            opens="parts"
+            on={partsOpen || view.only !== null || view.hidden.length > 0}
+            onChange={() => setPartsOpen(!partsOpen)}
+          >
+            <BoxesIcon />
+          </Switch>
+          {/* not the model but what it stands in: the ground, and the world's axes */}
+          <Switch
+            label="Grid"
+            shortcut={MAC ? "⇧G" : "Shift G"}
+            on={view.grid}
+            disabled={blueprint}
+            onChange={(grid) => setView({ grid })}
+          >
+            <Grid3x3Icon />
+          </Switch>
           <div className="relative">
             {/* while the model is cut open, alongside: the cut put back to where it
                 starts from, and which half of the model to show */}
@@ -233,8 +269,8 @@ export function Tools({
             <Switch
               label="Section"
               shortcut="S"
-              // its neighbours have the left
-              side={section ? "top" : "left"}
+              // its neighbours have the left: its name is on the far side of them
+              away={section ? BESIDE : undefined}
               on={section !== null}
               disabled={blueprint}
               // cut open again, it is as it was left
@@ -254,28 +290,6 @@ export function Tools({
             onChange={(exploded) => setView({ exploded, spread: SPREAD.min })}
           >
             <UnfoldVerticalIcon />
-          </Switch>
-          {/* lit while the list is up, and while not all of the model is showing:
-              something picked in the list is all that is, or parts are out of sight.
-              Pressing it brings the list back, to pick again or to bring them back */}
-          <Switch
-            label="Parts"
-            shortcut="P"
-            opens="parts"
-            on={partsOpen || view.only !== null || view.hidden.length > 0}
-            onChange={() => setPartsOpen(!partsOpen)}
-          >
-            <BoxesIcon />
-          </Switch>
-          {/* not the model but what it stands in: the ground, and the world's axes */}
-          <Switch
-            label="Grid"
-            shortcut={MAC ? "⇧G" : "Shift G"}
-            on={view.grid}
-            disabled={blueprint}
-            onChange={(grid) => setView({ grid })}
-          >
-            <Grid3x3Icon />
           </Switch>
           {/* the model drawn flat, from each of its sides and from its corners, on
               sheets that take the view's place: there is nothing to draw of the cube

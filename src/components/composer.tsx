@@ -14,8 +14,14 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
-import type { Access, Effort } from "@shared/api"
-import { ClaudeIcon } from "@/components/icons"
+import type {
+  Access,
+  ConversationSummary,
+  Effort,
+  Provider,
+  ProviderId,
+} from "@shared/api"
+import { ProviderIcon } from "@/components/icons"
 import { MentionMenu, type Choice } from "@/components/mention-menu"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -47,6 +53,12 @@ import {
 } from "@/lib/manner"
 import { matching, putIn, tokenAt } from "@/lib/mentions"
 import {
+  answering,
+  offeredModels,
+  PROVIDER_WORDS,
+  usable,
+} from "@/lib/providers"
+import {
   askCommands,
   askModels,
   goesBy,
@@ -70,8 +82,8 @@ const BOX_INSET = 14
 
 // what each choice is a choice of: over its list
 const MODEL_TITLE = "Which model answers"
-const EFFORT_TITLE = "How hard Claude thinks"
-const ACCESS_TITLE = "What Claude may do without asking"
+const effortTitle = (name: string) => `How hard ${name} thinks`
+const accessTitle = (name: string) => `What ${name} may do without asking`
 
 /**
  * One of the three choices, where they are made: what it is set to, and an arrow to the
@@ -100,16 +112,17 @@ function Words({ name, detail }: { name: string; detail?: string }) {
   )
 }
 
-/** Which model answers. */
-function ModelChoice() {
-  const models = useStore((state) => state.models)
-  const picked = useStore((state) => state.model)
+/** Which of an agent's models answers. */
+function ModelChoice({ provider }: { provider: Provider }) {
+  const models = offeredModels(provider)
+  const picked = useStore((state) => state.model[provider.id])
   const setModel = useStore((state) => state.setModel)
   const chosen = chosenModel(models, picked)
+  const { name, cli } = PROVIDER_WORDS[provider.id]
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className={CHOICE} title={MODEL_TITLE}>
-        {chosen?.short ?? "Claude"}
+        {chosen?.short ?? name}
         <Arrow />
       </DropdownMenuTrigger>
       <DropdownMenuContent
@@ -123,12 +136,14 @@ function ModelChoice() {
           <DropdownMenuLabel>{MODEL_TITLE}</DropdownMenuLabel>
           {models.length === 0 && (
             <p className="px-3 py-2 text-sm text-muted-foreground">
-              Claude Code has not said what models it has.
+              {cli} has not said what models it has.
             </p>
           )}
           <DropdownMenuRadioGroup
             value={chosen?.id ?? ""}
-            onValueChange={(value) => setModel(value === "" ? null : value)}
+            onValueChange={(value) =>
+              setModel(provider.id, value === "" ? null : value)
+            }
           >
             {models.map((model) => (
               <DropdownMenuRadioItem
@@ -147,34 +162,34 @@ function ModelChoice() {
 }
 
 /** How hard the model thinks, for a model that can be told. */
-function EffortChoice() {
-  const models = useStore((state) => state.models)
+function EffortChoice({ provider }: { provider: Provider }) {
   const model = chosenModel(
-    models,
-    useStore((state) => state.model)
+    offeredModels(provider),
+    useStore((state) => state.model[provider.id])
   )
-  const picked = useStore((state) => state.effort)
+  const picked = useStore((state) => state.effort[provider.id])
   const setEffort = useStore((state) => state.setEffort)
   if (!model || model.efforts.length === 0) return null
   const effort = chosenEffort(model, picked)
+  const { name, cli } = PROVIDER_WORDS[provider.id]
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className={CHOICE} title={EFFORT_TITLE}>
+      <DropdownMenuTrigger className={CHOICE} title={effortTitle(name)}>
         <CircleGaugeIcon />
         {effort ? EFFORT_WORDS[effort] : "Default"}
         <Arrow />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="top" className="w-56">
         <DropdownMenuGroup>
-          <DropdownMenuLabel>{EFFORT_TITLE}</DropdownMenuLabel>
+          <DropdownMenuLabel>{effortTitle(name)}</DropdownMenuLabel>
           <DropdownMenuRadioGroup
             value={effort ?? ""}
             onValueChange={(value) =>
-              setEffort(value === "" ? null : (value as Effort))
+              setEffort(provider.id, value === "" ? null : (value as Effort))
             }
           >
             <DropdownMenuRadioItem value="" closeOnClick>
-              <Words name="Default" detail="As Claude Code is set" />
+              <Words name="Default" detail={`As ${cli} is set`} />
             </DropdownMenuRadioItem>
             {model.efforts.map((level) => (
               <DropdownMenuRadioItem key={level} value={level} closeOnClick>
@@ -195,14 +210,15 @@ const ACCESS_ICON: Record<Access, LucideIcon> = {
   full: LockKeyholeOpenIcon,
 }
 
-/** What Claude may do without asking. */
-function AccessChoice() {
+/** What the agent may do without asking. */
+function AccessChoice({ provider }: { provider: Provider }) {
   const access = useStore((state) => state.access)
   const setAccess = useStore((state) => state.setAccess)
   const Icon = ACCESS_ICON[access]
+  const title = accessTitle(PROVIDER_WORDS[provider.id].name)
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className={CHOICE} title={ACCESS_TITLE}>
+      <DropdownMenuTrigger className={CHOICE} title={title}>
         <Icon />
         {ACCESS_WORDS[access].label}
         <Arrow />
@@ -214,7 +230,7 @@ function AccessChoice() {
         className="w-max max-w-(--available-width)"
       >
         <DropdownMenuGroup>
-          <DropdownMenuLabel>{ACCESS_TITLE}</DropdownMenuLabel>
+          <DropdownMenuLabel>{title}</DropdownMenuLabel>
           <DropdownMenuRadioGroup
             value={access}
             onValueChange={(value) => setAccess(value as Access)}
@@ -243,32 +259,49 @@ function AccessChoice() {
 /**
  * How the next message will be answered, said in one line under it: by which model,
  * thinking how hard, asking how much. The line is a button: it opens onto the three
- * choices, under the makers whose models there are to choose from.
+ * choices, under the makers whose models there are to choose from. A conversation under
+ * way is carried on by the agent it began with, so there it is that one's alone.
  */
-function Manner() {
-  const models = useStore((state) => state.models)
+function Manner({
+  conversation,
+}: {
+  conversation: ConversationSummary | null
+}) {
+  const providers = useStore((state) => state.providers)
+  const picked = useStore((state) => state.provider)
+  const setProvider = useStore((state) => state.setProvider)
+  const id = answering(providers, picked, conversation)
+  const provider = providers.find((one) => one.id === id)
+  const { name } = PROVIDER_WORDS[id]
   const model = chosenModel(
-    models,
-    useStore((state) => state.model)
+    offeredModels(provider),
+    useStore((state) => state.model[id])
   )
   const effort = chosenEffort(
     model,
-    useStore((state) => state.effort)
+    useStore((state) => state.effort[id])
   )
   const access = useStore((state) => state.access)
   const said = [
-    model?.short ?? "Claude",
+    model?.short ?? name,
     // a model that cannot be told how hard to think has nothing to say of it
     ...(model && model.efforts.length > 0
       ? [effort ? EFFORT_WORDS[effort] : "Default effort"]
       : []),
     ACCESS_WORDS[access].label,
   ].join(", ")
+  // whose models: every agent a message can be put to, or the one this is had with
+  const makers = conversation ? [] : providers.filter(usable)
+  const tabs = makers.some((one) => one.id === id)
+    ? makers
+    : provider
+      ? [provider]
+      : []
   return (
     <Popover
       onOpenChange={(open) => {
-        // Claude Code may not have said when the app started: it is asked again
-        if (open) void askModels()
+        // the agent may not have said when the app started: it is asked again
+        if (open) void askModels(id)
       }}
     >
       <PopoverTrigger
@@ -280,7 +313,7 @@ function Manner() {
           />
         }
       >
-        <ClaudeIcon className="shrink-0" />
+        <ProviderIcon provider={id} className="shrink-0" />
         <span className="truncate">Using {said}</span>
       </PopoverTrigger>
       {/* over the middle of the line that opens it, so that it is plain what it belongs
@@ -293,29 +326,37 @@ function Manner() {
         collisionPadding={BOX_INSET}
         className="w-auto gap-0 p-1.5 ring-foreground/8"
       >
-        {/* whose models: one maker for now, so one tab */}
-        <Tabs defaultValue="claude" className="gap-1.75">
+        <Tabs
+          value={id}
+          onValueChange={(value) => setProvider(value as ProviderId)}
+          className="gap-1.75"
+        >
           <TabsList
             variant="line"
             className="h-11.5! w-full justify-start gap-0 border-b p-0"
           >
-            <TabsTrigger
-              value="claude"
-              title="Claude"
-              className="h-full w-11.5 flex-none p-0 after:-bottom-px! after:h-px!"
-            >
-              <ClaudeIcon className="size-6" />
-              <span className="sr-only">Claude</span>
-            </TabsTrigger>
+            {tabs.map((one) => (
+              <TabsTrigger
+                key={one.id}
+                value={one.id}
+                title={PROVIDER_WORDS[one.id].name}
+                className="h-full w-11.5 flex-none p-0 after:-bottom-px! after:h-px!"
+              >
+                <ProviderIcon provider={one.id} className="size-6" />
+                <span className="sr-only">{PROVIDER_WORDS[one.id].name}</span>
+              </TabsTrigger>
+            ))}
           </TabsList>
-          <TabsContent
-            value="claude"
-            className="flex overflow-hidden rounded-[0.75rem] border bg-foreground/6"
-          >
-            <ModelChoice />
-            <EffortChoice />
-            <AccessChoice />
-          </TabsContent>
+          {provider && (
+            <TabsContent
+              value={id}
+              className="flex overflow-hidden rounded-[0.75rem] border bg-foreground/6"
+            >
+              <ModelChoice provider={provider} />
+              <EffortChoice provider={provider} />
+              <AccessChoice provider={provider} />
+            </TabsContent>
+          )}
         </Tabs>
       </PopoverContent>
     </Popover>
@@ -450,7 +491,16 @@ export function Composer({
   const box = React.useRef<HTMLTextAreaElement>(null)
   const [caret, setCaret] = React.useState(0)
   const [shut, setShut] = React.useState<string | null>(null)
-  const token = within ? tokenAt(text, caret) : null
+  // Skills and commands are Claude Code's: what Codex and Grok have of their own is not
+  // listed yet, so with them a $ or a / is only something written.
+  const answers = answering(
+    useStore((state) => state.providers),
+    useStore((state) => state.provider),
+    open
+  )
+  const found = within ? tokenAt(text, caret) : null
+  const token =
+    found && (found.kind === "part" || answers === "claude") ? found : null
   const naming = token ? `${token.kind}:${token.from}` : null
   // a name that was put away is done with once the caret has left it, or it is gone
   if (shut !== null && shut !== naming) setShut(null)
@@ -629,7 +679,7 @@ export function Composer({
         // not: that is kept as far from the side as it is from the bottom
         className="gap-1 pr-3 pl-1.5"
       >
-        <Manner />
+        <Manner conversation={open ?? null} />
         {busy && project ? (
           <InputGroupButton
             variant="secondary"

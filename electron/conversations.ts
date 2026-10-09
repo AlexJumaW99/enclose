@@ -5,12 +5,19 @@ import { randomBytes } from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
 
-import type { ThreadItem } from "../shared/api"
+import { PROVIDERS, type ProviderId, type ThreadItem } from "../shared/api"
 
 export type Conversation = {
   id: string
-  /** the Claude Code session that carries it on, once it has one */
+  /** whose agent it is had with: the one it began with, and is carried on with */
+  provider: ProviderId
+  /** that agent's own session that carries it on, once it has one */
   sessionId: string | null
+  /**
+   * What that session was last told of the project, as a mark of it: an agent that
+   * takes such things only when a session begins is told again when they change.
+   */
+  guided: string | null
   /** what the user has called it; until they do, it goes by the first thing said in it */
   name: string | null
   items: ThreadItem[]
@@ -28,16 +35,20 @@ function settled(item: ThreadItem): ThreadItem {
     return { ...item, state: "failed" }
   if (item.kind === "permission" && item.state === "pending")
     return { ...item, state: "denied" }
+  if (item.kind === "question" && item.state === "pending")
+    return { ...item, state: "skipped" }
   if (item.kind === "assistant" && item.streaming)
     return { ...item, streaming: false }
   return item
 }
 
 /** A conversation that is about to have its first thing said in it. */
-export function newConversation(): Conversation {
+export function newConversation(provider: ProviderId = "claude"): Conversation {
   return {
     id: randomBytes(6).toString("hex"),
+    provider,
     sessionId: null,
+    guided: null,
     name: null,
     items: [],
     gist: null,
@@ -52,12 +63,12 @@ const single = (dir: string, projectId: string) =>
 export function writeConversation(
   dir: string,
   projectId: string,
-  { id, sessionId, name, items, gist }: Conversation
+  { id, provider, sessionId, guided, name, items, gist }: Conversation
 ) {
   fs.mkdirSync(folder(dir, projectId), { recursive: true })
   fs.writeFileSync(
     path.join(folder(dir, projectId), `${id}.json`),
-    JSON.stringify({ sessionId, name, items, gist })
+    JSON.stringify({ provider, sessionId, guided, name, items, gist })
   )
 }
 
@@ -105,14 +116,18 @@ export function readConversations(
     if (!name.endsWith(".json")) continue
     try {
       const {
+        provider,
         sessionId,
+        guided,
         name: called,
         items,
         gist,
       } = JSON.parse(
         fs.readFileSync(path.join(folder(dir, projectId), name), "utf8")
       ) as {
+        provider?: unknown
         sessionId?: unknown
+        guided?: unknown
         name?: unknown
         items?: unknown
         gist?: unknown
@@ -121,7 +136,10 @@ export function readConversations(
       const { of, text } = (gist ?? {}) as { of?: unknown; text?: unknown }
       found.push({
         id: name.slice(0, -".json".length),
+        // one from before there was any agent but Claude Code says nothing of whose
+        provider: PROVIDERS.find((one) => one === provider) ?? "claude",
         sessionId: typeof sessionId === "string" ? sessionId : null,
+        guided: typeof guided === "string" ? guided : null,
         name: typeof called === "string" && called ? called : null,
         items: (items as ThreadItem[]).map(settled),
         gist:

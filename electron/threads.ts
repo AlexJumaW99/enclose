@@ -1,7 +1,9 @@
-// The conversations with Claude about each project. Each message starts the user's own
-// Claude Code in the project folder, resuming the conversation it belongs to, and turns
-// what it reports into the items the window shows. A project can have had any number of
-// conversations, and all of them are kept; only one of them is carried on at a time.
+// The conversations about each project, each with one of the agents: Claude Code, Codex
+// or Grok. Each message starts the user's own install of that agent in the project
+// folder, resuming the conversation it belongs to, and turns what it reports into the
+// items the window shows. A project can have had any number of conversations, and all of
+// them are kept; only one of them is carried on at a time.
+import { createHash } from "node:crypto"
 import path from "node:path"
 
 import {
@@ -13,15 +15,15 @@ import {
   type SDKMessage,
   type SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk"
-import { z } from "zod"
 
 import type {
-  ClaudeStatus,
   ConversationSummary,
   Manner,
   ObjectRef,
   PartNote,
   PermissionAnswer,
+  ProviderId,
+  Question,
   Seen,
   ThreadItem,
   ViewportRequest,
@@ -30,8 +32,10 @@ import { MANIFEST_FORMAT } from "../shared/manifest-format"
 import { PALETTE_NAMES } from "../shared/palette"
 import { replyOf } from "../shared/reply"
 import type { Changes } from "./changes"
-import { claudeEnv } from "./claude"
+import { running } from "./claude"
+import { runCodex } from "./codex"
 import { GIST_FROM, gistOf, plain } from "./gist"
+import { runGrok } from "./grok"
 import type { Arrangement } from "./imports"
 import {
   forgetConversations,
@@ -41,6 +45,17 @@ import {
   type Conversation,
 } from "./conversations"
 import type { Projects } from "./projects"
+import type { Launch } from "./providers"
+import {
+  MODEL,
+  modelTools,
+  VIEWPORT,
+  viewportTools,
+  type AppTool,
+  type Serving,
+  type ToolServer,
+} from "./tools"
+import type { Content, Turn } from "./turn"
 
 type Run = {
   /** the conversation being carried on */
@@ -50,8 +65,10 @@ type Run = {
   abort: AbortController
   /** ends the turn's input, which lets Claude Code exit */
   finish: () => void
-  /** questions waiting on the user, by item id */
+  /** yeses waiting on the user, by item id */
   pending: Map<string, (answer: PermissionAnswer) => void>
+  /** what Claude asked that waits on what the user says to it, by item id */
+  asked: Map<string, (answers: string[] | null) => void>
   /** the turn is the app's own asking, of files just opened: their model is looked over */
   lookOver: boolean
   /** what was asked for in it, in a line: what it goes by if what it does is taken back */
@@ -68,9 +85,6 @@ export type Arranging = (
   signal: AbortSignal
 ) => Promise<string>
 
-/** What goes into a turn besides the words: a message as Claude Code takes one. */
-type Content = SDKUserMessage["message"]["content"]
-
 /** What has been said about one project, and what is being said now. */
 type Book = { conversations: Map<string, Conversation>; run: Run | null }
 
@@ -79,7 +93,10 @@ export type ThreadsDeps = {
   projects: Projects
   /** what each turn does to a project's files is kept there, to be taken back */
   changes: Changes
-  claude: () => ClaudeStatus
+  /** what to start an agent with: null if it is switched off, or is not installed */
+  launch: (provider: ProviderId) => Launch | null
+  /** serves the app's own tools to an agent that cannot be handed them in-process */
+  tools: ToolServer
   /** where the app keeps the exporter a project copies to write its model */
   kit: string
   /** a project's folder was renamed, from this path to that */
@@ -94,12 +111,35 @@ export type ThreadsDeps = {
   onSummary: () => void
 }
 
-const VIEWPORT_TOOLS = ["screenshot", "selection", "parts"].map(
-  (t) => `mcp__viewport__${t}`
-)
-const ARRANGE_TOOL = "mcp__model__arrange"
-// there are three of them and they are the point of the app: no need to search for them
+/** What one of the app's own tools goes by here, whichever agent calls on it. */
+const toolName = (set: string, name: string) => `mcp__${set}__${name}`
+const ARRANGE_TOOL = toolName(MODEL, "arrange")
+
+/**
+ * What an agent itself knows such a tool as, which is what it is told to call: Claude
+ * Code and Codex by the set it is in, marked as a tool that was brought to them, and
+ * Grok by the set alone.
+ */
+const knownAs = (provider: ProviderId) => (set: string, name: string) =>
+  provider === "grok" ? `${set}__${name}` : toolName(set, name)
 const UP_FRONT = { alwaysLoad: true }
+
+/** What each agent is called, where something is said of it to the user. */
+const AGENTS: Record<ProviderId, string> = {
+  claude: "Claude Code",
+  codex: "Codex",
+  grok: "Grok",
+}
+
+/**
+ * Whether an agent takes pictures with a message. Grok does not: it is told in words,
+ * and looks for itself with the tools.
+ */
+const TAKES_PICTURES: Record<ProviderId, boolean> = {
+  claude: true,
+  codex: true,
+  grok: false,
+}
 
 function field(input: unknown, key: string): string {
   const value = (input as Record<string, unknown> | null)?.[key]
@@ -161,6 +201,56 @@ function describeTool(name: string, input: unknown, root: string) {
   }
 }
 
+/** The tool of Claude Code's that puts questions to the user, and waits on the answers. */
+const QUESTION_TOOL = "AskUserQuestion"
+
+/**
+ * What Claude asks with that tool, as the conversation puts it to the user. Taken as it
+ * comes: anything in it that is not a question with something to say is left out.
+ */
+export function questionsOf(input: unknown): Question[] {
+  const given = (input as { questions?: unknown } | null)?.questions
+  if (!Array.isArray(given)) return []
+  return given.flatMap((one): Question[] => {
+    const question = field(one, "question").trim()
+    if (!question) return []
+    const options = (one as { options?: unknown }).options
+    return [
+      {
+        question,
+        options: (Array.isArray(options) ? options : []).flatMap((option) => {
+          const label = field(option, "label").trim()
+          return label
+            ? [{ label, detail: field(option, "description").trim() }]
+            : []
+        }),
+        several: (one as { multiSelect?: unknown }).multiSelect === true,
+      },
+    ]
+  })
+}
+
+/** What Claude is told of a question the user answered the others of, and not this. */
+const LEFT_TO_CLAUDE =
+  "No answer: they leave this one to you. Go by your best guess, and say what you assumed."
+
+/** What it is told when they would answer none of what it asked. */
+const UNANSWERED =
+  "The user left this unanswered. Go on by your best guess, and say in your reply what you assumed, so that they can correct it."
+
+/** What was said to each question, as the tool takes it: under the question itself. */
+export function answersTo(
+  questions: Question[],
+  answers: string[]
+): Record<string, string> {
+  return Object.fromEntries(
+    questions.map((one, index) => [
+      one.question,
+      answers[index] || LEFT_TO_CLAUDE,
+    ])
+  )
+}
+
 /** What Claude Code calls each of the ways it can be told to ask before it acts. */
 const ASKING = {
   supervised: "default",
@@ -201,8 +291,26 @@ const ANSWERING = [
   "- What you say before the turn is over, between one step and the next, is no part of your answer. The app shows it while you are at work and then folds it away with the steps, where few will look. Keep it to a few words on what you are about to do or have just found, or say nothing; and leave nothing there that the user needs: that goes in the reply at the end, which has to stand without it.",
 ]
 
-/** What Claude is told about where it is, on top of Claude Code's own instructions. */
+/**
+ * Where the sizes of what Claude makes are to come from. It is a thing to be made, at
+ * the size it is drawn: a guess is the last place a size comes from, and is owned to.
+ */
+const SIZES = [
+  "- What you draw here is a physical thing, made at the size you draw it, so every size that decides its shape has to come from somewhere real. Take each from the first of these that has it: what the user told you; what is already in the model or the project's files (mcp__viewport__parts gives the size and place of every part); the standard for a thing that has one, such as a screw and its clearance hole, a connector, a bearing, a named circuit board and its mounting holes, or a drinks can, which you look up if you are not sure of it and never make up; and failing those, what such a thing commonly measures, as someone who makes them would know it.",
+  "- Leave the room that making it needs: clearance where one part goes into another or moves against it, and walls and details that can be made the way it is to be made. Take that to be 3D printing, unless the user or the project says otherwise.",
+  '- When you make something or change its size, say which sizes decided it and where each came from. One that was your own guess and that the thing depends on goes in the short reply ("I took the cup to be 80 mm across"); the rest go in the details.',
+]
+
+/** When Claude is to ask before it builds, and not show a guess: seldom, and all at once. */
+const QUESTIONS = [
+  "- You can ask before you build, with the AskUserQuestion tool: the app puts what you ask to the user as a short form in the conversation, and you go on when they have answered. Showing a guess is usually better than asking, since they see it at once and can correct it in a word, so most turns ask nothing.",
+  '- Ask when a wrong guess would waste the build: the thing has to fit or hold something real whose size you can neither know nor look up (their own mug, the slot it goes in, a board they have not named), or what they asked for could be quite different things. Ask once, before you start: one question, or two, and a third only where the thing cannot be begun without it. They are put to the user one at a time, so give each the likely answers as its options, shortly, with the sizes in them ("Coffee mug, about 85 mm across"); the user can always write an answer of their own instead.',
+  "- Never ask what you can sensibly decide yourself (wall thickness, fillets, how it will be made, how the parts are grouped), or what the message, the model or the project's files already say. A question left unanswered is left to you: go by your best guess and say what it was.",
+]
+
+/** What an agent is told about where it is, on top of its own instructions. */
 function guide(
+  provider: ProviderId,
   root: string,
   manifest: string | null,
   build: string | null,
@@ -210,8 +318,11 @@ function guide(
   /** what the project goes by, when that is not its folder's name */
   called: string | null,
   /** that name is only a stand-in, until the model gives the project one */
-  standIn: boolean
+  standIn: boolean,
+  /** it has the tool that asks the user things: not so when it only looks a model over */
+  canAsk: boolean
 ): string {
+  const tool = knownAs(provider)
   const lines = [
     "You are running inside Enclose, a desktop app for designing physical things in code. The user is looking at a 3D view of this project's model while they talk to you, and can click a part to ask about it.",
     "",
@@ -229,15 +340,19 @@ function guide(
     ...ANSWERING,
     "- A message may hold a <comments> block: things the user has said of parts of the model, one <comment> for each. Each names the part and gives the point on it they clicked, the way the surface faces there and which face it is, in the model's own coordinates (mm, Z up), and holds what they said. Take each as a change wanted at that place. The rest of the message, if there is any, is what they said of the model as a whole.",
     "- A click in the view picks out a whole object, not one part of it: the parts of a group that touch one another, such as a circuit board with all that is on it. A <comment> made of one has object, what the app calls it, and parts, the ids of all its parts. Its part, id and point are then only where on the object the user clicked: take what they said as said of the whole object, unless it says otherwise.",
-    '- A message may hold an <objects> block: whole objects the user picked out in the view for the message to be about, one <object> for each, with what the app calls it and the ids of all its parts. What the message says, it says of those objects, each as one thing: they are what the user means by "this", "these" or "them". The user may still want only some part of one changed (the cap of a button, one chip on a board) and say so in their own words, not by its id: then find that part among the object\'s parts, by their labels, sizes and places (mcp__viewport__parts) or by looking (mcp__viewport__screenshot), and change that part alone. Ask which they mean only if it cannot be told.',
+    `- A message may hold an <objects> block: whole objects the user picked out in the view for the message to be about, one <object> for each, with what the app calls it and the ids of all its parts. What the message says, it says of those objects, each as one thing: they are what the user means by "this", "these" or "them". The user may still want only some part of one changed (the cap of a button, one chip on a board) and say so in their own words, not by its id: then find that part among the object's parts, by their labels, sizes and places (${tool(VIEWPORT, "parts")}) or by looking (${tool(VIEWPORT, "screenshot")}), and change that part alone. Ask which they mean only if it cannot be told.`,
     "- The user can take back what one of your turns did to the project's files, with Cmd+Z in the app, and put it back again: it is how they try a change and think better of it, and it costs them nothing. The next message then leads with an <undone> block that names each such turn by what was asked for in it. The project's files, and the model built from them, are as they were before that turn, whatever you remember having done in it: read a file again before you go on from it, and do not make the change again unless you are asked to. A <redone> block names turns whose changes were put back since: the files are as those turns left them.",
-    "- A word in a message that begins with @ names a part of the model by its id, as the manifest and mcp__viewport__parts have it: @lid is the part whose id is lid.",
-    "- A word in a message that begins with $ names one of your skills, which the user wants used for what they are asking: $pcb is the skill called pcb. Load it with the Skill tool before you start on the work, and follow it.",
-    "- You can see what they see. mcp__viewport__screenshot returns the current view as an image, mcp__viewport__parts lists the parts with their groups and sizes, mcp__viewport__selection returns the current selection.",
+    `- A word in a message that begins with @ names a part of the model by its id, as the manifest and ${tool(VIEWPORT, "parts")} have it: @lid is the part whose id is lid.`,
+    provider === "claude"
+      ? "- A word in a message that begins with $ names one of your skills, which the user wants used for what they are asking: $pcb is the skill called pcb. Load it with the Skill tool before you start on the work, and follow it."
+      : "- A word in a message that begins with $ names one of your skills, which the user wants used for what they are asking: $pcb is the skill called pcb. Read it before you start on the work, and follow it.",
+    `- You can see what they see. ${tool(VIEWPORT, "screenshot")} returns the current view as an image, ${tool(VIEWPORT, "parts")} lists the parts with their groups and sizes, ${tool(VIEWPORT, "selection")} returns the current selection.`,
     "- The model is made of parts. Each separate component is one part: a thing that is made, bought or fitted on its own, such as a lid, a board or a screw. Whatever the user asks you to add as a thing of its own is a part of its own. The app lists the parts under groups, and the user can pick one part or one group to look at alone.",
     "- Grouping the parts is your job, not the user's. Whenever you add, split, merge or remove parts, put each one in the group a person would look for it in, by what it belongs to or what it does (the enclosure, the electronics, the fasteners), and add a group when none fits. Keep group and part labels short and plain. Do this without being asked and without asking. Regroup only when the user asks for a different arrangement, or when the model has changed so much that the old one no longer makes sense; if the user arranges the groups themselves, keep to their arrangement.",
     "- When the user pulls the model apart (Explode), a model that gives its parts no explode of their own comes apart by its groups. The parts of a group that touch one another go as one piece, so that a circuit board keeps its components and a switch its pins. The parts of the outside (a group made with shell=True) each go their own way, and so do parts in no group. So keep what is one object in one group, and make the group that encloses the rest the outside.",
     `- Colour is the app's job. It draws every part in one of its own colours (${PALETTE_NAMES.join(", ")}), and a part given no colour takes the one that falls to its group, so parts that belong together match and groups differ. Leave colour out unless the user asks for one or parts within a group need telling apart; then name one of those. Any other colour is drawn as the nearest of them, unless it is a grey, white or black, which is drawn as it is.`,
+    ...SIZES,
+    ...(canAsk ? QUESTIONS : []),
   ]
   if (manifest) {
     lines.push(
@@ -248,7 +363,7 @@ function guide(
       "- If the project has an enclose.py, that is the app's exporter, copied in: read its docstring for how parts and groups are declared, and do not edit it.",
       "- If the project has a source/ folder, the app made the project of CAD files the user opened: they are kept there, and model.py reads every body in them as a part (enclose.read_step). That model.py is the project's own, to change as the user asks: change a body after it is read, add parts of your own beside the ones read. Leave the files in source/ as they are. Where model.py has a table of names (PARTS), the parts were named and grouped when the files were opened, by you, from how the model looked: the table is where a part is renamed or moved to another group. Where it has none, the names and groups are only what the files happened to give, which is often no grouping at all: the first time you change such a model, put its parts in the groups a person would look for them in, as above.",
       '- The groups are what the manifest says they are: its "groups" list, and the "group" each part names. Like the rest of the manifest they are written by the build.',
-      "- The user can also arrange the parts by hand in the app: make a group of some (Cmd+G), take some out of their groups (Shift+Cmd+G), call a group something else. That is kept by the app and not in the project's files, and it is how the model is listed and handled from then on, whatever the manifest says. mcp__viewport__parts gives each part's group as the user has it, with what the group goes by, and marks with byHand the parts they moved. Take that as how the user wants the model arranged: never put it back as it was unless asked, and when you next change the model's script for some other reason, give it the same groups and names, so that what is built agrees with what the user sees.",
+      `- The user can also arrange the parts by hand in the app: make a group of some (Cmd+G), take some out of their groups (Shift+Cmd+G), call a group something else. That is kept by the app and not in the project's files, and it is how the model is listed and handled from then on, whatever the manifest says. ${tool(VIEWPORT, "parts")} gives each part's group as the user has it, with what the group goes by, and marks with byHand the parts they moved. Take that as how the user wants the model arranged: never put it back as it was unless asked, and when you next change the model's script for some other reason, give it the same groups and names, so that what is built agrees with what the user sees.`,
       "- After a change to geometry: rebuild, take a screenshot, and check the result yourself before you report it."
     )
   } else if (build) {
@@ -353,7 +468,12 @@ const MOST_PICTURE = 6_000_000
  * What Claude is asked on a model's being looked over: the pictures of it, its parts,
  * and what to make of them. `files` are the CAD files it was made from.
  */
-export function lookOverAsked(seen: Seen, files: string[]): Content {
+export function lookOverAsked(
+  seen: Seen,
+  files: string[],
+  /** what the agent it is put to knows the app's tools as */
+  tool: (set: string, name: string) => string = toolName
+): Content {
   const mm = (v: number[]) => v.map((n) => Math.round(n * 10) / 10).join(" × ")
   const at = (v: number[]) => v.map((n) => Math.round(n * 10) / 10).join(", ")
   // one line each, and nothing in it that could be taken for the next line
@@ -408,12 +528,12 @@ export function lookOverAsked(seen: Seen, files: string[]): Content {
         ),
         "</parts>",
         "",
-        `Work out what the thing is, what each part is, and where a person would look for it. Then call ${ARRANGE_TOOL} once, with all of it:`,
+        `Work out what the thing is, what each part is, and where a person would look for it. Then call ${tool(MODEL, "arrange")} once, with all of it:`,
         "- what: what the thing is, in a few plain words.",
         "- groups: the groups, in the order the list of parts is to show them. Group the parts by what they belong to or what they do (the case, the mechanism, the electronics, the fasteners). Most models want two to six groups; a handful of parts can be one. Mark as outside any group that encloses the rest, so that the app can show what is inside through it. When the user pulls the model apart, the outside comes apart part by part, and in every other group the parts that touch one another stay together as one object: so keep what is one object in one group (a circuit board with the components on it, a switch with its pins), and never in the outside.",
         '- parts: every part by its id as listed above, with the name it is to go by and its group. Keep a name the file gave where it is a good one, tidied to sentence case ("back cover" becomes "Back cover"). Give a new one where the file\'s says nothing ("Solid 12", "Body3"), from the part\'s shape and its place: say what it is ("Lid", "M3 screw"), or failing that what it looks like ("Round spacer"), never a guess passed off as known. Names are short and plain, and no two parts share one: parts that are alike are numbered ("Planet gear 1", "Planet gear 2").',
         "",
-        "That call writes the names and groups into the project's model.py and builds the model again; the view then shows it so. You have nothing here to change geometry or files with, and are not to try. If you need a closer look, mcp__viewport__screenshot shows the view as the user has it.",
+        `That call writes the names and groups into the project's model.py and builds the model again; the view then shows it so. You have nothing here to change geometry or files with, and are not to try. If you need a closer look, ${tool(VIEWPORT, "screenshot")} shows the view as the user has it.`,
         "",
         "Then tell the user, in two or three short sentences, what you take the thing to be and how you grouped it, and say plainly what you were unsure of. They can ask you to change any of it.",
       ].join("\n"),
@@ -559,9 +679,10 @@ export class Threads {
         return {
           id: conversation.id,
           title: conversation.name ?? (first ? firstLine(wordsOf(first)) : ""),
+          provider: conversation.provider,
           status: !running
             ? "idle"
-            : running.pending.size > 0
+            : running.pending.size > 0 || running.asked.size > 0
               ? "asking"
               : "working",
           since: running?.since ?? null,
@@ -595,9 +716,10 @@ export class Threads {
       return
     this.asked.add(message.id)
     this.gists = this.gists.then(async () => {
-      const claude = this.deps.claude()
+      // it is the quickest of Claude Code's models that sums things up, whoever said them
+      const claude = this.deps.launch("claude")
       // asked before Claude Code was found: it is asked again the next time round
-      if (!claude.path) {
+      if (!claude) {
         this.asked.delete(message.id)
         return
       }
@@ -617,6 +739,11 @@ export class Threads {
 
   answer(projectId: string, permissionId: string, answer: PermissionAnswer) {
     this.book(projectId).run?.pending.get(permissionId)?.(answer)
+  }
+
+  /** Answer what Claude asked: one thing said to each question, or null to leave them. */
+  tell(projectId: string, questionId: string, answers: string[] | null) {
+    this.book(projectId).run?.asked.get(questionId)?.(answers)
   }
 
   stop(projectId: string) {
@@ -687,9 +814,13 @@ export class Threads {
     manner: Manner,
     arrange: Arranging
   ): string | null {
-    if (!this.deps.claude().path) return null
+    if (!this.deps.launch(manner.provider)) return null
     return this.begin(projectId, null, LOOK_OVER, [], [], manner, {
-      content: lookOverAsked(seen, files),
+      content: lookOverAsked(
+        TAKES_PICTURES[manner.provider] ? seen : { ...seen, pictures: [] },
+        files,
+        knownAs(manner.provider)
+      ),
       arrange,
     })
   }
@@ -714,12 +845,21 @@ export class Threads {
     if (!project || book.run) return null
     let conversation: Conversation
     if (conversationId === null) {
-      conversation = newConversation()
+      conversation = newConversation(manner.provider)
       book.conversations.set(conversation.id, conversation)
     } else {
       const found = book.conversations.get(conversationId)
       if (!found) return null
       conversation = found
+      // A conversation is carried on by the agent it began with, which is the one that
+      // remembers it: a model picked from another's has nothing to say here.
+      if (manner.provider !== conversation.provider)
+        manner = {
+          ...manner,
+          provider: conversation.provider,
+          model: null,
+          effort: null,
+        }
     }
 
     const now = Date.now()
@@ -749,6 +889,7 @@ export class Threads {
       abort: new AbortController(),
       finish,
       pending: new Map(),
+      asked: new Map(),
       lookOver: asked.arrange !== undefined,
       what: firstLine(wordsOf(said)),
     }
@@ -761,7 +902,7 @@ export class Threads {
     return conversation.id
   }
 
-  /** One turn of a conversation: from what the user said to Claude having done with it. */
+  /** One turn of a conversation: from what was asked to the agent having done with it. */
   private async turn(
     projectId: string,
     project: NonNullable<ReturnType<Projects["get"]>>,
@@ -772,178 +913,281 @@ export class Threads {
     asked: { content: Content; arrange?: Arranging }
   ) {
     const { conversation, abort, finish } = run
-    /** The session Claude Code says this conversation now is: what carries it on next time. */
-    const session = (sessionId: string) => {
-      if (conversation.sessionId === sessionId) return
-      conversation.sessionId = sessionId
-      this.keep(projectId, conversation)
+    const { provider } = conversation
+    const told = guide(
+      provider,
+      project.path,
+      project.manifest,
+      project.build,
+      this.deps.kit,
+      project.name ?? null,
+      project.standIn === true,
+      // The tool that asks the user things is Claude Code's, and the app has a form for
+      // it. Codex and Grok ask in what they say; and nothing is asked on looking over.
+      provider === "claude" && asked.arrange === undefined
+    )
+    const guided = createHash("sha1").update(told).digest("hex")
+
+    // The app's own tools: what the agent sees the model with and, on a model's being
+    // looked over, the one thing it can change it with.
+    const { arrange } = asked
+    const tools: Record<string, AppTool[]> = {
+      [VIEWPORT]: viewportTools((kind) => this.deps.viewport(projectId, kind)),
+      ...(arrange
+        ? { [MODEL]: modelTools((given) => arrange(given, abort.signal)) }
+        : {}),
     }
+
+    const turn: Turn = {
+      cwd: project.path,
+      // (a turn with nothing to run it is over before this is read)
+      launch: this.deps.launch(provider) ?? { path: "", args: [], env: {} },
+      manner,
+      content: asked.content,
+      guide: told,
+      guideChanged:
+        conversation.sessionId !== null &&
+        conversation.guided !== null &&
+        conversation.guided !== guided,
+      sessionId: conversation.sessionId,
+      /** The session the agent says this conversation now is: what carries it on next time. */
+      session: (sessionId) => {
+        if (
+          conversation.sessionId === sessionId &&
+          conversation.guided === guided
+        )
+          return
+        conversation.sessionId = sessionId
+        // and what that session has been told of the project, or is about to be
+        conversation.guided = guided
+        this.keep(projectId, conversation)
+      },
+      signal: abort.signal,
+      put: (item) => this.put(projectId, conversation, item),
+      notice: (tone, text) => this.notice(projectId, conversation, tone, text),
+      ask: (wanted, signal) =>
+        new Promise<PermissionAnswer>((resolve) => {
+          const id = `ask-${++this.counter}-${Date.now()}`
+          const item = {
+            kind: "permission" as const,
+            id,
+            at: Date.now(),
+            ...wanted,
+          }
+          const settle = (answer: PermissionAnswer) => {
+            if (!run.pending.delete(id)) return
+            this.put(projectId, conversation, {
+              ...item,
+              state: answer === "deny" ? "denied" : "allowed",
+            })
+            this.deps.onSummary()
+            resolve(answer)
+          }
+          run.pending.set(id, settle)
+          for (const ending of [abort.signal, signal])
+            ending?.addEventListener("abort", () => settle("deny"), {
+              once: true,
+            })
+          this.put(projectId, conversation, { ...item, state: "pending" })
+          this.deps.onSummary()
+        }),
+      touched: () => {
+        this.deps.projects.refresh(projectId)
+        this.deps.onSummary()
+      },
+      tools,
+      served: {},
+      lookOver: arrange !== undefined,
+      describe: (name, input) => describeTool(name, input, project.path),
+      id: (kind) => `${kind}-${++this.counter}-${Date.now()}`,
+    }
+
+    // The folder as it is now is put aside, so that what this turn does to it can be
+    // taken back. (Stopped before that was done, the turn is over before it began.)
+    const pending = await this.deps.changes
+      .before(projectId, project.path)
+      .catch(() => null)
+    let serving: Serving | null = null
+    try {
+      if (abort.signal.aborted) throw new Error("Stopped.")
+      if (!this.deps.launch(provider))
+        throw new Error(
+          `${AGENTS[provider]} was not found on this machine, or is switched off in the settings.`
+        )
+      if (provider === "claude")
+        await this.claude(turn, projectId, project.path, run, finished)
+      else {
+        // Codex and Grok are not handed the tools: they are told where they answer
+        serving = await this.deps.tools.serve(tools)
+        const served = { ...turn, served: serving.urls }
+        await (provider === "codex" ? runCodex(served) : runGrok(served))
+      }
+    } catch (error) {
+      if (abort.signal.aborted) {
+        this.notice(projectId, conversation, "info", "Stopped.")
+      } else {
+        this.notice(
+          projectId,
+          conversation,
+          "error",
+          error instanceof Error ? error.message : String(error)
+        )
+      }
+    } finally {
+      serving?.stop()
+      finish()
+      for (const settle of [...run.pending.values()]) settle("deny")
+      for (const settle of [...run.asked.values()]) settle(null)
+      // What the turn did to the folder is kept as a change, before anything else can
+      // be done there: a turn that was stopped part of the way has that much to take back.
+      // (Not of a project that was taken off the list meanwhile: nothing of it is kept.)
+      if (pending && this.books.get(projectId) === book)
+        await this.deps.changes
+          .after(pending, project.path, {
+            conversationId: conversation.id,
+            what: run.what,
+          })
+          .catch(() => this.deps.changes.discard(pending))
+      else if (pending) this.deps.changes.discard(pending)
+      if (book.run === run) book.run = null
+      this.write(projectId, conversation)
+      // the agent may have created, moved or rebuilt the model
+      this.deps.projects.refresh(projectId)
+      // and with nothing at work in the folder any more, a project that has just been
+      // given its shape can take its name
+      this.deps.projects.christen(projectId, this.deps.onRenamed)
+      this.deps.onSummary()
+    }
+  }
+
+  /**
+   * A turn as Claude Code runs it: through its SDK, which starts the user's own Claude
+   * Code in the project's folder, resuming the session the conversation is in, and
+   * reports what it does as messages.
+   */
+  private async claude(
+    turn: Turn,
+    projectId: string,
+    root: string,
+    run: Run,
+    finished: Promise<void>
+  ) {
+    const { conversation, abort, finish } = run
+    const { manner } = turn
+    const session = turn.session
     // Keep the input open until the turn is over: approvals and viewport tools are
     // answered over the same channel the message went in on.
     async function* input(): AsyncGenerator<SDKUserMessage> {
       yield {
         type: "user",
-        message: { role: "user", content: asked.content },
+        message: { role: "user", content: turn.content },
         parent_tool_use_id: null,
       }
       await finished
     }
 
-    const canUseTool: CanUseTool = (toolName, toolInput, options) =>
+    // What Claude asks before it goes on is put to the user as it stands, and waits on
+    // what they say to it: one thing to each question, or nothing at all.
+    const asks = (toolInput: Record<string, unknown>, signal: AbortSignal) =>
       new Promise<PermissionResult>((resolve) => {
-        const id = `ask-${++this.counter}-${Date.now()}`
-        const shown = describeTool(toolName, toolInput, project.path)
-        const item = {
-          kind: "permission" as const,
-          id,
-          at: Date.now(),
-          title: options.title ?? question(toolName),
-          detail: shown.detail,
-          canAlways: Boolean(options.suggestions?.length),
-        }
-        const settle = (answer: PermissionAnswer) => {
-          if (!run.pending.delete(id)) return
-          this.put(projectId, conversation, {
-            ...item,
-            state: answer === "deny" ? "denied" : "allowed",
+        const questions = questionsOf(toolInput)
+        if (questions.length === 0)
+          return resolve({
+            behavior: "deny",
+            message:
+              "That could not be put to the user as questions. Ask in your reply instead.",
           })
+        const item = {
+          kind: "question" as const,
+          id: `question-${++this.counter}-${Date.now()}`,
+          at: Date.now(),
+          questions,
+        }
+        const settle = (answers: string[] | null) => {
+          if (!run.asked.delete(item.id)) return
+          const said = questions.map(
+            (_, index) => answers?.[index]?.trim() ?? ""
+          )
+          // nothing said to any of them is their all being left
+          const any = said.some(Boolean)
+          this.put(
+            projectId,
+            conversation,
+            any
+              ? { ...item, state: "answered", answers: said }
+              : { ...item, state: "skipped", answers: [] }
+          )
           this.deps.onSummary()
           resolve(
-            answer === "deny"
-              ? { behavior: "deny", message: "The user declined this." }
-              : {
+            any
+              ? {
                   behavior: "allow",
-                  updatedInput: toolInput,
-                  ...(answer === "always"
-                    ? { updatedPermissions: options.suggestions }
-                    : {}),
+                  updatedInput: {
+                    ...toolInput,
+                    answers: answersTo(questions, said),
+                  },
                 }
+              : { behavior: "deny", message: UNANSWERED }
           )
         }
-        run.pending.set(id, settle)
-        options.signal.addEventListener("abort", () => settle("deny"), {
-          once: true,
+        run.asked.set(item.id, settle)
+        signal.addEventListener("abort", () => settle(null), { once: true })
+        this.put(projectId, conversation, {
+          ...item,
+          state: "pending",
+          answers: [],
         })
-        this.put(projectId, conversation, { ...item, state: "pending" })
         this.deps.onSummary()
       })
 
-    const ask = (kind: ViewportRequest["kind"]) =>
-      this.deps.viewport(projectId, kind)
-    const text_ = (value: unknown) => ({
-      content: [
-        { type: "text" as const, text: JSON.stringify(value, null, 1) },
-      ],
-    })
-    const failed = (error: unknown) => ({
-      content: [
+    const permits: CanUseTool = async (toolName, toolInput, options) => {
+      const answer = await turn.ask(
         {
-          type: "text" as const,
-          text: error instanceof Error ? error.message : String(error),
+          title: options.title ?? question(toolName),
+          detail: describeTool(toolName, toolInput, root).detail,
+          canAlways: Boolean(options.suggestions?.length),
         },
-      ],
-      isError: true,
-    })
-    const viewport = createSdkMcpServer({
-      name: "viewport",
-      version: "0.1.0",
-      tools: [
-        tool(
-          "screenshot",
-          "The 3D viewport exactly as the user sees it right now, as an image: same camera, same exploded/section/see-through settings.",
-          {},
-          async () => {
-            try {
-              const shot = (await ask("screenshot")) as {
-                data: string
-                mimeType: string
-              }
-              return {
-                content: [
-                  {
-                    type: "image" as const,
-                    data: shot.data,
-                    mimeType: shot.mimeType,
-                  },
-                ],
-              }
-            } catch (error) {
-              return failed(error)
-            }
-          },
-          UP_FRONT
-        ),
-        tool(
-          "selection",
-          "The part the user has selected in the viewport, with the point they clicked (model coordinates, mm). Where they selected a whole object and not one part, piece gives what the app calls it and the ids of all its parts, and the rest is where on it they clicked. Null if nothing is selected.",
-          {},
-          async () => ask("selection").then(text_, failed),
-          UP_FRONT
-        ),
-        tool(
-          "parts",
-          "Every part of the model on screen: id, label, the group it is listed under (its id, and groupLabel for what it goes by), bounding box in model coordinates (mm), and whether it is currently shown. byHand marks a part the user has put in another group than the manifest has it in, by hand in the app: that is the group given here.",
-          {},
-          async () => ask("parts").then(text_, failed),
-          UP_FRONT
-        ),
-      ],
-    })
+        options.signal
+      )
+      return answer === "deny"
+        ? { behavior: "deny", message: "The user declined this." }
+        : {
+            behavior: "allow",
+            updatedInput: toolInput,
+            ...(answer === "always"
+              ? { updatedPermissions: options.suggestions }
+              : {}),
+          }
+    }
 
-    // On a model's being looked over, the one thing Claude can change it with: the names
-    // and groups of its parts, which the app writes down and builds.
-    const { arrange } = asked
-    const model =
-      arrange &&
-      createSdkMcpServer({
-        name: "model",
-        version: "0.1.0",
-        tools: [
-          tool(
-            "arrange",
-            "Name and group the parts of the model that has just been made of the user's CAD files. Writes the names and groups into the project's model.py and builds it again; the view then shows the model so. Call it once, with every part.",
-            {
-              what: z
-                .string()
-                .describe(
-                  'What the thing is, in a few plain words: "a planetary clock movement".'
-                ),
-              groups: z
-                .array(
-                  z.object({
-                    name: z.string().describe("Short and plain."),
-                    outside: z
-                      .boolean()
-                      .optional()
-                      .describe(
-                        "True if the parts in it enclose the rest: the app can then show what is inside through them."
-                      ),
-                  })
-                )
-                .describe("In the order the list of parts is to show them."),
-              parts: z
-                .array(
-                  z.object({
-                    id: z.string().describe("As in the list you were given."),
-                    name: z.string().describe("What the part is to go by."),
-                    group: z
-                      .string()
-                      .describe("The name of one of the groups."),
-                  })
-                )
-                .describe("Every part of the model."),
-            },
-            async (given) =>
-              arrange(given, abort.signal).then(
-                (done) => ({
-                  content: [{ type: "text" as const, text: done }],
-                }),
-                failed
-              ),
-            UP_FRONT
+    const canUseTool: CanUseTool = (toolName, toolInput, options) =>
+      toolName === QUESTION_TOOL
+        ? asks(toolInput, options.signal)
+        : permits(toolName, toolInput, options)
+
+    // Claude Code is handed the app's tools in-process, each set as a server of its own.
+    // There are few of them and they are the point of the app: no need to search for them.
+    const servers = Object.fromEntries(
+      Object.entries(turn.tools).map(([name, set]) => [
+        name,
+        createSdkMcpServer({
+          name,
+          version: "0.1.0",
+          tools: set.map((one) =>
+            tool(
+              one.name,
+              one.description,
+              one.shape,
+              one.run as never,
+              UP_FRONT
+            )
           ),
-        ],
-      })
+        }),
+      ])
+    )
+    const ours = Object.entries(turn.tools).flatMap(([name, set]) =>
+      set.map((one) => toolName(name, one.name))
+    )
 
     // text that arrived piece by piece, so the whole message that follows is not shown twice
     const streamed = new Set<string>()
@@ -1040,11 +1284,13 @@ export class Threads {
             })
             this.deps.onSummary()
           } else if (block.type === "tool_use") {
+            // what it asks the user is shown as what it is, and not as a step
+            if (block.name === QUESTION_TOOL) return
             const item = {
               kind: "tool" as const,
               id: block.id,
               at: Date.now(),
-              ...describeTool(block.name, block.input, project.path),
+              ...describeTool(block.name, block.input, root),
               state: "running" as const,
             }
             tools.set(block.id, item)
@@ -1094,43 +1340,24 @@ export class Threads {
       }
     }
 
-    // The folder as it is now is put aside, so that what this turn does to it can be
-    // taken back. (Stopped before that was done, the turn is over before it began.)
-    const pending = await this.deps.changes
-      .before(projectId, project.path)
-      .catch(() => null)
-    const claude = this.deps.claude()
     let stderr = ""
     try {
-      if (abort.signal.aborted) throw new Error("Stopped.")
-      const session = query({
+      const messages = query({
         prompt: input(),
         options: {
-          cwd: project.path,
-          resume: conversation.sessionId ?? undefined,
-          pathToClaudeCodeExecutable: claude.path ?? undefined,
-          env: claudeEnv(),
+          cwd: turn.cwd,
+          resume: turn.sessionId ?? undefined,
+          ...running(turn.launch),
           abortController: abort,
           includePartialMessages: true,
           settingSources: ["user", "project", "local"],
           systemPrompt: {
             type: "preset",
             preset: "claude_code",
-            append: guide(
-              project.path,
-              project.manifest,
-              project.build,
-              this.deps.kit,
-              project.name ?? null,
-              project.standIn === true
-            ),
+            append: turn.guide,
           },
-          mcpServers: model ? { viewport, model } : { viewport },
-          allowedTools: model
-            ? [...VIEWPORT_TOOLS, ARRANGE_TOOL]
-            : VIEWPORT_TOOLS,
-          // it would need its own form here; until then Claude asks in plain text
-          disallowedTools: ["AskUserQuestion"],
+          mcpServers: servers,
+          allowedTools: ours,
           // left unsaid, Claude Code runs the model it is set to, as hard as it is set to
           ...(manner.model ? { model: manner.model } : {}),
           ...(manner.effort ? { effort: manner.effort } : {}),
@@ -1138,58 +1365,36 @@ export class Threads {
           // what the app hands it and none of Claude Code's own tools, so there is no
           // file it can change and no command it can run, whatever it is let do when
           // the user asks. Anything else it reaches for is put to the user.
-          ...(model
-            ? { tools: [], permissionMode: "default" as const, canUseTool }
+          ...(turn.lookOver
+            ? { tools: [], permissionMode: "default" as const }
             : manner.access === "full"
               ? {
+                  // leave to do anything is never asked for; what Claude asks the
+                  // user still comes by canUseTool, being no leave it wants
                   permissionMode: "bypassPermissions" as const,
                   allowDangerouslySkipPermissions: true,
                 }
-              : { permissionMode: ASKING[manner.access], canUseTool }),
+              : { permissionMode: ASKING[manner.access] }),
+          canUseTool,
           stderr: (data) => {
             stderr = (stderr + data).slice(-2000)
           },
         },
       })
-      for await (const message of session) handle(message)
+      for await (const message of messages) handle(message)
     } catch (error) {
-      if (abort.signal.aborted) {
-        this.notice(projectId, conversation, "info", "Stopped.")
-      } else {
-        const reason = error instanceof Error ? error.message : String(error)
-        this.notice(
-          projectId,
-          conversation,
-          "error",
-          [reason, stderr.trim()].filter(Boolean).join("\n")
-        )
-      }
+      if (abort.signal.aborted) throw error
+      // what it last said to stderr is often why
+      const reason = error instanceof Error ? error.message : String(error)
+      throw new Error([reason, stderr.trim()].filter(Boolean).join("\n"), {
+        cause: error,
+      })
     } finally {
-      finish()
-      for (const settle of [...run.pending.values()]) settle("deny")
+      // what was in flight did not finish
       for (const item of live.values())
         this.put(projectId, conversation, { ...item, streaming: false })
       for (const item of tools.values())
         this.put(projectId, conversation, { ...item, state: "failed" })
-      // What the turn did to the folder is kept as a change, before anything else can
-      // be done there: a turn that was stopped part of the way has that much to take back.
-      // (Not of a project that was taken off the list meanwhile: nothing of it is kept.)
-      if (pending && this.books.get(projectId) === book)
-        await this.deps.changes
-          .after(pending, project.path, {
-            conversationId: conversation.id,
-            what: run.what,
-          })
-          .catch(() => this.deps.changes.discard(pending))
-      else if (pending) this.deps.changes.discard(pending)
-      if (book.run === run) book.run = null
-      this.write(projectId, conversation)
-      // Claude may have created, moved or rebuilt the model
-      this.deps.projects.refresh(projectId)
-      // and with nothing at work in the folder any more, a project that has just been
-      // given its shape can take its name
-      this.deps.projects.christen(projectId, this.deps.onRenamed)
-      this.deps.onSummary()
     }
   }
 

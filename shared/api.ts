@@ -3,7 +3,10 @@
 
 export type Vec3 = [number, number, number]
 
-/** idle: nothing running. working: Claude is on a turn. asking: waiting on a yes/no from you. */
+/**
+ * idle: nothing running. working: Claude is on a turn. asking: waiting on you, for a yes
+ * or a no, or for an answer to something it asked.
+ */
 export type ThreadStatus = "idle" | "working" | "asking"
 
 /** One conversation about a project, in as much as a card in the sidebar has room for. */
@@ -11,6 +14,8 @@ export type ConversationSummary = {
   id: string
   /** what it goes by: the name it was given, or else the first thing said in it */
   title: string
+  /** whose agent it is had with: the one it began with, and is carried on with */
+  provider: ProviderId
   status: ThreadStatus
   /** when the current turn started (ms), while one is running */
   since: number | null
@@ -107,6 +112,17 @@ export type PartRef = {
 /** Something said of a part: a change wanted at the point of it that was clicked. */
 export type PartNote = { part: PartRef; text: string }
 
+/**
+ * Something Claude asks before it goes on, where a guess of its own would not do: the
+ * question, and the answers it offers. Something else can always be said to it instead.
+ */
+export type Question = {
+  question: string
+  options: { label: string; detail: string }[]
+  /** more than one of them can be chosen */
+  several: boolean
+}
+
 export type ThreadItem =
   | {
       kind: "user"
@@ -153,6 +169,15 @@ export type ThreadItem =
       state: "pending" | "allowed" | "denied"
     }
   | {
+      kind: "question"
+      id: string
+      at: number
+      questions: Question[]
+      state: "pending" | "answered" | "skipped"
+      /** what was said to each, in their order: nothing where it was left to Claude */
+      answers: string[]
+    }
+  | {
       kind: "notice"
       id: string
       at: number
@@ -161,9 +186,16 @@ export type ThreadItem =
     }
 
 /**
- * What Claude may do without asking. supervised: nothing that changes a file or runs a
- * command. edits: change the project's files, and ask before anything else. auto: Claude
- * Code judges what is routine and asks about the rest. full: anything.
+ * Whose agent answers. Each is its maker's own command-line agent, installed on this
+ * machine and signed in there: the app runs it, and has no login of its own for any.
+ */
+export type ProviderId = "claude" | "codex" | "grok"
+export const PROVIDERS: readonly ProviderId[] = ["claude", "codex", "grok"]
+
+/**
+ * What an agent may do without asking. supervised: nothing that changes a file or runs a
+ * command. edits: change the project's files, and ask before anything else. auto: the
+ * agent judges what is routine and asks about the rest. full: anything.
  */
 export type Access = "supervised" | "edits" | "auto" | "full"
 export const ACCESSES: readonly Access[] = [
@@ -194,11 +226,11 @@ export type GroupAsked = {
   others: string[]
 }
 
-/** A model the installed Claude Code offers. */
+/** A model one of the agents offers. */
 export type ModelChoice = {
-  /** what Claude Code knows it by, or null for whichever model it is set to run */
+  /** what the agent knows it by, or null for whichever model it is set to run */
   id: string | null
-  /** as Claude Code lists it: "Opus 5.5", "Default (recommended)" */
+  /** as the agent lists it: "Opus 5.5", "Default (recommended)" */
   name: string
   /** the model it is, said shortly: the same, but for the default, the model that is */
   short: string
@@ -223,11 +255,15 @@ export type Commands = {
   skills: Command[]
 }
 
-/** How a message is to be answered: by which model, thinking how hard, asking how much. */
+/**
+ * How a message is to be answered: by whose agent, with which model, thinking how hard,
+ * asking how much.
+ */
 export type Manner = {
-  /** null: the model Claude Code is set to run */
+  provider: ProviderId
+  /** null: the model the agent is set to run */
   model: string | null
-  /** null: as hard as Claude Code is set to have that model think */
+  /** null: as hard as the agent is set to have that model think */
   effort: Effort | null
   access: Access
 }
@@ -254,10 +290,56 @@ export type Seen = {
   }[]
 }
 
-export type ClaudeStatus = {
-  /** the Claude Code this app will run: the one installed on this machine, if any */
+/** Something set in an agent's environment when it is started: a key, an address. */
+export type EnvVar = { name: string; value: string }
+
+/** What the user has chosen about one of the agents. */
+export type ProviderSettings = {
+  /** whether it is offered where a message is written */
+  enabled: boolean
+  /** what to run: a name looked for on the PATH, or a path. Empty for its usual name. */
+  binary: string
+  /** where it keeps its settings and its sign-in. Empty for where it keeps them itself. */
+  home: string
+  /** more to start it with, as it would be typed after its name */
+  args: string
+  env: EnvVar[]
+  /** models of its own that are left out where one is chosen, as it knows them */
+  hidden: string[]
+  /** models that come first there */
+  favorites: string[]
+  /** models it did not list but can be told to run, as it knows them */
+  custom: string[]
+}
+
+/** How one of the agents stands on this machine. */
+export type ProviderStatus = {
+  /** what would be run: where it was found, or null if it was not */
   path: string | null
   version: string | null
+  /** whether an account is signed in to it; null where it has not said */
+  signedIn: boolean | null
+  /** the account, as far as it says: a plan, an address */
+  account: string | null
+  /** what went wrong in looking at it, in a line; null if nothing did */
+  trouble: string | null
+  /** when it was last looked at (ms) */
+  checkedAt: number
+}
+
+/** One of the agents: what is chosen about it, how it stands, and what it offers. */
+export type Provider = {
+  id: ProviderId
+  settings: ProviderSettings
+  /** null until it has been looked for */
+  status: ProviderStatus | null
+  /** it is being looked at now: what is said of it here may be about to change */
+  checking: boolean
+  /**
+   * Every model it offers, the hidden among them. None until it has said, and none of
+   * one that is switched off, which is not asked.
+   */
+  models: ModelChoice[]
 }
 
 export type ModelSource = {
@@ -338,6 +420,14 @@ export type CadApi = {
      * `name` is what the file is called unless they call it something else
      */
     saveDrawing(name: string, svg: string): Promise<boolean>
+    /**
+     * save several such drawings together: in a new folder, called `folder`, made in a
+     * folder the user picks
+     */
+    saveDrawings(
+      folder: string,
+      drawings: { name: string; svg: string }[]
+    ): Promise<boolean>
   }
   thread: {
     items(projectId: string, conversationId: string): Promise<ThreadItem[]>
@@ -376,6 +466,15 @@ export type CadApi = {
       permissionId: string,
       answer: PermissionAnswer
     ): Promise<void>
+    /**
+     * Answer what Claude asked: something said to each of its questions, in their
+     * order, and nothing ("") to one that is left to it. Null leaves them all to it.
+     */
+    tell(
+      projectId: string,
+      questionId: string,
+      answers: string[] | null
+    ): Promise<void>
     onItem(
       listener: (
         projectId: string,
@@ -384,11 +483,19 @@ export type CadApi = {
       ) => void
     ): () => void
   }
+  providers: {
+    list(): Promise<Provider[]>
+    /** change what is chosen about one; resolves to them all as they then are */
+    change(
+      id: ProviderId,
+      patch: Partial<ProviderSettings>
+    ): Promise<Provider[]>
+    /** look at them again: what is installed, who is signed in, what models there are */
+    check(): Promise<Provider[]>
+    onChange(listener: (providers: Provider[]) => void): () => void
+  }
   claude: {
-    status(): Promise<ClaudeStatus>
-    /** the models to choose from; none if Claude Code is missing or would not say */
-    models(): Promise<ModelChoice[]>
-    /** the commands and skills it has in a project's folder; none, likewise */
+    /** the commands and skills Claude Code has in a project's folder; none if it would not say */
     commands(projectId: string): Promise<Commands>
   }
   settings: {
@@ -418,6 +525,7 @@ export const CHANNEL = {
   modelSaveCopy: "model:save-copy",
   modelSaveCopies: "model:save-copies",
   modelSaveDrawing: "model:save-drawing",
+  modelSaveDrawings: "model:save-drawings",
   modelNameGroup: "model:name-group",
   threadItems: "thread:items",
   threadSend: "thread:send",
@@ -425,11 +533,14 @@ export const CHANNEL = {
   threadStop: "thread:stop",
   threadRename: "thread:rename",
   threadAnswer: "thread:answer",
+  threadTell: "thread:tell",
   threadItem: "thread:item",
   changesUndo: "changes:undo",
   changesRedo: "changes:redo",
-  claudeStatus: "claude:status",
-  claudeModels: "claude:models",
+  providersList: "providers:list",
+  providersChange: "providers:change",
+  providersCheck: "providers:check",
+  providersChanged: "providers:changed",
   claudeCommands: "claude:commands",
   settingsGet: "settings:get",
   settingsChooseProjectsFolder: "settings:choose-projects-folder",

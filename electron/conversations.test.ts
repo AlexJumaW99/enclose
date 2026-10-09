@@ -67,7 +67,15 @@ describe("conversations on disk", () => {
 
     const read = readConversations(dir, "p1", () => "session-1")
     expect(read).toEqual([
-      { id: read[0].id, sessionId: "session-1", name: null, items, gist: null },
+      {
+        id: read[0].id,
+        provider: "claude",
+        sessionId: "session-1",
+        guided: null,
+        name: null,
+        items,
+        gist: null,
+      },
     ])
     // moved, not copied: reading again finds the same one, not a second
     expect(fs.existsSync(path.join(dir, "p1.json"))).toBe(false)
@@ -82,6 +90,27 @@ describe("conversations on disk", () => {
     }
     writeConversation(dir, "p1", named)
     expect(readConversations(dir, "p1", none)).toEqual([named])
+  })
+
+  it("keeps whose agent a conversation is had with, and takes one that says nothing of it for Claude Code's", () => {
+    const groks = {
+      ...newConversation("grok"),
+      sessionId: "01a1",
+      guided: "abc",
+      items: [said("a", "A cube")],
+    }
+    writeConversation(dir, "p1", groks)
+    expect(readConversations(dir, "p1", none)).toEqual([groks])
+
+    // from before there was any other, or with something else written where it goes
+    for (const provider of [undefined, "gemini", 3])
+      fs.writeFileSync(
+        path.join(dir, "p1", `${groks.id}.json`),
+        JSON.stringify({ provider, sessionId: "s", items: groks.items })
+      )
+    expect(readConversations(dir, "p1", none)).toMatchObject([
+      { provider: "claude", sessionId: "s", guided: null },
+    ])
   })
 
   it("keeps what a message was summed up as, and drops what does not read as that", () => {

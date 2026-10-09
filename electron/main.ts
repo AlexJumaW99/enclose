@@ -1,19 +1,26 @@
-// The app's own process: the window, the list of projects, and the line to Claude.
+// The app's own process: the window, the list of projects, and the line to the agents.
 import fs from "node:fs"
 import path from "node:path"
 
-import { app, BrowserWindow, dialog, ipcMain, protocol, shell } from "electron"
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  protocol,
+  safeStorage,
+  shell,
+} from "electron"
 
 import {
   ACCESSES,
   CHANNEL,
   EFFORTS,
   MODEL_SCHEME,
-  type ClaudeStatus,
+  PROVIDERS,
   type GroupAsked,
   type Manner,
   type Commands,
-  type ModelChoice,
   type ModelSource,
   type ObjectRef,
   type PartNote,
@@ -27,13 +34,9 @@ import {
   type ViewportResponse,
 } from "../shared/api"
 import { Changes } from "./changes"
-import {
-  claudeEnv,
-  findClaude,
-  followRename,
-  listCommands,
-  listModels,
-} from "./claude"
+import { followRename, listCommands, lookAtClaude } from "./claude"
+import { lookAtCodex } from "./codex"
+import { lookAtGrok } from "./grok"
 import {
   arrange,
   bringIn,
@@ -47,8 +50,10 @@ import {
 import { standInName } from "./names"
 import { groupNameOf } from "./naming"
 import { folderName, makeFolder, Projects, resolveInside } from "./projects"
-import { SettingsStore } from "./settings"
+import { cleanEnv, expandHome, Providers } from "./providers"
+import { SettingsStore, type Vault } from "./settings"
 import { Threads, type Arranging } from "./threads"
+import { ToolServer } from "./tools"
 
 const HERE = import.meta.dirname
 const DEV_URL = process.env.VITE_DEV_SERVER_URL
@@ -116,9 +121,10 @@ let projects: Projects
 let threads: Threads
 let changes: Changes
 let settings: SettingsStore
-let claude: ClaudeStatus = { path: null, version: null }
-/** the Claude Code on this machine, once it has been looked for */
-let claudeFound: Promise<ClaudeStatus> = Promise.resolve(claude)
+/** the agents on this machine: Claude Code, Codex, Grok */
+let providers: Providers
+/** where the app's own tools answer, for an agent that cannot be handed them */
+const toolServer = new ToolServer()
 /** where the app keeps the exporter a project copies to write its model */
 const KIT = path.join(app.getAppPath(), "kit", "enclose.py")
 
@@ -128,8 +134,8 @@ const list = (): Project[] =>
     .map((project): Project =>
       threads.lookingOver(project.id)
         ? { ...project, lookOver: "underway" }
-        : // with no Claude Code to ask, a model waits to be looked over unseen
-          project.lookOver && !claude.path
+        : // with no agent to ask, a model waits to be looked over unseen
+          project.lookOver && !providers.any()
           ? { ...project, lookOver: null }
           : project
     )
@@ -316,11 +322,11 @@ function makeModel(id: string) {
   if (!project || !command) return
   projects.report(id, { state: "working", done: 0, total: null })
   // Python is found on the PATH a terminal would have, which a Mac gives an app no part
-  // of: looking for Claude Code is what takes that PATH up
-  void claudeFound.then(() => {
+  // of: looking for the agents is what takes that PATH up
+  void providers.found.then(() => {
     // taken off the list while that was waited for
     if (!projects.get(id)) return
-    const build = runBuild(project.path, command, claudeEnv(), (done, total) =>
+    const build = runBuild(project.path, command, cleanEnv(), (done, total) =>
       projects.report(id, { state: "working", done, total })
     )
     builds.set(id, build.stop)
@@ -452,8 +458,8 @@ function seenFrom(given: unknown): Seen {
 function lookOver(id: string, seen: Seen, manner: Manner): string | null {
   const project = projects.get(id)
   const written = project?.lookOver
-  // (with no Claude Code to ask, it waits until there is one)
-  if (!project || !written || !claude.path) return null
+  // (with nothing to ask of the agent it is to be asked of, it waits until there is)
+  if (!project || !written || !providers.launch(manner.provider)) return null
   try {
     const { build, manifest } = project
     if (!manifest || !build) return null
@@ -470,7 +476,7 @@ function lookOver(id: string, seen: Seen, manner: Manner): string | null {
         )
       const next = modelScript(written.title, written.files, arranged)
       fs.writeFileSync(script, next)
-      const building = runBuild(project.path, build, claudeEnv(), () => {})
+      const building = runBuild(project.path, build, cleanEnv(), () => {})
       signal.addEventListener("abort", building.stop, { once: true })
       const failed = await building.finished
       signal.removeEventListener("abort", building.stop)
@@ -517,6 +523,7 @@ const objectsFrom = (given: unknown): ObjectRef[] =>
   )
 
 const mannerFrom = (manner: Partial<Manner> | null): Manner => ({
+  provider: PROVIDERS.find((one) => one === manner?.provider) ?? "claude",
   model: typeof manner?.model === "string" ? manner.model : null,
   effort: EFFORTS.find((effort) => effort === manner?.effort) ?? null,
   // what cannot be made out is not taken for leave to do anything
@@ -684,7 +691,10 @@ function wire() {
     async (_, id: string, asked: unknown): Promise<string | null> => {
       if (!projects.get(String(id))) return null
       const group = groupFrom(asked)
-      return group ? groupNameOf(await claudeFound, group) : null
+      if (!group) return null
+      // it is the quickest of Claude Code's models that is asked
+      await providers.found
+      return groupNameOf(providers.launch("claude"), group)
     }
   )
   ipcMain.handle(
@@ -735,6 +745,37 @@ function wire() {
       })
       if (picked.canceled || !picked.filePath) return false
       await fs.promises.writeFile(picked.filePath, svg, "utf8")
+      return true
+    }
+  )
+  ipcMain.handle(
+    CHANNEL.modelSaveDrawings,
+    async (_, folder: unknown, drawings: unknown) => {
+      if (!win || !Array.isArray(drawings)) return false
+      const wanted = (drawings as { name?: unknown; svg?: unknown }[]).flatMap(
+        (entry) =>
+          typeof entry?.svg === "string"
+            ? [{ name: path.basename(String(entry.name)), svg: entry.svg }]
+            : []
+      )
+      if (wanted.length === 0) return false
+      // a name a folder can have, whatever the model is called
+      const called =
+        String(folder)
+          .replace(/[\\/:]+/g, "-")
+          .replace(/^\.+/, "")
+          .trim() || "blueprint"
+      const picked = await dialog.showOpenDialog(win, {
+        message: `Choose where the folder "${called}" goes, with its ${wanted.length} SVG files`,
+        buttonLabel: "Save here",
+        defaultPath: app.getPath("downloads"),
+        properties: ["openDirectory", "createDirectory"],
+      })
+      if (picked.canceled || !picked.filePaths[0]) return false
+      // a folder of its own, numbered where the name is taken: nothing is written over
+      const into = makeFolder(picked.filePaths[0], called)
+      for (const { name, svg } of wanted)
+        await fs.promises.writeFile(path.join(into, name), svg, "utf8")
       return true
     }
   )
@@ -791,30 +832,40 @@ function wire() {
     (_, id: string, permissionId: string, answer: PermissionAnswer) =>
       threads.answer(id, permissionId, answer)
   )
+  ipcMain.handle(
+    CHANNEL.threadTell,
+    (_, id: string, questionId: string, answers: unknown) =>
+      threads.tell(
+        String(id),
+        String(questionId),
+        Array.isArray(answers)
+          ? answers.map((answer) => (typeof answer === "string" ? answer : ""))
+          : null
+      )
+  )
 
-  claudeFound = findClaude().then((status) => (claude = status))
-  // with Claude Code found, what the cards say can be summed up: have them asked for
-  void claudeFound.then(broadcast)
-  ipcMain.handle(CHANNEL.claudeStatus, () => claudeFound)
-  // asked of Claude Code once; if it would not say, it is asked again the next time
-  let models: Promise<ModelChoice[]> | null = null
-  ipcMain.handle(CHANNEL.claudeModels, () => {
-    models ??= claudeFound.then(listModels).then((found) => {
-      if (found.length === 0) models = null
-      return found
-    })
-    return models
+  ipcMain.handle(CHANNEL.providersList, () => providers.list())
+  ipcMain.handle(CHANNEL.providersChange, (_, id: unknown, patch: unknown) => {
+    const which = PROVIDERS.find((one) => one === id)
+    // answers at once, with what was chosen: what comes of looking at the agent again,
+    // where that is called for, the window hears of as it is found out
+    if (which) void providers.change(which, patch)
+    return providers.list()
   })
-  // What it can be called on for is asked afresh each time: it changes with the folder,
-  // and with what the user installs. One asking at a time for a project.
+  ipcMain.handle(CHANNEL.providersCheck, async () => {
+    await providers.check()
+    return providers.list()
+  })
+  // What Claude Code can be called on for is asked afresh each time: it changes with the
+  // folder, and with what the user installs. One asking at a time for a project.
   const commands = new Map<string, Promise<Commands>>()
   ipcMain.handle(CHANNEL.claudeCommands, (_, id: string): Promise<Commands> => {
     const project = projects.get(String(id))
     if (!project) return Promise.resolve({ commands: [], skills: [] })
     let asking = commands.get(project.id)
     if (!asking) {
-      asking = claudeFound
-        .then((found) => listCommands(found, project.path))
+      asking = providers.found
+        .then(() => listCommands(providers.launch("claude"), project.path))
         .finally(() => commands.delete(project.id))
       commands.set(project.id, asking)
     }
@@ -878,27 +929,56 @@ if (!app.requestSingleInstanceLock()) {
       })
 
     const data = app.getPath("userData")
-    settings = new SettingsStore(path.join(data, "settings.json"), {
-      // Documents is where a Mac keeps what its user makes; a run that keeps its state
-      // elsewhere keeps its projects there too
-      projectsFolder: ELSEWHERE
-        ? path.join(ELSEWHERE, "Projects")
-        : path.join(app.getPath("documents"), "Enclose"),
-      lookOver: true,
-    })
+    // What is set in an agent's environment is often a key: the system keeps those, where
+    // it has somewhere to keep them, and the settings file holds only what it gives back.
+    const vault: Vault | null = safeStorage.isEncryptionAvailable()
+      ? {
+          seal: (text) => safeStorage.encryptString(text).toString("base64"),
+          unseal: (sealed) =>
+            safeStorage.decryptString(Buffer.from(sealed, "base64")),
+        }
+      : null
+    settings = new SettingsStore(
+      path.join(data, "settings.json"),
+      {
+        // Documents is where a Mac keeps what its user makes; a run that keeps its state
+        // elsewhere keeps its projects there too
+        projectsFolder: ELSEWHERE
+          ? path.join(ELSEWHERE, "Projects")
+          : path.join(app.getPath("documents"), "Enclose"),
+        lookOver: true,
+      },
+      vault
+    )
     projects = new Projects(path.join(data, "projects.json"), broadcast)
     changes = new Changes(path.join(data, "changes"))
     threads = new Threads({
       dir: path.join(data, "threads"),
       projects,
       changes,
-      claude: () => claude,
+      launch: (id) => providers.launch(id),
+      tools: toolServer,
       kit: KIT,
-      onRenamed: followRename,
+      // (what Claude Code keeps of a folder is in its home, wherever the user has that)
+      onRenamed: (from, to) =>
+        followRename(
+          from,
+          to,
+          expandHome(settings.provider("claude").home) || undefined
+        ),
       viewport: askViewport,
       onItem: (projectId, conversationId, item) =>
         send(CHANNEL.threadItem, projectId, conversationId, item),
       onSummary: broadcast,
+    })
+    providers = new Providers({
+      settings,
+      look: { claude: lookAtClaude, codex: lookAtCodex, grok: lookAtGrok },
+      onChange: () => {
+        send(CHANNEL.providersChanged, providers.list())
+        // with an agent found, a model can be looked over and what the cards say summed up
+        broadcast()
+      },
     })
     wire()
 
@@ -939,6 +1019,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on("before-quit", () => {
     for (const stop of builds.values()) stop()
     threads?.close()
+    toolServer.close()
     projects?.close()
   })
 }

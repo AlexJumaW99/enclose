@@ -79,7 +79,9 @@ What was opened is left as it was.
 
 While the files are read and the model is made, the middle of the view says how far along
 it is, under the mark turning over. Then Claude looks the model over, while a light goes
-across all of its parts: the app draws it pictures of the model (put together, from the
+across all of its parts and the camera goes slowly round it, from a little further back
+than a model opens at; when Claude is through, the view comes in to the model again. The
+app draws it pictures of the model (put together, from the
 other side, pulled apart, and each part by itself) and it says what it takes the thing to
 be, and names and groups the parts, keeping the names the files gave where they are good
 ones. That is a conversation of the project's, begun by the app, and it ends with what
@@ -163,22 +165,6 @@ Down the right-hand edge:
 - **Download STEP**, at the top, saves the whole model as one STEP file, with every part
   in its place; its tooltip says how big the file is. (One part, or the parts of one
   group, are saved from the list of parts, below.)
-- **Section** (S) cuts the model open. Three squares appear by the axes, one per direction
-  to cut across, which the X, Y and Z keys choose too; in the view, drag the arrow to push
-  the cut through the model and the arcs to tilt it. While the pointer is on either, or
-  has hold of it, a faint square shows where the cut lies and how it is tilted. Two more
-  buttons appear to the left of this one: one shows the other half, the other starts the
-  cut again. A cut is kept as it is left: cut open again, the model is cut the same way,
-  until it is started again. While the model is cut open a tap of Z is the cut across Z,
-  and holding the key, or flicking with it down, brings up the shading.
-  Where the cut passes through a solid part it leaves a face in the part's colour, with
-  lines across it, the way a drawing marks what has been cut through. Where two parts
-  are in the same place by more than a tenth of a millimetre, the cut shows it in red.
-  (A part whose surfaces do not close, and anything drawn as glass or by its lines, is
-  left open.)
-- **Explode** (E) pulls the parts apart by the distances the manifest gives (or straight
-  out from the middle, if it gives none), and a slider along the bottom pulls them
-  further.
 - **Parts** (P) lists what the model is made of: a card for each group the model puts
   its parts in, and in it a row of the group's parts, each a picture with its name and
   the size of its STEP file. A row with more parts than fit scrolls sideways. Pick a part
@@ -213,6 +199,22 @@ Down the right-hand edge:
   power of ten millimetres across, whichever suits how near the view is, with every
   tenth line heavier: zoom out and they give way to squares ten times the size. It stays
   on, or off, from one model to the next.
+- **Section** (S) cuts the model open. Three squares appear by the axes, one per direction
+  to cut across, which the X, Y and Z keys choose too; in the view, drag the arrow to push
+  the cut through the model and the arcs to tilt it. While the pointer is on either, or
+  has hold of it, a faint square shows where the cut lies and how it is tilted. Two more
+  buttons appear to the left of this one: one shows the other half, the other starts the
+  cut again. A cut is kept as it is left: cut open again, the model is cut the same way,
+  until it is started again. While the model is cut open a tap of Z is the cut across Z,
+  and holding the key, or flicking with it down, brings up the shading.
+  Where the cut passes through a solid part it leaves a face in the part's colour, with
+  lines across it, the way a drawing marks what has been cut through. Where two parts
+  are in the same place by more than a tenth of a millimetre, the cut shows it in red.
+  (A part whose surfaces do not close, and anything drawn as glass or by its lines, is
+  left open.)
+- **Explode** (E) pulls the parts apart by the distances the manifest gives (or straight
+  out from the middle, if it gives none), and a slider along the bottom pulls them
+  further.
 - **Blueprint** (B) puts the model's drawings where the view was: the model drawn flat,
   from four of its corners and then from each of its six sides, each on a sheet of
   its own, upright and four wide to five high (210 by 262.5 mm, the width of A4). A corner shows three sides at once, all turned equally from the eye (an
@@ -245,7 +247,9 @@ Down the right-hand edge:
   shows the two it can, across its top and down its left, and a corner all three. They
   are of what is drawn, so of the parts on show, and are saved with a sheet, in a group
   of their own. Beside the switch, while it is on, is what they are in: millimetres or
-  inches, which the settings have too (General, Blueprints).
+  inches, which the settings have too (General, Blueprints). **Download all SVG**, after
+  them, saves every sheet at once, in a folder named after the model inside one you
+  choose.
 - **Search** (Cmd+F) finds parts and groups by name. A box comes up at the top of the
   view, and as you type in it the whole model goes see-through but for what goes by the
   name, which turns white the way a part does when it is picked out, wherever in the
@@ -293,6 +297,19 @@ while Claude is at work and is then kept with the steps, under the line that say
 long it worked.
 Claude is told to answer so, and sets the rest off in a `<details>` block for the app to
 fold away; a reply with nothing set off is shown whole, as every earlier one is.
+
+What Claude makes is drawn at the size it is to be made, so it is told where sizes come
+from: what you said, what is already in the model, the standard for a thing that has one
+(looked up, not made up), and only then what such a thing commonly measures. It says
+which sizes decided the shape, and leads with any that were its own guess.
+
+Mostly it shows that guess and lets you correct it. Where a wrong guess would waste the
+build (the thing has to fit something of yours whose size it cannot know, or what you
+asked for could be quite different things) it asks first, in the conversation, one
+question at a time: a few likely answers to click, and a line to write your own. A click
+goes on to the next question, and the last one sends them all; **Skip** leaves a question
+to Claude, which goes by its best guess and says what it was. Whatever access Claude has,
+what it asks is put to you: a question is no leave to do something.
 
 A card says the last of its conversation in two lines: what was asked, while Claude is at
 work on it, and otherwise what was last said, which of a reply of Claude's is the short
@@ -389,7 +406,7 @@ access". Click it for the three choices behind it: which of Claude Code's models
 how hard it thinks, and what it may do without asking. The models are the ones your
 Claude Code offers; "Default" leaves the model, and how hard it thinks, as Claude Code is
 set.
-Claude starts out with full access and never asks. It can be made to ask before it
+Claude starts out with full access and never asks leave. It can be made to ask before it
 changes a file or runs anything ("Supervised"), to edit files freely and ask before
 anything else ("Auto-accept edits"), or to do what is routine and ask about the rest
 ("Auto").

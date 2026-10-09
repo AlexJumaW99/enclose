@@ -2,15 +2,19 @@
 // together; and saying how big it is, or not. Each is a switch in a bar of its own, and
 // next to it, while it is on, is what goes with it, in a bar of its own again: how far
 // apart the parts are pulled, and what the sizes are said in. So there are two pairs of
-// them, a little apart from one another.
+// them, a little apart from one another. And after them, what takes all the sheets away
+// at once.
 import * as React from "react"
 import { cn } from "cn"
+import { DownloadIcon } from "lucide-react"
 
+import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Spread } from "@/components/viewport/explode-slider"
 import { usePreferences, type Unit } from "@/lib/preferences"
 import { SPREAD, useStore } from "@/lib/store"
+import { useSaving } from "./saving"
 
 /** What a length can be said in, in the order they are offered. */
 const UNITS: Unit[] = ["mm", "in"]
@@ -66,6 +70,7 @@ export function Options() {
   const setView = useStore((state) => state.setView)
   const units = usePreferences((state) => state.units)
   const change = usePreferences((state) => state.change)
+  const saveAll = useSaving((state) => state.all)
 
   // The bars are in the middle of the foot of the view, and another comes up next to a
   // switch as it is turned on: which would take the switch out from under the pointer
@@ -163,6 +168,21 @@ export function Options() {
           </ToggleGroup>
         )}
       </With>
+      {/* Every sheet at once, each a file, in a folder of their own: not while any of
+          them is still being drawn. */}
+      <Button
+        variant="ghost"
+        disabled={!saveAll}
+        onClick={() => saveAll?.()}
+        className={cn(
+          SWITCH,
+          // under the pointer it lightens a little, and its edge with it
+          "ml-5 cursor-pointer gap-2 pr-5 pl-4 hover:bg-foreground/8 hover:ring-foreground/20 dark:hover:bg-foreground/8"
+        )}
+      >
+        <DownloadIcon />
+        Download all SVG
+      </Button>
     </div>
   )
 }

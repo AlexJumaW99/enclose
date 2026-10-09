@@ -211,4 +211,21 @@ describe("atWork", () => {
     )
     expect(atWork([user("u"), asked("p", "denied")])).toBeNull()
   })
+
+  it("says so too while something Claude asked waits on an answer", () => {
+    const question = (state: "pending" | "answered"): ThreadItem => ({
+      kind: "question",
+      id: "q",
+      at: 0,
+      questions: [
+        { question: "What does it hold?", options: [], several: false },
+      ],
+      state,
+      answers: state === "answered" ? ["A mug"] : [],
+    })
+    expect(atWork([user("u"), question("pending")])).toBe(
+      "Waiting for your answer in the conversation"
+    )
+    expect(atWork([user("u"), question("answered")])).toBeNull()
+  })
 })

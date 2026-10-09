@@ -10,6 +10,7 @@ import {
 
 import type { ConversationSummary, Project, ThreadItem } from "@shared/api"
 import { Composer } from "@/components/composer"
+import { QuestionCard } from "@/components/question"
 import { Reply } from "@/components/reply"
 import { Steps } from "@/components/steps"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -28,6 +29,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { stretches } from "@/lib/mentions"
+import { answering, PROVIDER_WORDS, usable } from "@/lib/providers"
 import { inBlocks, type Block } from "@/lib/steps"
 import {
   fitThread,
@@ -48,7 +50,7 @@ function UserMessage({ item }: { item: Of<"user"> }) {
   if (item.lookOver)
     return (
       <div className="text-center text-xs text-muted-foreground">
-        Enclose asked Claude to look over the files you opened
+        Enclose asked for the files you opened to be looked over
       </div>
     )
   return (
@@ -166,6 +168,8 @@ function Item({
       return <Reply item={item} />
     case "permission":
       return <PermissionCard item={item} project={project} />
+    case "question":
+      return <QuestionCard item={item} project={project} />
     case "notice":
       return item.tone === "error" ? (
         <Alert variant="destructive">
@@ -346,7 +350,15 @@ export function Thread({ project }: { project: Project }) {
   const items = useStore((state) => (open ? state.items[open.id] : undefined))
   const load = useStore((state) => state.load)
   const openConversation = useStore((state) => state.openConversation)
-  const claude = useStore((state) => state.claude)
+  // whose agent answers here: the one this conversation is had with, or the one picked
+  const providers = useStore((state) => state.providers)
+  const answers = answering(
+    providers,
+    useStore((state) => state.provider),
+    open
+  )
+  const agent = providers.find((one) => one.id === answers)
+  const { name, cli } = PROVIDER_WORDS[answers]
   const setThreadOpen = useStore((state) => state.setThreadOpen)
   const width = useStore((state) => state.threadWidth)
   const end = React.useRef<HTMLDivElement>(null)
@@ -460,10 +472,10 @@ export function Thread({ project }: { project: Project }) {
           {/* files being made a model of are as good as one: it is seconds away */}
           {project.manifest || project.bringingIn?.state === "working" ? (
             <EmptyHeader>
-              <EmptyTitle>Ask Claude about this model</EmptyTitle>
+              <EmptyTitle>Ask {name} about this model</EmptyTitle>
               <EmptyDescription>
                 Describe a change, or click a part in the view and say what it
-                should become. Claude edits the project and rebuilds; the view
+                should become. {name} edits the project and rebuilds; the view
                 updates by itself.
               </EmptyDescription>
             </EmptyHeader>
@@ -471,7 +483,7 @@ export function Thread({ project }: { project: Project }) {
             <EmptyHeader>
               <EmptyTitle>No model of the files yet</EmptyTitle>
               <EmptyDescription>
-                They are in the project, where Claude can get at them. Ask it to
+                They are in the project, where {name} can get at them. Ask it to
                 set the project up, and it goes on from there.
               </EmptyDescription>
             </EmptyHeader>
@@ -479,7 +491,7 @@ export function Thread({ project }: { project: Project }) {
             <EmptyHeader>
               <EmptyTitle>What do you want to make?</EmptyTitle>
               <EmptyDescription>
-                Describe it and Claude builds it in this folder. It takes the
+                Describe it and {name} builds it in this folder. It takes the
                 place of the cube.
               </EmptyDescription>
             </EmptyHeader>
@@ -491,7 +503,9 @@ export function Thread({ project }: { project: Project }) {
         <Composer
           placeholder={
             project.manifest
-              ? "Ask anything, @tag parts, $use skills or / for commands"
+              ? agent && agent.id !== "claude"
+                ? "Ask anything, or @tag parts"
+                : "Ask anything, @tag parts, $use skills or / for commands"
               : project.bringingIn?.state === "failed"
                 ? "Set this project up, so the files show…"
                 : "A case for a Raspberry Pi Zero, with a lid that screws on…"
@@ -500,11 +514,13 @@ export function Thread({ project }: { project: Project }) {
           autoFocus
         />
         {/* said only when a message cannot be sent, and why */}
-        {(elsewhere || (claude && !claude.path)) && (
+        {(elsewhere || (agent && !agent.checking && !usable(agent))) && (
           <p className="px-1.5 text-xs text-muted-foreground">
             {elsewhere
-              ? "Claude is at work in another of this project's conversations."
-              : "Claude Code was not found on this machine. Install it and sign in there."}
+              ? "Another of this project's conversations is still being answered."
+              : agent?.status?.path
+                ? `${cli} is switched off. Switch it on in Settings.`
+                : `${cli} was not found on this machine. Install it and sign in there.`}
           </p>
         )}
       </div>

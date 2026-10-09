@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { commandChoices, modelChoices } from "./claude"
+import { accountOf, commandChoices, extraArgs, modelChoices } from "./claude"
 
 describe("modelChoices", () => {
   it("offers the models as Claude Code lists them", () => {
@@ -127,5 +127,51 @@ describe("commandChoices", () => {
       "context",
       "usage",
     ])
+  })
+})
+
+describe("extraArgs", () => {
+  it("is what was typed after the command, as the SDK takes more arguments", () => {
+    expect(extraArgs([])).toEqual({})
+    expect(
+      extraArgs(["--chrome", "--model", "opus", "--x=1=2", "stray", "-v", "--"])
+    ).toEqual({ chrome: null, model: "opus", x: "1=2" })
+    expect(extraArgs(["--debug", "--verbose"])).toEqual({
+      debug: null,
+      verbose: null,
+    })
+  })
+})
+
+describe("accountOf", () => {
+  it("says who is signed in, by what they pay for or how they reach it", () => {
+    expect(
+      accountOf({
+        email: "someone@example.com",
+        subscriptionType: "Claude Max",
+        apiProvider: "firstParty",
+      })
+    ).toEqual({ signedIn: true, account: "Claude Max" })
+    expect(accountOf({ apiProvider: "bedrock" })).toEqual({
+      signedIn: true,
+      account: "bedrock",
+    })
+    expect(
+      accountOf({
+        apiKeySource: "ANTHROPIC_API_KEY",
+        apiProvider: "firstParty",
+      })
+    ).toEqual({ signedIn: true, account: "API key" })
+  })
+
+  it("says nobody is, where Claude Code names no account and no key", () => {
+    expect(accountOf({ apiProvider: "firstParty" })).toEqual({
+      signedIn: false,
+      account: null,
+    })
+    expect(accountOf({ tokenSource: "none", apiKeySource: "none" })).toEqual({
+      signedIn: false,
+      account: null,
+    })
   })
 })

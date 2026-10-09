@@ -1,13 +1,14 @@
-// Finding the Claude Code already installed on this machine. The app has no login of its
-// own: it runs that install, which carries whatever account the user signed in with.
-import { execFile } from "node:child_process"
+// Claude Code, as one of the agents the app runs: who is signed in to it, the models it
+// offers, and the commands and skills it has. It is run through its own SDK, pointed at
+// the install already on this machine, which carries whatever account the user signed in
+// with.
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
-import { promisify } from "node:util"
 
 import {
   query,
+  type AccountInfo,
   type ModelInfo,
   type Query,
   type SDKUserMessage,
@@ -17,39 +18,20 @@ import {
 
 import {
   EFFORTS,
-  type ClaudeStatus,
   type Command,
   type Commands,
   type ModelChoice,
 } from "../shared/api"
+import type { Launch, Looked } from "./providers"
 
-const run = promisify(execFile)
-
-// What a Claude Code session sets for the processes it starts. If this app is launched
-// from inside one (a terminal in an editor, say), the Claude it starts must not inherit
-// them, or it would take itself for a child of that session.
-const PARENT_SESSION = [
-  "CLAUDECODE",
-  "CLAUDE_CODE_ENTRYPOINT",
-  "CLAUDE_CODE_EXECPATH",
-  "CLAUDE_CODE_SESSION_ID",
-  "CLAUDE_CODE_CHILD_SESSION",
-  "CLAUDE_CODE_SESSION_ATTENDED",
-  "CLAUDE_CODE_MESSAGING_SOCKET",
-  "CLAUDE_CODE_MESSAGING_TOKEN",
-  "CLAUDE_AGENT_SDK_VERSION",
-  "CLAUDE_PID",
-  "CLAUDE_EFFORT",
-]
-
-/** The environment to start Claude Code with: ours, minus what belongs to a parent session. */
 /**
  * Where Claude Code keeps what it knows of a folder: the conversations had there, and
- * the notes it has made about the project. It files them under the folder's path.
+ * the notes it has made about the project. It files them under the folder's path, in
+ * its home, which is `home` when the user has given it another.
  */
-const storeOf = (dir: string) =>
+const storeOf = (dir: string, home: string | undefined) =>
   path.join(
-    process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), ".claude"),
+    home ?? process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), ".claude"),
     "projects",
     dir.replace(/[^a-zA-Z0-9]/g, "-")
   )
@@ -59,81 +41,40 @@ const storeOf = (dir: string) =>
  * that its notes are still the project's. (A conversation can be carried on either way:
  * Claude Code finds it by its id.) If this cannot be done, nothing is lost by it.
  */
-export function followRename(from: string, to: string) {
+export function followRename(from: string, to: string, home?: string) {
   try {
-    const [was, is] = [storeOf(from), storeOf(to)]
+    const [was, is] = [storeOf(from, home), storeOf(to, home)]
     if (fs.existsSync(was) && !fs.existsSync(is)) fs.renameSync(was, is)
   } catch {
     // left where it was
   }
 }
 
-export function claudeEnv(): Record<string, string | undefined> {
-  const env: Record<string, string | undefined> = { ...process.env }
-  for (const key of PARENT_SESSION) delete env[key]
-  delete env.VITE_DEV_SERVER_URL
-  return env
-}
-
-function onPath(name: string): string | null {
-  for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
-    if (!dir) continue
-    const file = path.join(dir, name)
-    try {
-      fs.accessSync(file, fs.constants.X_OK)
-      return file
-    } catch {
-      // not in this directory
-    }
-  }
-  return null
-}
-
 /**
- * An app opened from the Dock or Finder gets a bare PATH, without the directories a
- * terminal adds - which is where `claude`, `python3` and the rest live. Ask the login
- * shell what PATH it would use, and adopt it.
+ * What the user would have typed after `claude`, as the SDK takes more arguments: each
+ * flag by its name, with what follows it, or nothing for one that stands alone.
  */
-async function adoptShellPath(): Promise<void> {
-  if (process.platform === "win32") return
-  const shell = process.env.SHELL ?? "/bin/zsh"
-  try {
-    const { stdout } = await run(
-      shell,
-      ["-ilc", 'printf "__PATH__%s__PATH__" "$PATH"'],
-      {
-        timeout: 5000,
-      }
-    )
-    const found = /__PATH__(.*)__PATH__/s.exec(stdout)?.[1]
-    if (found) process.env.PATH = found
-  } catch {
-    // keep the PATH we were started with
+export function extraArgs(args: string[]): Record<string, string | null> {
+  const extra: Record<string, string | null> = {}
+  for (let at = 0; at < args.length; at++) {
+    const arg = args[at]
+    // what is no flag has no place among them
+    if (!arg.startsWith("--") || arg.length === 2) continue
+    const [name, value] = arg.slice(2).split(/=(.*)/s)
+    if (value !== undefined) extra[name] = value
+    else if (args[at + 1] !== undefined && !args[at + 1].startsWith("-"))
+      extra[name] = args[++at]
+    else extra[name] = null
   }
+  return extra
 }
 
-export async function findClaude(): Promise<ClaudeStatus> {
-  const name = process.platform === "win32" ? "claude.exe" : "claude"
-  let file = onPath(name)
-  if (!file) {
-    await adoptShellPath()
-    file = onPath(name)
-  }
-  if (!file) return { path: null, version: null }
-
-  const real = fs.realpathSync(file)
-  let version: string | null = null
-  try {
-    const { stdout } = await run(real, ["--version"], {
-      timeout: 8000,
-      env: claudeEnv(),
-    })
-    version = stdout.trim().split(/\s+/)[0] || null
-  } catch {
-    // it is there but would not report a version; still worth trying to run
-  }
-  return { path: real, version }
-}
+/** How the SDK is told which Claude Code to run, and with what. */
+export const running = (launch: Launch) => ({
+  pathToClaudeCodeExecutable: launch.path,
+  env: launch.env,
+  ...(launch.args.length > 0 ? { extraArgs: extraArgs(launch.args) } : {}),
+})
 
 /** What Claude Code says of its models, as the app offers them. */
 export function modelChoices(rows: ModelInfo[]): ModelChoice[] {
@@ -179,11 +120,10 @@ const ASKING_TIMEOUT_MS = 20_000
  * nothing to answer and is ended once it has said. Null if it would not say.
  */
 async function asked<T>(
-  claude: ClaudeStatus,
+  launch: Launch,
   where: { cwd: string; settingSources: SettingSource[] },
   ask: (session: Query) => Promise<T>
 ): Promise<T | null> {
-  if (!claude.path) return null
   const abort = new AbortController()
   const gaveUp = new Promise<never>((_, reject) =>
     abort.signal.addEventListener("abort", () => reject(new Error("ended")), {
@@ -201,12 +141,7 @@ async function asked<T>(
   try {
     const session = query({
       prompt: nothing,
-      options: {
-        ...where,
-        pathToClaudeCodeExecutable: claude.path,
-        env: claudeEnv(),
-        abortController: abort,
-      },
+      options: { ...where, ...running(launch), abortController: abort },
     })
     return await Promise.race([ask(session), gaveUp])
   } catch {
@@ -218,16 +153,53 @@ async function asked<T>(
 }
 
 /**
- * The models the installed Claude Code offers the account it is signed in to. None, if
- * it is not installed or would not say.
+ * Who Claude Code says is signed in to it: by what they pay for, or how they reach it.
+ * Nobody, if it names no account and no key.
  */
-export async function listModels(claude: ClaudeStatus): Promise<ModelChoice[]> {
-  const rows = await asked(
-    claude,
-    { cwd: os.tmpdir(), settingSources: ["user"] },
-    (session) => session.supportedModels()
+export function accountOf(info: AccountInfo): {
+  signedIn: boolean
+  account: string | null
+} {
+  const elsewhere =
+    info.apiProvider && info.apiProvider !== "firstParty"
+      ? info.apiProvider
+      : null
+  const key = [info.apiKeySource, info.tokenSource].find(
+    (source) => source && source !== "none"
   )
-  return rows ? modelChoices(rows) : []
+  const account =
+    info.subscriptionType ?? elsewhere ?? (key ? "API key" : null) ?? info.email
+  return { signedIn: account != null, account: account ?? null }
+}
+
+/**
+ * What the installed Claude Code says of itself: the account it is signed in to, and
+ * the models it offers that account.
+ */
+export async function lookAtClaude(launch: Launch): Promise<Looked> {
+  const said = await asked(
+    launch,
+    { cwd: os.tmpdir(), settingSources: ["user"] },
+    async (session) => ({
+      models: await session.supportedModels(),
+      // one too old to say is not one that nobody is signed in to
+      account: await session.accountInfo().catch(() => null),
+    })
+  )
+  if (!said)
+    return {
+      signedIn: null,
+      account: null,
+      trouble: "Claude Code did not answer.",
+      models: [],
+    }
+  return {
+    ...(said.account
+      ? accountOf(said.account)
+      : { signedIn: null, account: null }),
+    trouble: null,
+    models: modelChoices(said.models),
+  }
 }
 
 /**
@@ -283,17 +255,19 @@ export function commandChoices(
  * user's, the folder's, and what plugins bring. None, if it would not say.
  */
 export async function listCommands(
-  claude: ClaudeStatus,
+  launch: Launch | null,
   cwd: string
 ): Promise<Commands> {
-  const found = await asked(
-    claude,
-    { cwd, settingSources: ["user", "project", "local"] },
-    async (session) =>
-      commandChoices(
-        await session.supportedCommands(),
-        (await session.reloadSkills()).skills
-      )
-  )
+  const found =
+    launch &&
+    (await asked(
+      launch,
+      { cwd, settingSources: ["user", "project", "local"] },
+      async (session) =>
+        commandChoices(
+          await session.supportedCommands(),
+          (await session.reloadSkills()).skills
+        )
+    ))
   return found ?? { commands: [], skills: [] }
 }

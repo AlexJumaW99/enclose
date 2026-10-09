@@ -13,6 +13,8 @@ import {
 
 import type { Settings as AppSettings } from "@shared/api"
 import { Miniature } from "@/components/miniature"
+import { Providers } from "@/components/providers"
+import { Group, Row } from "@/components/setting"
 import { useTheme } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -30,54 +32,11 @@ const SECTIONS = [
   { id: "appearance", label: "Appearance", icon: PaletteIcon },
   { id: "navigation", label: "Navigation", icon: Rotate3dIcon },
   { id: "shortcuts", label: "Shortcuts", icon: KeyboardIcon },
-  { id: "claude", label: "Claude", icon: SparklesIcon },
+  { id: "providers", label: "Providers", icon: SparklesIcon },
   { id: "about", label: "About", icon: InfoIcon },
 ] as const satisfies { id: string; label: string; icon: LucideIcon }[]
 
 type SectionId = (typeof SECTIONS)[number]["id"]
-
-/** A run of settings that belong together, under a heading. */
-function Group({
-  title,
-  children,
-}: {
-  title: string
-  children: React.ReactNode
-}) {
-  return (
-    <section className="flex flex-col gap-2">
-      <h2 className="px-1 text-sm text-muted-foreground">{title}</h2>
-      <div className="divide-y divide-border/60 rounded-2xl bg-card ring-1 ring-foreground/10">
-        {children}
-      </div>
-    </section>
-  )
-}
-
-/** One setting: what it is and what it does on the left, the control on the right. */
-function Row({
-  title,
-  detail,
-  children,
-}: {
-  title: string
-  detail?: React.ReactNode
-  children?: React.ReactNode
-}) {
-  return (
-    <div className="flex items-center justify-between gap-6 px-4 py-3.5">
-      <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-sm font-medium">{title}</span>
-        {detail && (
-          <span className="text-sm text-muted-foreground">{detail}</span>
-        )}
-      </div>
-      {children && (
-        <div className="flex shrink-0 items-center gap-2">{children}</div>
-      )}
-    </div>
-  )
-}
 
 /** A choice of one out of a few, all of them in view. */
 function Choice<Value extends string>({
@@ -204,10 +163,10 @@ function General() {
         </Row>
         <Row
           title="Opened files"
-          detail="Claude names and groups the parts of CAD files you open."
+          detail="Names and groups the parts of CAD files you open."
         >
           <Choice
-            label="Have Claude look over opened files"
+            label="Look over opened files"
             value={settings?.lookOver === false ? "off" : "on"}
             onChange={(value) =>
               void window.cad.settings
@@ -366,15 +325,16 @@ const KEYS: { title: string; rows: [string, string[]][] }[] = [
     title: "The model",
     rows: [
       ["Shading", ["Z"]],
+      ["Parts", ["P"]],
+      ["Group the selection", [CMD, "G"]],
+      ["Ungroup", [SHIFT, CMD, "G"]],
+      ["Grid", [SHIFT, "G"]],
       ["Section", ["S"]],
       ["Section axis", ["X", "Y", "Z"]],
       ["Explode", ["E"]],
       ["Isolate the selection", ["I"]],
       ["Hide the selection, or show everything", ["H"]],
-      ["Parts", ["P"]],
-      ["Group the selection", [CMD, "G"]],
-      ["Ungroup", [SHIFT, CMD, "G"]],
-      ["Grid", [SHIFT, "G"]],
+      ["Blueprint", ["B"]],
       ["Search", [CMD, "F"]],
       ["Undo", [CMD, "Z"]],
       ["Redo", [SHIFT, CMD, "Z"]],
@@ -442,34 +402,6 @@ function Shortcuts() {
   )
 }
 
-function Claude() {
-  const claude = useStore((state) => state.claude)
-  return (
-    <Group title="Claude Code">
-      <Row
-        title={
-          !claude
-            ? "Looking for Claude Code…"
-            : claude.path
-              ? `Claude Code${claude.version ? ` ${claude.version}` : ""}`
-              : "Claude Code was not found"
-        }
-        detail={
-          claude?.path ? (
-            <span className="font-mono text-xs break-all">{claude.path}</span>
-          ) : (
-            "Install Claude Code and sign in, then restart Enclose."
-          )
-        }
-      />
-      <Row
-        title="Signing in"
-        detail="Enclose uses the account signed in to Claude Code."
-      />
-    </Group>
-  )
-}
-
 function About() {
   return (
     <Group title="Enclose">
@@ -503,7 +435,7 @@ const PAGES: Record<SectionId, () => React.ReactNode> = {
   appearance: Appearance,
   navigation: Navigation,
   shortcuts: Shortcuts,
-  claude: Claude,
+  providers: Providers,
   about: About,
 }
 
@@ -575,7 +507,14 @@ export function Settings() {
           <span className="font-medium">{section?.label}</span>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-8 pt-4 pb-16">
+          <div
+            className={cn(
+              "mx-auto flex w-full flex-col gap-8 px-8 pt-4",
+              // the providers are a list with what is open of it beside: wider than a
+              // column of settings, and as tall as the window, scrolling within itself
+              open === "providers" ? "h-full max-w-5xl pb-8" : "max-w-2xl pb-16"
+            )}
+          >
             <Page />
           </div>
         </div>

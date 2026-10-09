@@ -1,0 +1,193 @@
+import { afterEach, describe, expect, it } from "vitest"
+
+import { answerTo, modelTools, ToolServer, viewportTools } from "./tools"
+
+const viewport = viewportTools(async (kind) => {
+  if (kind === "screenshot") return { data: "AAAA", mimeType: "image/png" }
+  if (kind === "parts") return [{ id: "lid", label: "Lid" }]
+  throw new Error("The viewport did not answer.")
+})
+
+describe("answerTo", () => {
+  it("says what it is, in the version it was asked in if it speaks that", async () => {
+    const answer = await answerTo("viewport", viewport, {
+      id: 1,
+      method: "initialize",
+      params: { protocolVersion: "2025-03-26" },
+    })
+    expect(answer).toMatchObject({
+      jsonrpc: "2.0",
+      id: 1,
+      result: {
+        protocolVersion: "2025-03-26",
+        capabilities: { tools: {} },
+        serverInfo: { name: "viewport" },
+      },
+    })
+    const other = await answerTo("viewport", viewport, {
+      id: 2,
+      method: "initialize",
+      params: { protocolVersion: "1999-01-01" },
+    })
+    expect(other).toMatchObject({ result: { protocolVersion: "2025-06-18" } })
+  })
+
+  it("lists its tools with what each takes", async () => {
+    const answer = await answerTo(
+      "model",
+      modelTools(async () => "done"),
+      { id: "a", method: "tools/list" }
+    )
+    const [arrange] = (
+      answer as {
+        result: {
+          tools: { name: string; inputSchema: { required: string[] } }[]
+        }
+      }
+    ).result.tools
+    expect(arrange.name).toBe("arrange")
+    expect(arrange.inputSchema).toMatchObject({
+      type: "object",
+      required: ["what", "groups", "parts"],
+    })
+    expect(arrange.inputSchema).not.toHaveProperty("$schema")
+  })
+
+  it("runs a tool, and gives back words or a picture", async () => {
+    expect(
+      await answerTo("viewport", viewport, {
+        id: 1,
+        method: "tools/call",
+        params: { name: "parts", arguments: {} },
+      })
+    ).toMatchObject({
+      result: {
+        content: [{ type: "text", text: expect.stringContaining('"lid"') }],
+      },
+    })
+    expect(
+      await answerTo("viewport", viewport, {
+        id: 2,
+        method: "tools/call",
+        params: { name: "screenshot" },
+      })
+    ).toMatchObject({
+      result: {
+        content: [{ type: "image", data: "AAAA", mimeType: "image/png" }],
+      },
+    })
+  })
+
+  it("says so, as a tool's own answer, when the tool could not do it", async () => {
+    expect(
+      await answerTo("viewport", viewport, {
+        id: 1,
+        method: "tools/call",
+        params: { name: "selection", arguments: {} },
+      })
+    ).toMatchObject({
+      result: {
+        isError: true,
+        content: [{ type: "text", text: "The viewport did not answer." }],
+      },
+    })
+    // what it was given is not what the tool takes
+    const arranged: unknown[] = []
+    const answer = await answerTo(
+      "model",
+      modelTools(async (given) => {
+        arranged.push(given)
+        return "done"
+      }),
+      {
+        id: 2,
+        method: "tools/call",
+        params: { name: "arrange", arguments: { what: "a box" } },
+      }
+    )
+    expect(answer).toMatchObject({ result: { isError: true } })
+    expect(arranged).toEqual([])
+  })
+
+  it("has no answer to what wants none, and an error for what it does not know", async () => {
+    expect(
+      await answerTo("viewport", viewport, {
+        method: "notifications/initialized",
+      })
+    ).toBeNull()
+    expect(
+      await answerTo("viewport", viewport, { id: 1, method: "resources/list" })
+    ).toMatchObject({ error: { code: -32601 } })
+    expect(
+      await answerTo("viewport", viewport, {
+        id: 2,
+        method: "tools/call",
+        params: { name: "nothing" },
+      })
+    ).toMatchObject({ error: { code: -32602 } })
+  })
+})
+
+describe("ToolServer", () => {
+  const server = new ToolServer()
+  afterEach(() => server.close())
+
+  const post = (
+    url: string,
+    body: unknown,
+    headers: Record<string, string> = {}
+  ) =>
+    fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...headers },
+      body: JSON.stringify(body),
+    })
+
+  it("answers at the address it gave, and only there, and only while it serves", async () => {
+    const serving = await server.serve({ viewport })
+    const url = serving.urls.viewport
+    expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/[\w-]{20,}\/viewport$/)
+
+    const listed = await post(url, {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/list",
+    })
+    expect(listed.status).toBe(200)
+    const { result } = (await listed.json()) as {
+      result: { tools: { name: string }[] }
+    }
+    expect(result.tools.map((tool) => tool.name)).toEqual([
+      "screenshot",
+      "selection",
+      "parts",
+    ])
+
+    // nothing in it wanted an answer
+    const told = await post(url, {
+      jsonrpc: "2.0",
+      method: "notifications/initialized",
+    })
+    expect(told.status).toBe(202)
+
+    // another set, another key, another way of asking, a page in a browser
+    expect((await post(url.replace(/viewport$/, "model"), {})).status).toBe(404)
+    expect(
+      (await post(url.replace(/\/[\w-]+\/viewport$/, "/wrong/viewport"), {}))
+        .status
+    ).toBe(404)
+    expect((await fetch(url)).status).toBe(405)
+    expect(
+      (
+        await post(
+          url,
+          { id: 1, method: "ping" },
+          { origin: "https://evil.example" }
+        )
+      ).status
+    ).toBe(403)
+
+    serving.stop()
+    expect((await post(url, { id: 1, method: "ping" })).status).toBe(404)
+  })
+})

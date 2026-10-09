@@ -1,8 +1,9 @@
 // What a group of parts made by hand is to be called. The user puts parts together with
 // Cmd+G and says nothing of what they are together: the quickest of Claude Code's models
 // is asked, with nothing to go by but what the parts and the other groups are called.
-import type { ClaudeStatus, GroupAsked } from "../shared/api"
+import type { GroupAsked } from "../shared/api"
 import { askOnce } from "./gist"
+import type { Launch } from "./providers"
 
 /** The most parts that are listed for it: more than tells it what a group is. */
 const LISTED = 60
@@ -64,7 +65,7 @@ export function tidyName(answer: string): string | null {
  * ask, or would not say.
  */
 export async function groupNameOf(
-  claude: ClaudeStatus,
+  claude: Launch | null,
   group: GroupAsked
 ): Promise<string | null> {
   if (group.parts.length === 0) return null

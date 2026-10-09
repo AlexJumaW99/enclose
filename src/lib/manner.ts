@@ -1,5 +1,6 @@
-// How a message is to be answered: by which model, thinking how hard, asking how much.
-// The user picks each; what is picked has to be squared with what Claude Code offers.
+// How a message is to be answered: by whose agent, with which model, thinking how hard,
+// asking how much. The user picks each; what is picked has to be squared with what the
+// agent offers.
 
 import {
   ACCESSES,
@@ -7,9 +8,10 @@ import {
   type Effort,
   type Manner,
   type ModelChoice,
+  type ProviderId,
 } from "@shared/api"
 
-/** How much Claude may do without asking, as it was last chosen and kept. */
+/** How much an agent may do without asking, as it was last chosen and kept. */
 export function savedAccess(kept: string | null): Access {
   // what an earlier version called the one of its two that asked
   if (kept === "ask") return "edits"
@@ -17,7 +19,7 @@ export function savedAccess(kept: string | null): Access {
 }
 
 /**
- * The model that will answer: the one picked, if Claude Code still offers it, and
+ * The model that will answer: the one picked, if the agent still offers it, and
  * otherwise whichever it is set to run. None, while it has not said what it offers.
  */
 export function chosenModel(
@@ -39,17 +41,19 @@ export function chosenEffort(
   return picked && model?.efforts.includes(picked) ? picked : null
 }
 
-/** What goes with a message, from what is picked and what Claude Code offers. */
+/** What goes with a message, from what is picked and what the agent offers. */
 export function mannerOf(
+  provider: ProviderId,
   models: ModelChoice[],
   model: string | null,
   effort: Effort | null,
   access: Access
 ): Manner {
-  // Claude Code has not said what it offers: what was picked stands as it is
-  if (models.length === 0) return { model, effort, access }
+  // the agent has not said what it offers: what was picked stands as it is
+  if (models.length === 0) return { provider, model, effort, access }
   const chosen = chosenModel(models, model)
   return {
+    provider,
     model: chosen?.id ?? null,
     effort: chosenEffort(chosen, effort),
     access,

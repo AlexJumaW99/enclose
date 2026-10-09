@@ -1,0 +1,327 @@
+// The app's own tools: what an agent sees the model with, and the one thing it changes a
+// model with on looking it over. Claude Code is handed them in-process, through its SDK.
+// Codex and Grok cannot be: they are told an address on this machine instead, where the
+// same tools answer as MCP servers over HTTP for as long as a turn lasts.
+import { randomBytes } from "node:crypto"
+import http from "node:http"
+import type { AddressInfo } from "node:net"
+
+import { z } from "zod"
+
+import type { ViewportRequest } from "../shared/api"
+import type { Arrangement } from "./imports"
+
+/** What a tool gives back: words, or a picture. */
+export type ToolResult = {
+  content: (
+    | { type: "text"; text: string }
+    | { type: "image"; data: string; mimeType: string }
+  )[]
+  isError?: boolean
+}
+
+/** One of the app's tools, as any agent is given it. */
+export type AppTool = {
+  name: string
+  description: string
+  /** what it takes, field by field; nothing, for a tool that takes nothing */
+  shape: z.ZodRawShape
+  run: (given: never) => Promise<ToolResult>
+}
+
+/** A tool, with what it is run with checked against what it says it takes. */
+function appTool<Shape extends z.ZodRawShape>(
+  name: string,
+  description: string,
+  shape: Shape,
+  run: (given: z.infer<z.ZodObject<Shape>>) => Promise<ToolResult>
+): AppTool {
+  return { name, description, shape, run: run as AppTool["run"] }
+}
+
+const words = (text: string): ToolResult => ({
+  content: [{ type: "text", text }],
+})
+const failed = (error: unknown): ToolResult => ({
+  ...words(error instanceof Error ? error.message : String(error)),
+  isError: true,
+})
+const told = (value: unknown) => words(JSON.stringify(value, null, 1))
+
+/** What each set of tools is called, as the server an agent finds them under. */
+export const VIEWPORT = "viewport"
+export const MODEL = "model"
+
+/** The tools an agent sees what the user sees with. `ask` puts a question to the window. */
+export function viewportTools(
+  ask: (kind: ViewportRequest["kind"]) => Promise<unknown>
+): AppTool[] {
+  return [
+    appTool(
+      "screenshot",
+      "The 3D viewport exactly as the user sees it right now, as an image: same camera, same exploded/section/see-through settings.",
+      {},
+      async () => {
+        try {
+          const shot = (await ask("screenshot")) as {
+            data: string
+            mimeType: string
+          }
+          return {
+            content: [
+              { type: "image", data: shot.data, mimeType: shot.mimeType },
+            ],
+          }
+        } catch (error) {
+          return failed(error)
+        }
+      }
+    ),
+    appTool(
+      "selection",
+      "The part the user has selected in the viewport, with the point they clicked (model coordinates, mm). Where they selected a whole object and not one part, piece gives what the app calls it and the ids of all its parts, and the rest is where on it they clicked. Null if nothing is selected.",
+      {},
+      async () => ask("selection").then(told, failed)
+    ),
+    appTool(
+      "parts",
+      "Every part of the model on screen: id, label, the group it is listed under (its id, and groupLabel for what it goes by), bounding box in model coordinates (mm), and whether it is currently shown. byHand marks a part the user has put in another group than the manifest has it in, by hand in the app: that is the group given here.",
+      {},
+      async () => ask("parts").then(told, failed)
+    ),
+  ]
+}
+
+/**
+ * On a model's being looked over, the one thing an agent can change it with: the names
+ * and groups of its parts, which `arrange` writes down and builds.
+ */
+export function modelTools(
+  arrange: (given: Arrangement) => Promise<string>
+): AppTool[] {
+  return [
+    appTool(
+      "arrange",
+      "Name and group the parts of the model that has just been made of the user's CAD files. Writes the names and groups into the project's model.py and builds it again; the view then shows the model so. Call it once, with every part.",
+      {
+        what: z
+          .string()
+          .describe(
+            'What the thing is, in a few plain words: "a planetary clock movement".'
+          ),
+        groups: z
+          .array(
+            z.object({
+              name: z.string().describe("Short and plain."),
+              outside: z
+                .boolean()
+                .optional()
+                .describe(
+                  "True if the parts in it enclose the rest: the app can then show what is inside through them."
+                ),
+            })
+          )
+          .describe("In the order the list of parts is to show them."),
+        parts: z
+          .array(
+            z.object({
+              id: z.string().describe("As in the list you were given."),
+              name: z.string().describe("What the part is to go by."),
+              group: z.string().describe("The name of one of the groups."),
+            })
+          )
+          .describe("Every part of the model."),
+      },
+      async (given) => arrange(given).then(words, failed)
+    ),
+  ]
+}
+
+// --- the same tools, over HTTP --------------------------------------------------------
+
+/** The versions of MCP this answers to, the one it would sooner speak first. */
+const VERSIONS = ["2025-06-18", "2025-11-25", "2025-03-26", "2024-11-05"]
+/** The most that is read of one request, in bytes: far more than any call to these is. */
+const MOST = 4_000_000
+
+type Message = {
+  id?: number | string | null
+  method?: string
+  params?: {
+    protocolVersion?: unknown
+    name?: unknown
+    arguments?: unknown
+  } | null
+}
+
+/** What a tool says it takes, as MCP wants it said. */
+function schemaOf(shape: z.ZodRawShape) {
+  const schema: Record<string, unknown> = {
+    ...z.toJSONSchema(z.object(shape)),
+  }
+  // which draft it is written in is no part of what a tool takes
+  delete schema.$schema
+  return schema
+}
+
+/**
+ * The answer to one message put to a set of tools, as an MCP server gives it: nothing,
+ * to one that wants no answer.
+ */
+export async function answerTo(
+  name: string,
+  tools: AppTool[],
+  message: Message
+): Promise<Record<string, unknown> | null> {
+  const { id, method, params } = message
+  if (id === undefined || id === null || typeof method !== "string") return null
+  const result = (value: unknown) => ({ jsonrpc: "2.0", id, result: value })
+  const error = (code: number, text: string) => ({
+    jsonrpc: "2.0",
+    id,
+    error: { code, message: text },
+  })
+  switch (method) {
+    case "initialize": {
+      const wanted = params?.protocolVersion
+      return result({
+        protocolVersion:
+          VERSIONS.find((version) => version === wanted) ?? VERSIONS[0],
+        capabilities: { tools: {} },
+        serverInfo: { name, version: "0.1.0" },
+      })
+    }
+    case "ping":
+      return result({})
+    case "tools/list":
+      return result({
+        tools: tools.map((tool) => ({
+          name: tool.name,
+          description: tool.description,
+          inputSchema: schemaOf(tool.shape),
+        })),
+      })
+    case "tools/call": {
+      const tool = tools.find((one) => one.name === params?.name)
+      if (!tool) return error(-32602, `Unknown tool: ${String(params?.name)}`)
+      const given = z.object(tool.shape).safeParse(params?.arguments ?? {})
+      if (!given.success)
+        return result(
+          failed(
+            `What was given is not what ${tool.name} takes:\n${z.prettifyError(given.error)}`
+          )
+        )
+      return result(await tool.run(given.data as never).catch(failed))
+    }
+  }
+  return error(-32601, `Method not found: ${method}`)
+}
+
+/** Tools being served: where each set is, and what stops serving them. */
+export type Serving = { urls: Record<string, string>; stop: () => void }
+
+/**
+ * Serves sets of tools over HTTP, to this machine only, each for as long as it is wanted.
+ * Where a set is, is known only to whoever was told: the address has a key in it that is
+ * made for the occasion and gone with it.
+ */
+export class ToolServer {
+  private server: http.Server | null = null
+  private port: Promise<number> | null = null
+  private served = new Map<string, Record<string, AppTool[]>>()
+
+  private listen(): Promise<number> {
+    this.port ??= new Promise<number>((resolve, reject) => {
+      const server = http.createServer((request, response) => {
+        void this.handle(request, response).catch(() => {
+          if (!response.headersSent) response.writeHead(500)
+          response.end()
+        })
+      })
+      server.once("error", reject)
+      server.listen(0, "127.0.0.1", () => {
+        this.server = server
+        resolve((server.address() as AddressInfo).port)
+      })
+    })
+    return this.port
+  }
+
+  private async handle(
+    request: http.IncomingMessage,
+    response: http.ServerResponse
+  ) {
+    // /<key>/<set>
+    const [, key, name] = (request.url ?? "").split("?")[0].split("/")
+    const tools = this.served.get(key ?? "")?.[name ?? ""]
+    // a page in a browser has no business here, whatever it was told
+    const origin = request.headers.origin
+    if (!tools || (origin !== undefined && origin !== "null")) {
+      response.writeHead(tools ? 403 : 404).end()
+      return
+    }
+    // there is nothing it has to say unasked, and nothing kept between one call and the next
+    if (request.method !== "POST") {
+      response.writeHead(405, { allow: "POST" }).end()
+      return
+    }
+    const chunks: Buffer[] = []
+    let size = 0
+    for await (const chunk of request as AsyncIterable<Buffer>) {
+      size += chunk.length
+      if (size > MOST) {
+        response.writeHead(413).end()
+        return
+      }
+      chunks.push(chunk)
+    }
+    let asked: unknown
+    try {
+      asked = JSON.parse(Buffer.concat(chunks).toString("utf8"))
+    } catch {
+      response.writeHead(400).end()
+      return
+    }
+    const several = Array.isArray(asked)
+    const answers = (
+      await Promise.all(
+        (several ? (asked as Message[]) : [asked as Message]).map((message) =>
+          answerTo(name, tools, message ?? {})
+        )
+      )
+    ).filter((answer) => answer !== null)
+    // nothing in it wanted an answer
+    if (answers.length === 0) {
+      response.writeHead(202).end()
+      return
+    }
+    response
+      .writeHead(200, { "content-type": "application/json" })
+      .end(JSON.stringify(several ? answers : answers[0]))
+  }
+
+  /** Serve these sets of tools, each under its name, until told to stop. */
+  async serve(sets: Record<string, AppTool[]>): Promise<Serving> {
+    const port = await this.listen()
+    const key = randomBytes(24).toString("base64url")
+    this.served.set(key, sets)
+    return {
+      urls: Object.fromEntries(
+        Object.keys(sets).map((name) => [
+          name,
+          `http://127.0.0.1:${port}/${key}/${name}`,
+        ])
+      ),
+      stop: () => {
+        this.served.delete(key)
+      },
+    }
+  }
+
+  close() {
+    this.served.clear()
+    this.server?.close()
+    this.server = null
+    this.port = null
+  }
+}

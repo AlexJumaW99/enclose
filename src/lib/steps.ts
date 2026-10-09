@@ -80,7 +80,7 @@ export function inBlocks(items: ThreadItem[]): Block[] {
 export function atWork(items: ThreadItem[]): string | null {
   const last = items.at(-1)
   if (!last) return null
-  if (last.kind === "permission")
+  if (last.kind === "permission" || last.kind === "question")
     return last.state === "pending"
       ? "Waiting for your answer in the conversation"
       : null

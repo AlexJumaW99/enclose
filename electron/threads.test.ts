@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import type { Seen } from "../shared/api"
-import { lookOverAsked, withNotes } from "./threads"
+import { answersTo, lookOverAsked, questionsOf, withNotes } from "./threads"
 
 const part = (id: string, label = id): Seen["parts"][number] => ({
   id,
@@ -173,5 +173,71 @@ describe("withNotes", () => {
     ).toContain(
       '<comment object="Main board" parts="pcb chip socket" part="Chip" id="chip" point='
     )
+  })
+})
+
+describe("questionsOf", () => {
+  const cup = {
+    question: " What does it hold? ",
+    header: "Cup",
+    options: [
+      { label: "Can", description: "66 mm across" },
+      { label: "Mug", description: "About 85 mm across", preview: "…" },
+    ],
+    multiSelect: false,
+  }
+
+  it("takes what Claude asks as the conversation shows it", () => {
+    expect(questionsOf({ questions: [cup] })).toEqual([
+      {
+        question: "What does it hold?",
+        options: [
+          { label: "Can", detail: "66 mm across" },
+          { label: "Mug", detail: "About 85 mm across" },
+        ],
+        several: false,
+      },
+    ])
+  })
+
+  it("knows a question that takes several answers", () => {
+    const [asked] = questionsOf({ questions: [{ ...cup, multiSelect: true }] })
+    expect(asked?.several).toBe(true)
+  })
+
+  it("leaves out what is no question, and an answer that says nothing", () => {
+    const asked = questionsOf({
+      questions: [
+        null,
+        { header: "Nothing asked" },
+        { ...cup, options: [{ label: " " }, "Mug", { label: "Can" }] },
+        { question: "And nothing offered?" },
+      ],
+    })
+    expect(asked.map((one) => one.question)).toEqual([
+      "What does it hold?",
+      "And nothing offered?",
+    ])
+    expect(asked[0]?.options).toEqual([{ label: "Can", detail: "" }])
+    expect(asked[1]?.options).toEqual([])
+  })
+
+  it("is nothing where nothing was asked", () => {
+    expect(questionsOf(null)).toEqual([])
+    expect(questionsOf({ questions: "What?" })).toEqual([])
+  })
+})
+
+describe("answersTo", () => {
+  it("puts what was said under each question, and says which were left", () => {
+    const asked = questionsOf({
+      questions: [
+        { question: "What does it hold?", options: [] },
+        { question: "Where does it go?", options: [] },
+      ],
+    })
+    const told = answersTo(asked, ["Mug, a flask", ""])
+    expect(told["What does it hold?"]).toBe("Mug, a flask")
+    expect(told["Where does it go?"]).toMatch(/^No answer: they leave this/)
   })
 })

@@ -19,8 +19,10 @@ import {
 } from "@/components/ui/tooltip"
 import type { LoadedModel, LoadedPart } from "@/components/viewport/load"
 import { usePreferences } from "@/lib/preferences"
+import { useStore } from "@/lib/store"
 import { dimensionsOf, type Room } from "./dimensions"
 import { drawn, type Body, type Stroke } from "./lines"
+import { useSaving } from "./saving"
 import {
   FIGURES,
   INK,
@@ -51,6 +53,9 @@ const LINE_PX = (LINE * 72) / 25.4
 /** And the same of what a sheet says of the model's size: its lines, and its figures. */
 const THIN_PX = (THIN * 72) / 25.4
 const FIGURES_PX = (FIGURES * 72) / 25.4
+
+/** How long after the sheet before it each sheet comes in, as the blueprint comes up, ms. */
+const AFTER_MS = 70
 
 /** A moment for the window to draw itself in. */
 const breathe = () => new Promise((resolve) => setTimeout(resolve, 0))
@@ -359,6 +364,7 @@ function Lines({
 /** One sheet: what it is of and the way to take it away, over the paper with the drawing on it. */
 function Sheet({
   name,
+  place,
   drawing,
   measures,
   stale,
@@ -371,10 +377,17 @@ function Sheet({
   measures: Dimension[] | null
   /** what is on it is of the model as it was, and is being drawn again */
   stale: boolean
+  /** its place in the row, from the left: it comes in that much after the first */
+  place: number
   onSave: () => void
 }) {
   return (
-    <section className="flex shrink-0 flex-col gap-2.5">
+    <section
+      // The sheets come in one after another along the row as the blueprint comes up:
+      // each out of nothing, and up a little into its place.
+      className="flex shrink-0 animate-in flex-col gap-2.5 duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] fill-mode-both fade-in slide-in-from-bottom-6 motion-reduce:animate-none"
+      style={{ animationDelay: `${place * AFTER_MS}ms` }}
+    >
       <header className="flex h-9 items-center justify-between">
         <h2 className="text-base font-medium">{name} View</h2>
         <Tooltip disableHoverablePopup>
@@ -474,34 +487,57 @@ export function Blueprint({
     [now, was, dimensions, units]
   )
 
+  /** A sheet as the file it is saved as: nothing, of one that is not drawn as the model now is. */
+  const fileOf = React.useCallback(
+    (index: number) => {
+      const { drawing, measures, stale } = sides[index]
+      if (!now || !drawing || stale) return null
+      const side = SIDES[index].name.toLowerCase()
+      // each part's lines under its name, and under its group's as the model has it now
+      const lines = new Map(
+        now.parts.map((id, place) => [id, drawing.strokes[place]])
+      )
+      const svg = svgOf({
+        title: `${name}, ${side} view (${scaleSaid(drawing.placing.by)}${
+          measures ? `, ${units}` : ""
+        })`,
+        placing: drawing.placing,
+        dimensions: measures ?? undefined,
+        groups: loaded.model.groups.map((group) => ({
+          id: group.id,
+          label: group.label,
+          parts: loaded.model.parts.flatMap((part) => {
+            const strokes = part.group === group.id && lines.get(part.id)
+            return strokes ? [{ id: part.id, label: part.label, strokes }] : []
+          }),
+        })),
+      })
+      return { name: `${fileName(name)}-${fileName(side)}.svg`, svg }
+    },
+    [sides, now, name, units, loaded]
+  )
   const save = (index: number) => {
-    const { drawing, measures, stale } = sides[index]
-    if (!now || !drawing || stale) return
-    const side = SIDES[index].name.toLowerCase()
-    // each part's lines under its name, and under its group's as the model has it now
-    const lines = new Map(
-      now.parts.map((id, place) => [id, drawing.strokes[place]])
-    )
-    const svg = svgOf({
-      title: `${name}, ${side} view (${scaleSaid(drawing.placing.by)}${
-        measures ? `, ${units}` : ""
-      })`,
-      placing: drawing.placing,
-      dimensions: measures ?? undefined,
-      groups: loaded.model.groups.map((group) => ({
-        id: group.id,
-        label: group.label,
-        parts: loaded.model.parts.flatMap((part) => {
-          const strokes = part.group === group.id && lines.get(part.id)
-          return strokes ? [{ id: part.id, label: part.label, strokes }] : []
-        }),
-      })),
-    })
-    void window.cad.model.saveDrawing(
-      `${fileName(name)}-${fileName(side)}.svg`,
-      svg
-    )
+    const file = fileOf(index)
+    if (file) void window.cad.model.saveDrawing(file.name, file.svg)
   }
+
+  // All of them together, for the button at the foot: once every sheet is drawn, and
+  // drawn as the model now is.
+  const whole = sides.every(({ drawing, stale }) => drawing !== null && !stale)
+  React.useEffect(() => {
+    if (!whole) return
+    useSaving.setState({
+      all: () => {
+        const files = SIDES.flatMap((_, index) => fileOf(index) ?? [])
+        void window.cad.model
+          .saveDrawings(`${fileName(name)}-blueprint`, files)
+          .then((saved) => {
+            if (saved) useStore.getState().say(`Saved ${files.length} SVGs`)
+          })
+      },
+    })
+    return () => useSaving.setState({ all: null })
+  }, [whole, fileOf, name])
 
   return (
     <div
@@ -510,7 +546,7 @@ export function Blueprint({
       // cards, and the last can be brought clear of the buttons down the other edge.
       ref={row}
       className="absolute inset-0 flex [scrollbar-width:none] items-center gap-10 overflow-x-auto overflow-y-hidden overscroll-x-contain pr-25 pl-68"
-      aria-busy={sides.some(({ drawing, stale }) => !drawing || stale)}
+      aria-busy={!whole}
       onWheel={(event) => {
         if (Math.abs(event.deltaY) > Math.abs(event.deltaX))
           event.currentTarget.scrollLeft += event.deltaY
@@ -520,6 +556,7 @@ export function Blueprint({
         <Sheet
           key={side.name}
           name={side.name}
+          place={index}
           drawing={sides[index].drawing}
           measures={sides[index].measures}
           stale={sides[index].stale}
