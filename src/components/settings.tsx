@@ -119,6 +119,14 @@ function Days({
   )
 }
 
+/** How much room a folder takes, as it is said to someone: "294 MB", "1.2 GB". */
+function roomOf(bytes: number): string {
+  if (!bytes) return "Empty"
+  if (bytes < 999_500) return `${Math.max(1, Math.round(bytes / 1000))} KB`
+  if (bytes < 999_500_000) return `${Math.round(bytes / 1_000_000)} MB`
+  return `${(bytes / 1_000_000_000).toFixed(1)} GB`
+}
+
 function General() {
   const access = useStore((state) => state.access)
   const setAccess = useStore((state) => state.setAccess)
@@ -129,6 +137,23 @@ function General() {
   React.useEffect(() => {
     void window.cad.settings.get().then(setSettings)
   }, [])
+  // the room the projects folder takes, and which folder that was measured for
+  const [measured, setMeasured] = React.useState<{
+    folder: string
+    bytes: number
+  } | null>(null)
+  const folder = settings?.projectsFolder
+  React.useEffect(() => {
+    if (!folder) return
+    let stale = false
+    void window.cad.settings.projectsFolderSize().then((bytes) => {
+      if (!stale) setMeasured({ folder, bytes })
+    })
+    return () => {
+      stale = true
+    }
+  }, [folder])
+  const size = measured && measured.folder === folder ? measured.bytes : null
 
   return (
     <>
@@ -138,8 +163,9 @@ function General() {
           detail={
             <>
               Where new projects are saved.
-              <span className="mt-1 block font-mono text-xs break-all">
-                {settings?.projectsFolder ?? " "}
+              <span className="mt-1 block text-xs">
+                <span className="font-mono break-all">{folder ?? " "}</span>
+                {size !== null && ` · ${roomOf(size)}`}
               </span>
             </>
           }

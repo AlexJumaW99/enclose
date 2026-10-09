@@ -1,0 +1,673 @@
+{
+ "title": "Counter stool",
+ "reference": "person",
+ "groups": [
+  {
+   "id": "frame",
+   "label": "Frame"
+  },
+  {
+   "id": "seat",
+   "label": "Seat"
+  },
+  {
+   "id": "brackets",
+   "label": "Brackets"
+  },
+  {
+   "id": "footrest",
+   "label": "Footrest"
+  }
+ ],
+ "parts": [
+  {
+   "id": "leg-front-left",
+   "label": "Leg, front left",
+   "group": "frame",
+   "color": "white",
+   "explode": [
+    -49.497474683058336,
+    -49.49747468305832,
+    0.0
+   ],
+   "file": "leg-front-left.glb",
+   "edges": "leg-front-left.edges.bin"
+  },
+  {
+   "id": "leg-front-right",
+   "label": "Leg, front right",
+   "group": "frame",
+   "color": "white",
+   "explode": [
+    49.497474683058314,
+    -49.497474683058336,
+    0.0
+   ],
+   "file": "leg-front-right.glb",
+   "edges": "leg-front-right.edges.bin"
+  },
+  {
+   "id": "leg-back-right",
+   "label": "Leg, back right",
+   "group": "frame",
+   "color": "white",
+   "explode": [
+    49.49747468305833,
+    49.49747468305832,
+    0.0
+   ],
+   "file": "leg-back-right.glb",
+   "edges": "leg-back-right.edges.bin"
+  },
+  {
+   "id": "leg-back-left",
+   "label": "Leg, back left",
+   "group": "frame",
+   "color": "white",
+   "explode": [
+    -49.49747468305832,
+    49.49747468305833,
+    0.0
+   ],
+   "file": "leg-back-left.glb",
+   "edges": "leg-back-left.edges.bin"
+  },
+  {
+   "id": "backrest",
+   "label": "Backrest",
+   "group": "frame",
+   "color": "white",
+   "explode": [
+    0.0,
+    42.0,
+    70.0
+   ],
+   "file": "backrest.glb",
+   "edges": "backrest.edges.bin"
+  },
+  {
+   "id": "glide-front-left",
+   "label": "Glide, front left",
+   "group": "frame",
+   "color": "lightgrey",
+   "explode": [
+    -49.497474683058336,
+    -49.49747468305832,
+    -25.0
+   ],
+   "file": "glide-front-left.glb",
+   "edges": "glide-front-left.edges.bin"
+  },
+  {
+   "id": "glide-front-right",
+   "label": "Glide, front right",
+   "group": "frame",
+   "color": "lightgrey",
+   "explode": [
+    49.497474683058314,
+    -49.497474683058336,
+    -25.0
+   ],
+   "file": "glide-front-right.glb",
+   "edges": "glide-front-right.edges.bin"
+  },
+  {
+   "id": "glide-back-right",
+   "label": "Glide, back right",
+   "group": "frame",
+   "color": "lightgrey",
+   "explode": [
+    49.49747468305833,
+    49.49747468305832,
+    -25.0
+   ],
+   "file": "glide-back-right.glb",
+   "edges": "glide-back-right.edges.bin"
+  },
+  {
+   "id": "glide-back-left",
+   "label": "Glide, back left",
+   "group": "frame",
+   "color": "lightgrey",
+   "explode": [
+    -49.49747468305832,
+    49.49747468305833,
+    -25.0
+   ],
+   "file": "glide-back-left.glb",
+   "edges": "glide-back-left.edges.bin"
+  },
+  {
+   "id": "cushion",
+   "label": "Cushion",
+   "group": "seat",
+   "color": "lightgrey",
+   "explode": [
+    0.0,
+    0.0,
+    100.0
+   ],
+   "file": "cushion.glb",
+   "edges": "cushion.edges.bin"
+  },
+  {
+   "id": "board",
+   "label": "Seat board",
+   "group": "seat",
+   "color": "white",
+   "explode": [
+    0.0,
+    0.0,
+    50.0
+   ],
+   "file": "board.glb",
+   "edges": "board.edges.bin"
+  },
+  {
+   "id": "bracket-front-left",
+   "label": "Bracket, front left",
+   "group": "brackets",
+   "color": "lightgrey",
+   "explode": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "file": "bracket-front-left.glb",
+   "edges": "bracket-front-left.edges.bin"
+  },
+  {
+   "id": "bracket-front-right",
+   "label": "Bracket, front right",
+   "group": "brackets",
+   "color": "lightgrey",
+   "explode": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "file": "bracket-front-right.glb",
+   "edges": "bracket-front-right.edges.bin"
+  },
+  {
+   "id": "bracket-back-right",
+   "label": "Bracket, back right",
+   "group": "brackets",
+   "color": "lightgrey",
+   "explode": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "file": "bracket-back-right.glb",
+   "edges": "bracket-back-right.edges.bin"
+  },
+  {
+   "id": "bracket-back-left",
+   "label": "Bracket, back left",
+   "group": "brackets",
+   "color": "lightgrey",
+   "explode": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "file": "bracket-back-left.glb",
+   "edges": "bracket-back-left.edges.bin"
+  },
+  {
+   "id": "key-front-left",
+   "label": "Key, front left",
+   "group": "brackets",
+   "color": "grey",
+   "explode": [
+    -16.970562748477143,
+    -16.97056274847714,
+    0.0
+   ],
+   "file": "key-front-left.glb",
+   "edges": "key-front-left.edges.bin"
+  },
+  {
+   "id": "key-front-right",
+   "label": "Key, front right",
+   "group": "brackets",
+   "color": "grey",
+   "explode": [
+    16.970562748477136,
+    -16.970562748477143,
+    0.0
+   ],
+   "file": "key-front-right.glb",
+   "edges": "key-front-right.edges.bin"
+  },
+  {
+   "id": "key-back-right",
+   "label": "Key, back right",
+   "group": "brackets",
+   "color": "grey",
+   "explode": [
+    16.970562748477143,
+    16.97056274847714,
+    0.0
+   ],
+   "file": "key-back-right.glb",
+   "edges": "key-back-right.edges.bin"
+  },
+  {
+   "id": "key-back-left",
+   "label": "Key, back left",
+   "group": "brackets",
+   "color": "grey",
+   "explode": [
+    -16.97056274847714,
+    16.970562748477143,
+    0.0
+   ],
+   "file": "key-back-left.glb",
+   "edges": "key-back-left.edges.bin"
+  },
+  {
+   "id": "leg-plate-front-left",
+   "label": "Leg plate, front left",
+   "group": "brackets",
+   "color": "lightgrey",
+   "explode": [
+    -33.941125496954285,
+    -33.94112549695428,
+    0.0
+   ],
+   "file": "leg-plate-front-left.glb",
+   "edges": "leg-plate-front-left.edges.bin"
+  },
+  {
+   "id": "leg-plate-front-right",
+   "label": "Leg plate, front right",
+   "group": "brackets",
+   "color": "lightgrey",
+   "explode": [
+    33.94112549695427,
+    -33.941125496954285,
+    0.0
+   ],
+   "file": "leg-plate-front-right.glb",
+   "edges": "leg-plate-front-right.edges.bin"
+  },
+  {
+   "id": "leg-plate-back-right",
+   "label": "Leg plate, back right",
+   "group": "brackets",
+   "color": "lightgrey",
+   "explode": [
+    33.941125496954285,
+    33.94112549695428,
+    0.0
+   ],
+   "file": "leg-plate-back-right.glb",
+   "edges": "leg-plate-back-right.edges.bin"
+  },
+  {
+   "id": "leg-plate-back-left",
+   "label": "Leg plate, back left",
+   "group": "brackets",
+   "color": "lightgrey",
+   "explode": [
+    -33.94112549695428,
+    33.941125496954285,
+    0.0
+   ],
+   "file": "leg-plate-back-left.glb",
+   "edges": "leg-plate-back-left.edges.bin"
+  },
+  {
+   "id": "seat-screws",
+   "label": "Bracket screws, M4 \u00d7 16",
+   "group": "brackets",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    0.0,
+    -45.0
+   ],
+   "file": "seat-screws.glb",
+   "edges": "seat-screws.edges.bin"
+  },
+  {
+   "id": "ring",
+   "label": "Footrest ring",
+   "group": "footrest",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "file": "ring.glb",
+   "edges": "ring.edges.bin"
+  },
+  {
+   "id": "bolt-front-left",
+   "label": "Bolt, front left, M6 \u00d7 50",
+   "group": "footrest",
+   "finish": "metal",
+   "explode": [
+    -84.85281374238572,
+    -84.85281374238569,
+    0.0
+   ],
+   "file": "bolt-front-left.glb",
+   "edges": "bolt-front-left.edges.bin"
+  },
+  {
+   "id": "bolt-front-right",
+   "label": "Bolt, front right, M6 \u00d7 50",
+   "group": "footrest",
+   "finish": "metal",
+   "explode": [
+    84.85281374238568,
+    -84.85281374238572,
+    0.0
+   ],
+   "file": "bolt-front-right.glb",
+   "edges": "bolt-front-right.edges.bin"
+  },
+  {
+   "id": "bolt-back-right",
+   "label": "Bolt, back right, M6 \u00d7 50",
+   "group": "footrest",
+   "finish": "metal",
+   "explode": [
+    84.8528137423857,
+    84.85281374238569,
+    0.0
+   ],
+   "file": "bolt-back-right.glb",
+   "edges": "bolt-back-right.edges.bin"
+  },
+  {
+   "id": "bolt-back-left",
+   "label": "Bolt, back left, M6 \u00d7 50",
+   "group": "footrest",
+   "finish": "metal",
+   "explode": [
+    -84.85281374238569,
+    84.8528137423857,
+    0.0
+   ],
+   "file": "bolt-back-left.glb",
+   "edges": "bolt-back-left.edges.bin"
+  }
+ ],
+ "keepouts": [],
+ "downloads": [
+  {
+   "file": "step/counter_stool.step",
+   "name": "counter_stool.step",
+   "label": "Counter stool",
+   "detail": "every part, in place",
+   "kind": "full",
+   "bytes": 5593842
+  },
+  {
+   "file": "step/leg-front-left.step",
+   "name": "leg-front-left.step",
+   "label": "Leg, front left",
+   "detail": "",
+   "kind": "part",
+   "part": "leg-front-left",
+   "bytes": 189621
+  },
+  {
+   "file": "step/leg-front-right.step",
+   "name": "leg-front-right.step",
+   "label": "Leg, front right",
+   "detail": "",
+   "kind": "part",
+   "part": "leg-front-right",
+   "bytes": 189621
+  },
+  {
+   "file": "step/leg-back-right.step",
+   "name": "leg-back-right.step",
+   "label": "Leg, back right",
+   "detail": "",
+   "kind": "part",
+   "part": "leg-back-right",
+   "bytes": 184750
+  },
+  {
+   "file": "step/leg-back-left.step",
+   "name": "leg-back-left.step",
+   "label": "Leg, back left",
+   "detail": "",
+   "kind": "part",
+   "part": "leg-back-left",
+   "bytes": 184750
+  },
+  {
+   "file": "step/backrest.step",
+   "name": "backrest.step",
+   "label": "Backrest",
+   "detail": "",
+   "kind": "part",
+   "part": "backrest",
+   "bytes": 411368
+  },
+  {
+   "file": "step/glide-front-left.step",
+   "name": "glide-front-left.step",
+   "label": "Glide, front left",
+   "detail": "",
+   "kind": "part",
+   "part": "glide-front-left",
+   "bytes": 35208
+  },
+  {
+   "file": "step/glide-front-right.step",
+   "name": "glide-front-right.step",
+   "label": "Glide, front right",
+   "detail": "",
+   "kind": "part",
+   "part": "glide-front-right",
+   "bytes": 35208
+  },
+  {
+   "file": "step/glide-back-right.step",
+   "name": "glide-back-right.step",
+   "label": "Glide, back right",
+   "detail": "",
+   "kind": "part",
+   "part": "glide-back-right",
+   "bytes": 35207
+  },
+  {
+   "file": "step/glide-back-left.step",
+   "name": "glide-back-left.step",
+   "label": "Glide, back left",
+   "detail": "",
+   "kind": "part",
+   "part": "glide-back-left",
+   "bytes": 35207
+  },
+  {
+   "file": "step/cushion.step",
+   "name": "cushion.step",
+   "label": "Cushion",
+   "detail": "",
+   "kind": "part",
+   "part": "cushion",
+   "bytes": 12456
+  },
+  {
+   "file": "step/board.step",
+   "name": "board.step",
+   "label": "Seat board",
+   "detail": "",
+   "kind": "part",
+   "part": "board",
+   "bytes": 40703
+  },
+  {
+   "file": "step/bracket-front-left.step",
+   "name": "bracket-front-left.step",
+   "label": "Bracket, front left",
+   "detail": "",
+   "kind": "part",
+   "part": "bracket-front-left",
+   "bytes": 169123
+  },
+  {
+   "file": "step/bracket-front-right.step",
+   "name": "bracket-front-right.step",
+   "label": "Bracket, front right",
+   "detail": "",
+   "kind": "part",
+   "part": "bracket-front-right",
+   "bytes": 169123
+  },
+  {
+   "file": "step/bracket-back-right.step",
+   "name": "bracket-back-right.step",
+   "label": "Bracket, back right",
+   "detail": "",
+   "kind": "part",
+   "part": "bracket-back-right",
+   "bytes": 169122
+  },
+  {
+   "file": "step/bracket-back-left.step",
+   "name": "bracket-back-left.step",
+   "label": "Bracket, back left",
+   "detail": "",
+   "kind": "part",
+   "part": "bracket-back-left",
+   "bytes": 169122
+  },
+  {
+   "file": "step/key-front-left.step",
+   "name": "key-front-left.step",
+   "label": "Key, front left",
+   "detail": "",
+   "kind": "part",
+   "part": "key-front-left",
+   "bytes": 73840
+  },
+  {
+   "file": "step/key-front-right.step",
+   "name": "key-front-right.step",
+   "label": "Key, front right",
+   "detail": "",
+   "kind": "part",
+   "part": "key-front-right",
+   "bytes": 73840
+  },
+  {
+   "file": "step/key-back-right.step",
+   "name": "key-back-right.step",
+   "label": "Key, back right",
+   "detail": "",
+   "kind": "part",
+   "part": "key-back-right",
+   "bytes": 73839
+  },
+  {
+   "file": "step/key-back-left.step",
+   "name": "key-back-left.step",
+   "label": "Key, back left",
+   "detail": "",
+   "kind": "part",
+   "part": "key-back-left",
+   "bytes": 73839
+  },
+  {
+   "file": "step/leg-plate-front-left.step",
+   "name": "leg-plate-front-left.step",
+   "label": "Leg plate, front left",
+   "detail": "",
+   "kind": "part",
+   "part": "leg-plate-front-left",
+   "bytes": 63744
+  },
+  {
+   "file": "step/leg-plate-front-right.step",
+   "name": "leg-plate-front-right.step",
+   "label": "Leg plate, front right",
+   "detail": "",
+   "kind": "part",
+   "part": "leg-plate-front-right",
+   "bytes": 63744
+  },
+  {
+   "file": "step/leg-plate-back-right.step",
+   "name": "leg-plate-back-right.step",
+   "label": "Leg plate, back right",
+   "detail": "",
+   "kind": "part",
+   "part": "leg-plate-back-right",
+   "bytes": 63743
+  },
+  {
+   "file": "step/leg-plate-back-left.step",
+   "name": "leg-plate-back-left.step",
+   "label": "Leg plate, back left",
+   "detail": "",
+   "kind": "part",
+   "part": "leg-plate-back-left",
+   "bytes": 63743
+  },
+  {
+   "file": "step/seat-screws.step",
+   "name": "seat-screws.step",
+   "label": "Bracket screws, M4 \u00d7 16",
+   "detail": "",
+   "kind": "part",
+   "part": "seat-screws",
+   "bytes": 268914
+  },
+  {
+   "file": "step/ring.step",
+   "name": "ring.step",
+   "label": "Footrest ring",
+   "detail": "",
+   "kind": "part",
+   "part": "ring",
+   "bytes": 425311
+  },
+  {
+   "file": "step/bolt-front-left.step",
+   "name": "bolt-front-left.step",
+   "label": "Bolt, front left, M6 \u00d7 50",
+   "detail": "",
+   "kind": "part",
+   "part": "bolt-front-left",
+   "bytes": 300834
+  },
+  {
+   "file": "step/bolt-front-right.step",
+   "name": "bolt-front-right.step",
+   "label": "Bolt, front right, M6 \u00d7 50",
+   "detail": "",
+   "kind": "part",
+   "part": "bolt-front-right",
+   "bytes": 300832
+  },
+  {
+   "file": "step/bolt-back-right.step",
+   "name": "bolt-back-right.step",
+   "label": "Bolt, back right, M6 \u00d7 50",
+   "detail": "",
+   "kind": "part",
+   "part": "bolt-back-right",
+   "bytes": 300830
+  },
+  {
+   "file": "step/bolt-back-left.step",
+   "name": "bolt-back-left.step",
+   "label": "Bolt, back left, M6 \u00d7 50",
+   "detail": "",
+   "kind": "part",
+   "part": "bolt-back-left",
+   "bytes": 300832
+  }
+ ]
+}

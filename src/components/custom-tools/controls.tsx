@@ -102,7 +102,7 @@ const columns = (count: number): React.CSSProperties => ({
 })
 
 /** What a control is set to, in words, over the control itself. */
-const SAYS = "text-sm/[17px] font-medium tabular-nums"
+const SAYS = "text-sm/[17px] font-medium"
 
 /**
  * Follow the pointer from where it is pressed until it is let go, wherever it goes:
@@ -420,7 +420,7 @@ export function ControlOf({
       return <Palette control={control} onSet={onSet} />
     case "readout":
       return (
-        <div className="text-center text-[28px]/8 font-medium tracking-tight tabular-nums">
+        <div className="text-center text-[28px]/8 font-medium tracking-tight">
           {control.value || " "}
         </div>
       )

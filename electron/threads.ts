@@ -17,6 +17,7 @@ import {
 } from "@anthropic-ai/claude-agent-sdk"
 
 import type {
+  Attached,
   ConversationSummary,
   Manner,
   ObjectRef,
@@ -31,6 +32,7 @@ import type {
 import { MANIFEST_FORMAT } from "../shared/manifest-format"
 import { TOOLS_FOLDER } from "../shared/tool-format"
 import { PALETTE_NAMES } from "../shared/palette"
+import { pictureMark, pictureName } from "../shared/pictures"
 import { replyOf } from "../shared/reply"
 import type { Changes } from "./changes"
 import { running } from "./claude"
@@ -46,6 +48,7 @@ import {
   type Conversation,
 } from "./conversations"
 import type { Projects } from "./projects"
+import type { Shown } from "./pictures"
 import type { Launch } from "./providers"
 import type { AppScene } from "./reference"
 import {
@@ -133,8 +136,9 @@ const AGENTS: Record<ProviderId, string> = {
 }
 
 /**
- * Whether an agent takes pictures with a message. Grok does not: it is told in words,
- * and looks for itself with the tools.
+ * Whether an agent takes pictures with a message. Grok does not. Of a model that is to
+ * be looked over it is told in words; and the pictures a user puts with a message it
+ * cannot be shown at all, which it and the user are both told.
  */
 const TAKES_PICTURES: Record<ProviderId, boolean> = {
   claude: true,
@@ -377,6 +381,20 @@ export function keeping(kit: string): string[] {
   ]
 }
 
+/**
+ * What an agent is told of the pictures a message can come with: what they are for, and
+ * that a picture says how a thing is shaped far more often than how big it is.
+ */
+export function picturing(
+  tool: (set: string, name: string) => string
+): string[] {
+  return [
+    `- A message may come with pictures the user attached to it: a photo of a thing, a sketch, a drawing with sizes on it, a screenshot. Each is given under what it goes by (${pictureName(1)}), and ${pictureMark(1)} in what they wrote is where they put that picture in it. They are what the message is about. Asked to make what a picture shows, make that thing: the parts it is made of, each a part of its own, in the proportions the picture has them. Then set a screenshot of what you built (${tool(VIEWPORT, "screenshot")}) beside the picture and mend what differs, before you report it.`,
+    "- A picture gives shape and proportion, seldom size. A size written on it, or said with it, is real: go by it. Failing that, take the sizes from the standard for the thing or from what such a thing commonly measures, keep the picture's proportions, and say in the short reply which size you went by.",
+    "- A message that holds a <pictures> block came with pictures that you cannot be shown here: the block only names them. Never describe one, or make anything from one, as if you had seen it. Go by the words; and where what was asked cannot be done without the picture, say that you cannot see pictures here and ask the user to say in words what it shows: what the thing is, its parts, its sizes.",
+  ]
+}
+
 /** The reference for a project's own tools, beside the exporter in the app. */
 const TOOLS_GUIDE = "tools.md"
 
@@ -438,6 +456,7 @@ function guide(
     "- A click in the view picks out a whole object, not one part of it: the parts of a group that touch one another, such as a circuit board with all that is on it. A <comment> made of one has object, what the app calls it, and parts, the ids of all its parts. Its part, id and point are then only where on the object the user clicked: take what they said as said of the whole object, unless it says otherwise.",
     `- A message may hold an <objects> block: whole objects the user picked out in the view for the message to be about, one <object> for each, with what the app calls it and the ids of all its parts. What the message says, it says of those objects, each as one thing: they are what the user means by "this", "these" or "them". The user may still want only some part of one changed (the cap of a button, one chip on a board) and say so in their own words, not by its id: then find that part among the object's parts, by their labels, sizes and places (${tool(VIEWPORT, "parts")}) or by looking (${tool(VIEWPORT, "screenshot")}), and change that part alone. Ask which they mean only if it cannot be told.`,
     "- The user can take back what one of your turns did to the project's files, with Cmd+Z in the app, and put it back again: it is how they try a change and think better of it, and it costs them nothing. The next message then leads with an <undone> block that names each such turn by what was asked for in it. The project's files, and the model built from them, are as they were before that turn, whatever you remember having done in it: read a file again before you go on from it, and do not make the change again unless you are asked to. A <redone> block names turns whose changes were put back since: the files are as those turns left them.",
+    ...picturing(tool),
     `- A word in a message that begins with @ names a part of the model by its id, as the manifest and ${tool(VIEWPORT, "parts")} have it: @lid is the part whose id is lid.`,
     provider === "claude"
       ? "- A word in a message that begins with $ names one of your skills, which the user wants used for what they are asking: $pcb is the skill called pcb. Load it with the Skill tool before you start on the work, and follow it."
@@ -579,6 +598,48 @@ export function withNotes(
     .trim()
 }
 
+/**
+ * A message as an agent gets it when pictures came with it: each picture under what it
+ * goes by, and then the words. A message that is a command still leads with it. An
+ * agent that takes no pictures (`seen` false) gets the words, and with them that there
+ * were pictures and what each is called: so that it knows what the words speak of, and
+ * that it has not seen it.
+ */
+export function pictured(
+  text: string,
+  pictures: Shown[],
+  seen = true
+): Content {
+  if (pictures.length === 0) return text
+  if (!seen) {
+    const block = [
+      `<pictures count="${pictures.length}" shown-to-you="no">`,
+      ...pictures.map(
+        (picture) =>
+          `<picture name="${pictureName(picture.number)}" file="${picture.name.replace(/"/g, "'")}" />`
+      ),
+      "</pictures>",
+    ]
+    return (text.startsWith("/") ? [text, "", ...block] : [...block, "", text])
+      .join("\n")
+      .trim()
+  }
+  const shown = pictures.flatMap((picture) => [
+    { type: "text" as const, text: `${pictureName(picture.number)}:` },
+    {
+      type: "image" as const,
+      source: {
+        type: "base64" as const,
+        media_type: picture.mimeType as
+          "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+        data: picture.data,
+      },
+    },
+  ])
+  const words = text ? [{ type: "text" as const, text }] : []
+  return text.startsWith("/") ? [...words, ...shown] : [...shown, ...words]
+}
+
 /** What the app's asking for a model to be looked over reads as, in the conversation. */
 const LOOK_OVER = "Look the model over, and name and group its parts"
 /** The most pictures taken, and the most of one (as base64), from the window. */
@@ -681,12 +742,16 @@ function wordsOf(item: Extract<ThreadItem, { kind: "user" | "assistant" }>) {
   if (item.text) return item.text
   // nothing but what was said of parts: or, with nothing said at all, what it is about
   const said = (item.notes ?? []).map((note) => note.text)
+  const pictures = item.pictures?.length ?? 0
   return (
     said.length > 0
       ? said
       : [
           ...(item.reference ? [item.reference] : []),
           ...(item.objects ?? []).map((one) => one.label),
+          ...(pictures > 0
+            ? [pictures === 1 ? "An image" : `${pictures} images`]
+            : []),
         ]
   ).join(" · ")
 }
@@ -918,11 +983,19 @@ export class Threads {
     objects: ObjectRef[],
     manner: Manner,
     /** the reference scene on screen, when that is what the message is about */
-    reference: Referenced | null = null
+    reference: Referenced | null = null,
+    /** the pictures that go with it */
+    pictures: Shown[] = []
   ): string | null {
     return this.begin(projectId, conversationId, text, notes, objects, manner, {
-      content: (told) => withNotes(text, notes, objects, told, reference),
+      content: (told, provider) =>
+        pictured(
+          withNotes(text, notes, objects, told, reference),
+          pictures,
+          TAKES_PICTURES[provider]
+        ),
       reference: reference?.name,
+      pictures,
     })
   }
 
@@ -976,10 +1049,12 @@ export class Threads {
     objects: ObjectRef[],
     manner: Manner,
     asked: {
-      content: Content | ((told: Told) => Content)
+      content: Content | ((told: Told, provider: ProviderId) => Content)
       arrange?: Arranging
       /** what the reference scene the message is about goes by, if it is about one */
       reference?: string
+      /** the pictures that go with the message */
+      pictures?: Shown[]
     }
   ): string | null {
     const project = this.deps.projects.get(projectId)
@@ -1005,6 +1080,7 @@ export class Threads {
     }
 
     const now = Date.now()
+    const pictures = asked.pictures ?? []
     const said: Extract<ThreadItem, { kind: "user" }> = {
       kind: "user",
       id: `user-${now}`,
@@ -1014,14 +1090,39 @@ export class Threads {
       ...(notes.length > 0 ? { notes } : {}),
       ...(objects.length > 0 ? { objects } : {}),
       ...(asked.reference ? { reference: asked.reference } : {}),
+      ...(pictures.length > 0
+        ? {
+            // what is in each is kept in its file, and not with what was said
+            pictures: pictures.map(
+              ({ id, name, mimeType, bytes, number }): Attached => ({
+                id,
+                name,
+                mimeType,
+                bytes,
+                number,
+              })
+            ),
+          }
+        : {}),
       ...(asked.arrange ? { lookOver: true as const } : {}),
     }
     this.put(projectId, conversation, said)
+    // the user is not left to think an agent saw what it cannot be shown
+    if (pictures.length > 0 && !TAKES_PICTURES[conversation.provider])
+      this.notice(
+        projectId,
+        conversation,
+        "info",
+        `${AGENTS[conversation.provider]} cannot see images. It got only your words.`
+      )
     // Claude hears with the message of any of this conversation's turns that had what
     // they did taken back, or put back, since it was last told
     const content =
       typeof asked.content === "function"
-        ? asked.content(this.deps.changes.toTell(projectId, conversation.id))
+        ? asked.content(
+            this.deps.changes.toTell(projectId, conversation.id),
+            conversation.provider
+          )
         : asked.content
 
     let finish = () => {}

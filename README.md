@@ -132,6 +132,16 @@ carry, is drawn as the nearest of them, except greys, white and black, which are
 they are, and bare metal. A part given no colour takes the one that falls to its group. Nothing in the
 project's files is changed by this: it is only how the app draws them.
 
+A part that is made of something clear, a window or the glass over a dial, is drawn
+see-through whatever the shading, with no colour unless it is given one: the model says
+so of the part (`finish="glass"`). A click on it picks what is behind it, and a blueprint
+draws what it covers.
+
+What is round is drawn round. The exporter cuts every curve into flats that keep within a
+fiftieth of a millimetre of it, however big the curve is, so the rim of a dial is as
+smooth as a pin; a model built before that was so is drawn in fewer, until its project's
+`enclose.py` is replaced with the app's and it is built again.
+
 Moving around on a trackpad: move two fingers across it to orbit, pinch to zoom in on
 whatever is under the pointer, and hold Shift to pan. With a mouse: drag with the right
 button to orbit, turn the wheel to zoom, and hold Shift with either to pan. The main
@@ -273,6 +283,10 @@ Down the right-hand edge:
   takes him away again. He is there once he is asked for, in whatever project is open,
   and the camera stands back for him as it does for a scene.
 
+  [`examples/stool`](examples/stool) is a project to try it on: a counter stool, drawn
+  to the sizes it is sold by, whose model asks to be seen beside the person. Open the
+  folder as a project and press Cmd+/.
+
   Nobody is kept to the app's scenes. With the model set in one, a button at the foot of
   the view, **Improve reference scene in chat**, puts the scene on the message box as a
   chip and opens the conversation. What is written then is about the scene and not the
@@ -371,11 +385,18 @@ Down the right-hand edge:
   back from a frame, is stopped and says why in its tab, with a button that takes that
   to Claude.
 
-  [`examples/clock`](examples/clock) is a project to try it on: a clock movement whose
-  wheels have the numbers of teeth a real one has, and a tool that sets the time the
-  hands show, runs it forwards or back at three speeds, or keeps it to the computer's
-  clock. Open the folder as a project, or, with no projects yet, press Start with
-  example: that makes a project of a copy of it, where new projects go.
+  [`examples/clock`](examples/clock) is a project to try it on, and the rest of the app
+  with it: a table clock, a mechanical movement in a drum case on a stand. The bezel,
+  the dial, the back, the movement and the stand are each screwed on, with screws from
+  the app's library in holes cut to fit them, and there is glass over the dial. The
+  movement is a whole one, from the barrel to the balance, its wheels cut to the
+  numbers of teeth a real one has. Its tool sets the time the hands show, runs it
+  forwards or back at three speeds, or keeps it to the computer's clock; at the
+  clock's own speed the balance swings and the train goes on in beats, four to the
+  second. Glass shows the movement in its case, Explode takes it apart in the order it
+  is put together, and the dial has a window on the balance. Open the folder as a
+  project, or, with no projects yet, press Start with example: that makes a project of
+  a copy of it, where new projects go.
 
 Esc puts the search away if it is up, and then the parts list, the list of reference
 scenes, or the project's tools. After that it gets back out of the section, the explode,
@@ -527,6 +548,21 @@ you name before it starts on the work. A message that begins with / is a command
 that you, the project or a plugin have given Claude Code, and three of its own that mean
 something here (compact, context and usage). Esc puts the list away.
 
+A message can take pictures with it: a photo of the thing to make, a sketch, a drawing
+with its sizes on it. Paste one into the message box, drop it on the window, or pick it
+with the paperclip beside the send button. Each shows small over what you write, with a
+cross that takes it back off; click one to see it big. A picture that is pasted also
+leaves its mark where the caret was, [Image 1], so that the words can say which picture
+they mean ("the body of [Image 1] with the knob of [Image 2]"), and Backspace at the
+mark takes the picture with it. One message takes eight, and one too big for an agent is
+made smaller first. Claude gets each picture under its name, ahead of the words. It is
+told to make what a picture shows, part by part and in its proportions, to take sizes
+from what is written on it or said with it and not from how it looks, and to set a
+screenshot of what it built beside the picture before it reports. A message that was
+sent shows its pictures over what it said. They are kept with the app's own state, not
+in the project's folder, for as long as the project is on the list. Codex takes pictures
+the same way. Grok cannot see them: it gets your words, and the conversation says so.
+
 Under the message, one line says how it will be answered: "Using Opus 5.5, High, Full
 access". Click it for the three choices behind it: which of Claude Code's models answers,
 how hard it thinks, and what it may do without asking. The models are the ones your
@@ -545,7 +581,8 @@ and a list of every shortcut.
 
 ```
 electron/    the app's own process: window, project list, the line to Claude
-examples/    projects to open and try things on: a clock movement, with a tool
+examples/    projects to open and try things on: a table clock, with a tool, and a
+             counter stool, to see beside a person
 icons/       the app's icon, in the sizes each system asks for
 kit/         the exporter a project copies in to write its model (Python), the
              screws it can put in one, the app's own reference scenes, each drawn in

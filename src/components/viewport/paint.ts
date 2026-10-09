@@ -10,6 +10,8 @@ const UNCOLOURED = "#aeb2b9"
 // near-black metal would vanish on the dark theme; it goes steel instead
 const STEEL = "#aab0b8"
 export const EDGE = "#0e1012"
+/** What a clear part is drawn in when no colour is given it: no colour, as glass has none. */
+const CLEAR = "#ffffff"
 
 /**
  * The colour of one of a part's skins. It is one of the app's own colours (see
@@ -26,6 +28,8 @@ export function skinColour(
   chosen: string | null = null
 ): THREE.Color {
   if (chosen) return new THREE.Color(drawnIn(chosen, turn))
+  // what is clear has no colour but one it was given: its group's is not its own
+  if (part.clear && !part.color) return new THREE.Color(CLEAR)
   const ofFile =
     part.paint === "bare" && skin.color ? `#${skin.color.getHexString()}` : null
   if (part.metal) {

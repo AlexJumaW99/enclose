@@ -25,6 +25,11 @@ export type Part = {
   glass: boolean | null
   /** drawn as bare metal rather than plastic */
   metal: boolean
+  /**
+   * Made of something clear, as a window or a lens is: drawn see-through, so that what
+   * is behind it shows, however the rest of the model is drawn.
+   */
+  clear: boolean
 }
 
 export type Keepout = {
@@ -116,6 +121,7 @@ export function readModel(manifest: unknown): Model {
       explode: vec3(raw.explode) ?? [0, 0, 0],
       glass: typeof raw.glass === "boolean" ? raw.glass : null,
       metal: raw.finish === "metal" || (!declared && group === "screws"),
+      clear: raw.finish === "glass",
     }
   })
   if (parts.length === 0) throw new Error("The manifest lists no parts.")

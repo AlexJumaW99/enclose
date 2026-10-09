@@ -14,6 +14,7 @@ const part = (id: string, label: string, group: string) => ({
   explode: [0, 0, 0] as [number, number, number],
   glass: null,
   metal: false,
+  clear: false,
 })
 
 const model = {

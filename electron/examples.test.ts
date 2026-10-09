@@ -51,7 +51,7 @@ describe("startFrom", () => {
   const start = () =>
     startFrom(
       path.join(root, "app/examples/clock"),
-      "Clock movement",
+      "Table clock",
       path.join(root, "projects"),
       path.join(root, "app/kit/enclose.py"),
       made
@@ -70,7 +70,7 @@ describe("startFrom", () => {
 
   it("copies the example into a new project's folder, exporter and all", () => {
     const dir = start()
-    expect(dir).toBe(path.join(root, "projects/2026-10-09-1230-clock-movement"))
+    expect(dir).toBe(path.join(root, "projects/2026-10-09-1230-table-clock"))
     const at = path.relative(root, dir)
     expect(read(`${at}/tools/clock.js`)).toBe("// tool\n")
     expect(read(`${at}/build/step/base.step`)).toBe("step")
@@ -78,6 +78,16 @@ describe("startFrom", () => {
     expect(read(`${at}/model.py`)).not.toContain("sys.path")
     expect(fs.existsSync(path.join(dir, "__pycache__"))).toBe(false)
     expect(fs.existsSync(path.join(dir, ".DS_Store"))).toBe(false)
+  })
+
+  it("gives the copy the app's screws as well, where its model is made with them", () => {
+    expect(fs.existsSync(path.join(start(), "screws.py"))).toBe(false)
+    write("app/kit/screws.py", "# screws\n")
+    write(
+      "app/examples/clock/model.py",
+      SCRIPT + "from screws import Screw  # noqa: E402\n"
+    )
+    expect(read(`${path.relative(root, start())}/screws.py`)).toBe("# screws\n")
   })
 
   it("leaves the example as it was", () => {

@@ -7,6 +7,7 @@ import {
   CircleGaugeIcon,
   LockKeyholeIcon,
   LockKeyholeOpenIcon,
+  PaperclipIcon,
   PencilIcon,
   SparklesIcon,
   SquareIcon,
@@ -16,6 +17,7 @@ import {
 
 import type {
   Access,
+  Attached,
   ConversationSummary,
   Effort,
   Provider,
@@ -23,6 +25,7 @@ import type {
 } from "@shared/api"
 import { ProviderIcon, ReferenceIcon } from "@/components/icons"
 import { MentionMenu, type Choice } from "@/components/mention-menu"
+import { Thumb } from "@/components/picture"
 import { Badge } from "@/components/ui/badge"
 import {
   DropdownMenu,
@@ -52,6 +55,7 @@ import {
   EFFORT_WORDS,
 } from "@/lib/manner"
 import { matching, putIn, tokenAt } from "@/lib/mentions"
+import { isPicture } from "@/lib/pictures"
 import {
   answering,
   offeredModels,
@@ -69,6 +73,13 @@ import {
   type Note,
 } from "@/lib/store"
 import { useNow } from "@/lib/time"
+import {
+  atPictures,
+  cutOut,
+  pictureMark,
+  pictureName,
+  PICTURE_TYPES,
+} from "@shared/pictures"
 import { bridge } from "./viewport/bridge"
 
 /**
@@ -450,9 +461,127 @@ function Waiting({ called, notes }: { called: Called[]; notes: Note[] }) {
   )
 }
 
+/**
+ * The pictures waiting to go with the next message, over what is written: each small,
+ * in one row that scrolls sideways when there are more than fit. Pressed, one is shown
+ * big; its cross takes it back off the message. With more than one, each says which it
+ * is, as what is written speaks of it.
+ */
+function Pictures({
+  projectId,
+  pictures,
+  trouble,
+}: {
+  projectId: string
+  pictures: Attached[]
+  trouble: string | null
+}) {
+  const dropPicture = useStore((state) => state.dropPicture)
+  return (
+    <InputGroupAddon align="block-start" className="flex-col items-start pb-0">
+      {pictures.length > 0 && (
+        <div className="flex max-w-full min-w-0 [scrollbar-width:none] gap-2 overflow-x-auto">
+          {pictures.map((picture) => (
+            <div
+              key={picture.id}
+              data-picture={picture.number}
+              className="relative shrink-0"
+            >
+              <Thumb
+                projectId={projectId}
+                picture={picture}
+                className="block size-14 rounded-lg ring-1 ring-foreground/10"
+              />
+              {pictures.length > 1 && (
+                <span className="pointer-events-none absolute bottom-1 left-1 rounded-sm bg-background/85 px-1 text-[0.625rem] leading-3.5 font-medium text-foreground tabular-nums">
+                  {picture.number}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => dropPicture(picture.id)}
+                aria-label={`Leave ${pictureName(picture.number)} out of the message`}
+                className="absolute top-1 right-1 flex size-4.5 cursor-pointer items-center justify-center rounded-full bg-background/85 text-foreground outline-none hover:bg-background focus-visible:bg-background"
+              >
+                <XIcon className="size-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {trouble && (
+        <span className="text-xs font-normal text-muted-foreground">
+          {trouble}
+        </span>
+      )}
+    </InputGroupAddon>
+  )
+}
+
+/**
+ * Where a picture's mark stands in what is being written, drawn round as a chip is. It
+ * lies under the box, which is see-through, and holds the same words in the same
+ * letters: so each mark's ground falls behind the mark, and the words are the box's own.
+ */
+function Marks({
+  text,
+  numbers,
+  box,
+}: {
+  text: string
+  numbers: number[]
+  box: React.RefObject<HTMLTextAreaElement | null>
+}) {
+  const under = React.useRef<HTMLDivElement>(null)
+  // as wide as the box has room to write in, and moved up as far as it has been
+  const follow = React.useCallback(() => {
+    const at = box.current
+    const it = under.current
+    if (!at || !it) return
+    it.style.right = `${at.offsetWidth - at.clientWidth}px`
+    it.scrollTop = at.scrollTop
+  }, [box])
+  React.useLayoutEffect(follow, [follow, text])
+  React.useEffect(() => {
+    const at = box.current
+    if (!at) return
+    at.addEventListener("scroll", follow)
+    const sized = new ResizeObserver(follow)
+    sized.observe(at)
+    return () => {
+      at.removeEventListener("scroll", follow)
+      sized.disconnect()
+    }
+  }, [box, follow])
+  return (
+    <div
+      ref={under}
+      aria-hidden
+      className="pointer-events-none absolute inset-y-0 left-0 overflow-hidden px-3 pt-3 pb-2 text-base wrap-break-word whitespace-pre-wrap text-transparent md:text-sm"
+    >
+      {atPictures(text, numbers).map((piece) =>
+        piece.picture === null ? (
+          piece.text
+        ) : (
+          <span
+            key={piece.from}
+            data-mark={piece.picture}
+            className="rounded-[0.3rem] bg-foreground/10 ring-2 ring-foreground/10"
+          >
+            {piece.text}
+          </span>
+        )
+      )}
+      {/* a last line with nothing on it is still a line */}
+      {text.endsWith("\n") && " "}
+    </div>
+  )
+}
+
 /** Stable when a project has nothing said of its parts, and none of them called on. */
 const NO_NOTES: Note[] = []
 const NO_CALLED: Called[] = []
+const NO_PICTURES: Attached[] = []
 const NO_CHOICES: Choice[] = []
 
 /** How many times the message box has taken the typing for being asked to. */
@@ -489,6 +618,12 @@ export function Composer({
   const called = useStore((state) =>
     project ? (state.called[project.id] ?? NO_CALLED) : NO_CALLED
   )
+  const pictures = useStore((state) =>
+    project ? (state.pictures[project.id] ?? NO_PICTURES) : NO_PICTURES
+  )
+  const pictureTrouble = useStore((state) => state.pictureTrouble)
+  const attach = useStore((state) => state.attach)
+  const dropPicture = useStore((state) => state.dropPicture)
   // whether it is being written in, which is when a name being written is looked for
   const [within, setWithin] = React.useState(false)
 
@@ -561,6 +696,60 @@ export function Composer({
   }
   const follow = (at: HTMLTextAreaElement) => setCaret(at.selectionStart)
 
+  // A picture that is pasted goes on the message, and its mark goes into what is being
+  // written, where the caret is: so that the words can say which picture they mean.
+  const numbers = React.useMemo(
+    () => pictures.map((picture) => picture.number),
+    [pictures]
+  )
+  const paste = async (files: File[]) => {
+    const added = await attach(files)
+    const at = box.current
+    if (added.length === 0 || !at) return
+    // (what is written may have been written on while the pictures were made ready)
+    const now = at.value
+    const before = now.slice(0, at.selectionStart)
+    const after = now.slice(at.selectionEnd)
+    const marks =
+      (before === "" || /\s$/.test(before) ? "" : " ") +
+      added.map((picture) => pictureMark(picture.number)).join(" ") +
+      // (a full stop or a comma after it is the sentence's, and stays up against it)
+      (/^(\s|[,.;:!?)])/.test(after) ? "" : " ")
+    caretTo.current = before.length + marks.length
+    setText(before + marks + after)
+    setCaret(caretTo.current)
+  }
+  // The mark of a picture is one thing: the key that would take its last letter takes
+  // all of it, and the picture with it. Whether it did.
+  const unmark = (at: HTMLTextAreaElement, key: string) => {
+    if (at.selectionStart !== at.selectionEnd) return false
+    const piece = atPictures(text, numbers).find(
+      (one) =>
+        one.picture !== null &&
+        (key === "Backspace"
+          ? one.from + one.text.length === at.selectionStart
+          : one.from === at.selectionStart)
+    )
+    const picture = pictures.find((one) => one.number === piece?.picture)
+    if (!piece || !picture) return false
+    const cut = cutOut(text, piece.from, piece.text.length)
+    caretTo.current = cut.caret
+    setText(cut.text)
+    setCaret(cut.caret)
+    dropPicture(picture.id)
+    return true
+  }
+  // why a picture was not taken is said for a moment, and then not
+  React.useEffect(() => {
+    if (!pictureTrouble) return
+    const timer = setTimeout(
+      () => useStore.setState({ pictureTrouble: null }),
+      6000
+    )
+    return () => clearTimeout(timer)
+  }, [pictureTrouble])
+  const picker = React.useRef<HTMLInputElement>(null)
+
   // Parts called on from the view go on the box as chips, for the user to say what of
   // them: the box takes the typing. It may only now be on show, having been asked before.
   const asked = useStore((state) => state.writeRequests)
@@ -595,7 +784,11 @@ export function Composer({
   const busy = !project || (running !== undefined && running.id === open?.id)
   const elsewhere = running !== undefined && !busy
 
-  const something = text.trim() !== "" || notes.length > 0 || called.length > 0
+  const something =
+    text.trim() !== "" ||
+    notes.length > 0 ||
+    called.length > 0 ||
+    pictures.length > 0
   const submit = () => {
     if (!busy && !elsewhere && something) send()
   }
@@ -627,57 +820,90 @@ export function Composer({
           onPick={pick}
         />
       )}
+      {project && (pictures.length > 0 || pictureTrouble) && (
+        <Pictures
+          projectId={project.id}
+          pictures={pictures}
+          trouble={pictureTrouble}
+        />
+      )}
       {(called.length > 0 || notes.length > 0) && (
         <Waiting called={called} notes={notes} />
       )}
-      <InputGroupTextarea
-        value={text}
-        ref={box}
-        onChange={(event) => {
-          setText(event.target.value)
-          follow(event.target)
-        }}
-        onSelect={(event) => follow(event.currentTarget)}
-        onKeyDown={(event) => {
-          if (calling && !event.nativeEvent.isComposing) {
-            if (event.key === "Escape") {
-              event.preventDefault()
-              setShut(naming)
-              return
-            }
-            const step =
-              event.key === "ArrowDown" ? 1 : event.key === "ArrowUp" ? -1 : 0
-            if (step !== 0 && offered.length > 0) {
-              event.preventDefault()
-              move((active + step + offered.length) % offered.length)
-              return
-            }
-            const takes =
-              (event.key === "Enter" && !event.shiftKey) || event.key === "Tab"
-            if (takes && offered.length > 0) {
-              event.preventDefault()
-              pick(offered[active])
-              return
-            }
-          }
-          if (
-            event.key === "Enter" &&
-            !event.shiftKey &&
-            !event.nativeEvent.isComposing
-          ) {
+      <div className="relative w-full">
+        {pictures.length > 0 && (
+          <Marks text={text} numbers={numbers} box={box} />
+        )}
+        <InputGroupTextarea
+          value={text}
+          ref={box}
+          onPaste={(event) => {
+            const data = event.clipboardData
+            const files = [...data.files].filter(isPicture)
+            // Words copied with a picture of them (a table's cells) are pasted as words.
+            // A file copied where files are kept has its name for words: that is a picture.
+            const words = data.getData("text/plain") !== ""
+            const kept = files.some((file) => window.cad.projects.pathOf(file))
+            if (!project || files.length === 0 || (words && !kept)) return
             event.preventDefault()
-            submit()
-          }
-        }}
-        placeholder={placeholder}
-        autoFocus={autoFocus}
-        rows={1}
-        // A little more room over the words than the box gives, to match what is under
-        // the words of the line below. The box is one size, written in or not, until
-        // what is written needs more; and what it suggests keeps to one line, however
-        // long it is, so that the first letter written does not change the size either.
-        className="max-h-48 min-h-14 pt-3 placeholder-shown:overflow-hidden placeholder-shown:whitespace-nowrap"
-      />
+            void paste(files)
+          }}
+          onChange={(event) => {
+            setText(event.target.value)
+            follow(event.target)
+          }}
+          onSelect={(event) => follow(event.currentTarget)}
+          onKeyDown={(event) => {
+            if (
+              (event.key === "Backspace" || event.key === "Delete") &&
+              pictures.length > 0 &&
+              !event.nativeEvent.isComposing &&
+              unmark(event.currentTarget, event.key)
+            ) {
+              event.preventDefault()
+              return
+            }
+            if (calling && !event.nativeEvent.isComposing) {
+              if (event.key === "Escape") {
+                event.preventDefault()
+                setShut(naming)
+                return
+              }
+              const step =
+                event.key === "ArrowDown" ? 1 : event.key === "ArrowUp" ? -1 : 0
+              if (step !== 0 && offered.length > 0) {
+                event.preventDefault()
+                move((active + step + offered.length) % offered.length)
+                return
+              }
+              const takes =
+                (event.key === "Enter" && !event.shiftKey) ||
+                event.key === "Tab"
+              if (takes && offered.length > 0) {
+                event.preventDefault()
+                pick(offered[active])
+                return
+              }
+            }
+            if (
+              event.key === "Enter" &&
+              !event.shiftKey &&
+              !event.nativeEvent.isComposing
+            ) {
+              event.preventDefault()
+              submit()
+            }
+          }}
+          placeholder={placeholder}
+          autoFocus={autoFocus}
+          rows={1}
+          // A little more room over the words than the box gives, to match what is under
+          // the words of the line below. The box is one size, written in or not, until
+          // what is written needs more; and what it suggests keeps to one line, however
+          // long it is, so that the first letter written does not change the size either.
+          className="relative max-h-48 min-h-14 pt-3 placeholder-shown:overflow-hidden placeholder-shown:whitespace-nowrap"
+        />
+      </div>
       {/* by which model, thinking how hard, asking how much: one line that says so */}
       <InputGroupAddon
         align="block-end"
@@ -686,11 +912,35 @@ export function Composer({
         className="gap-1 pr-3 pl-1.5"
       >
         <Manner conversation={open ?? null} />
+        {/* a picture to go with the message: it can also be pasted, or dropped here */}
+        <input
+          ref={picker}
+          type="file"
+          accept={Object.keys(PICTURE_TYPES).join(",") + ",image/*"}
+          multiple
+          hidden
+          onChange={(event) => {
+            const files = [...(event.target.files ?? [])].filter(isPicture)
+            // (the same file can be picked again, having been taken off)
+            event.target.value = ""
+            void attach(files, true)
+          }}
+        />
+        <InputGroupButton
+          size="icon-xs"
+          title="Attach an image"
+          className="ml-auto shrink-0"
+          disabled={!project}
+          onClick={() => picker.current?.click()}
+        >
+          <PaperclipIcon />
+          <span className="sr-only">Attach an image</span>
+        </InputGroupButton>
         {busy && project ? (
           <InputGroupButton
             variant="secondary"
             size="icon-xs"
-            className="ml-auto shrink-0"
+            className="shrink-0"
             onClick={() => void window.cad.thread.stop(project.id)}
           >
             <SquareIcon className="fill-current" />
@@ -700,7 +950,7 @@ export function Composer({
           <InputGroupButton
             variant="default"
             size="icon-xs"
-            className="ml-auto shrink-0"
+            className="shrink-0"
             disabled={!something || elsewhere}
             onClick={submit}
           >

@@ -1,5 +1,5 @@
 import * as React from "react"
-import { FolderPlusIcon, SettingsIcon } from "lucide-react"
+import { FolderPlusIcon, ImagePlusIcon, SettingsIcon } from "lucide-react"
 
 import { Settings } from "@/components/settings"
 import { Sidebar } from "@/components/sidebar"
@@ -15,6 +15,7 @@ import {
 import { bridge } from "@/components/viewport/bridge"
 import { Viewport } from "@/components/viewport/viewport"
 import { toolsAsked, toolUsed } from "@/lib/custom-tools/asked"
+import { isPicture } from "@/lib/pictures"
 import { MAC } from "@/lib/platform"
 import { useActiveProject, useStore } from "@/lib/store"
 
@@ -102,21 +103,34 @@ function useAppKeys() {
 }
 
 /**
- * A folder dropped anywhere on the window becomes a project, and so do CAD files. True
- * while something is being dragged over it.
+ * A folder dropped anywhere on the window becomes a project, and so do CAD files. A
+ * picture dropped on it, with a project open, goes with that project's next message.
+ * Says what is being dragged over the window, while something is: pictures alone, or
+ * anything else.
  */
-function useFolderDrop(): boolean {
-  const [over, setOver] = React.useState(false)
+function useFolderDrop(): "pictures" | "files" | null {
+  const [over, setOver] = React.useState<"pictures" | "files" | null>(null)
   React.useEffect(() => {
     // entering a child fires before leaving its parent: count, so the two cancel
     let inside = 0
     const carriesFiles = (event: DragEvent) =>
       event.dataTransfer?.types.includes("Files") ?? false
+    // what kind each file is can be told while it is still on its way, and no more
+    const allPictures = (event: DragEvent) => {
+      const files = [...(event.dataTransfer?.items ?? [])].filter(
+        (item) => item.kind === "file"
+      )
+      return (
+        useStore.getState().activeId !== null &&
+        files.length > 0 &&
+        files.every((item) => item.type.startsWith("image/"))
+      )
+    }
     const enter = (event: DragEvent) => {
       if (!carriesFiles(event)) return
       event.preventDefault()
       inside++
-      setOver(true)
+      setOver(allPictures(event) ? "pictures" : "files")
     }
     const hover = (event: DragEvent) => {
       if (!carriesFiles(event) || !event.dataTransfer) return
@@ -127,17 +141,23 @@ function useFolderDrop(): boolean {
     const leave = (event: DragEvent) => {
       if (!carriesFiles(event)) return
       inside = Math.max(0, inside - 1)
-      if (inside === 0) setOver(false)
+      if (inside === 0) setOver(null)
     }
     const drop = (event: DragEvent) => {
       if (!carriesFiles(event) || !event.dataTransfer) return
       event.preventDefault()
       inside = 0
-      setOver(false)
-      const paths = [...event.dataTransfer.files]
+      setOver(null)
+      const files = [...event.dataTransfer.files]
+      // pictures go with the open project's next message, and the rest is opened
+      const { activeId, attach, openPaths } = useStore.getState()
+      const pictures = activeId ? files.filter(isPicture) : []
+      if (pictures.length > 0) void attach(pictures, true)
+      const paths = files
+        .filter((file) => !pictures.includes(file))
         .map((file) => window.cad.projects.pathOf(file))
         .filter(Boolean)
-      void useStore.getState().openPaths(paths)
+      void openPaths(paths)
     }
     window.addEventListener("dragenter", enter)
     window.addEventListener("dragover", hover)
@@ -196,8 +216,17 @@ export function App() {
         {dropping && (
           <div className="pointer-events-none fixed inset-2 z-50 flex items-center justify-center rounded-2xl bg-background/70 ring-2 ring-foreground/40 backdrop-blur-sm ring-inset">
             <div className="flex items-center gap-2.5 text-sm font-medium">
-              <FolderPlusIcon className="size-5" />
-              Drop a file or folder to make it a project
+              {dropping === "pictures" ? (
+                <>
+                  <ImagePlusIcon className="size-5" />
+                  Drop an image to send it with your message
+                </>
+              ) : (
+                <>
+                  <FolderPlusIcon className="size-5" />
+                  Drop a file or folder to make it a project
+                </>
+              )}
             </div>
           </div>
         )}

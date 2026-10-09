@@ -1,90 +1,238 @@
 {
- "title": "Clock movement",
+ "title": "Table clock",
  "reference": "table",
  "groups": [
   {
-   "id": "frame",
-   "label": "Frame",
+   "id": "case",
+   "label": "Case",
    "shell": true
+  },
+  {
+   "id": "dial_and_hands",
+   "label": "Dial and hands"
+  },
+  {
+   "id": "plates",
+   "label": "Plates"
   },
   {
    "id": "going_train",
    "label": "Going train"
   },
   {
+   "id": "escapement",
+   "label": "Escapement"
+  },
+  {
    "id": "motion_work",
    "label": "Motion work"
   },
   {
-   "id": "hands",
-   "label": "Hands"
+   "id": "screws",
+   "label": "Screws"
   }
  ],
  "parts": [
   {
-   "id": "base",
-   "label": "Base",
-   "group": "frame",
+   "id": "stand",
+   "label": "Stand",
+   "group": "case",
    "color": "grey",
    "explode": [
     0.0,
     0.0,
-    -30.0
+    -40.0
    ],
-   "file": "base.glb",
-   "edges": "base.edges.bin"
+   "file": "stand.glb",
+   "edges": "stand.edges.bin"
   },
   {
-   "id": "back-plate",
-   "label": "Back plate",
-   "group": "frame",
-   "color": "lightgrey",
+   "id": "feet",
+   "label": "Feet",
+   "group": "case",
+   "color": "#26282b",
    "explode": [
     0.0,
-    60.0,
-    0.0
+    0.0,
+    -54.0
    ],
-   "file": "back-plate.glb",
-   "edges": "back-plate.edges.bin"
+   "file": "feet.glb",
+   "edges": "feet.edges.bin"
   },
   {
-   "id": "pillars",
-   "label": "Pillars",
-   "group": "frame",
-   "color": "lightgrey",
+   "id": "case",
+   "label": "Case",
+   "group": "case",
+   "file": "case.glb",
+   "edges": "case.edges.bin"
+  },
+  {
+   "id": "back-cover",
+   "label": "Back cover",
+   "group": "case",
    "explode": [
     0.0,
-    40.0,
+    104.0,
     0.0
    ],
-   "file": "pillars.glb",
-   "edges": "pillars.edges.bin"
+   "file": "back-cover.glb",
+   "edges": "back-cover.edges.bin"
+  },
+  {
+   "id": "bezel",
+   "label": "Bezel",
+   "group": "case",
+   "explode": [
+    0.0,
+    -88.0,
+    0.0
+   ],
+   "file": "bezel.glb",
+   "edges": "bezel.edges.bin"
+  },
+  {
+   "id": "crystal",
+   "label": "Crystal",
+   "group": "case",
+   "finish": "glass",
+   "explode": [
+    0.0,
+    -74.0,
+    0.0
+   ],
+   "file": "crystal.glb",
+   "edges": "crystal.edges.bin"
+  },
+  {
+   "id": "dial",
+   "label": "Dial",
+   "group": "dial_and_hands",
+   "color": "white",
+   "explode": [
+    0.0,
+    -38.0,
+    0.0
+   ],
+   "file": "dial.glb",
+   "edges": "dial.edges.bin"
+  },
+  {
+   "id": "hour-marks",
+   "label": "Hour marks",
+   "group": "dial_and_hands",
+   "color": "#26282b",
+   "explode": [
+    0.0,
+    -44.0,
+    0.0
+   ],
+   "file": "hour-marks.glb",
+   "edges": "hour-marks.edges.bin"
+  },
+  {
+   "id": "seconds-hand",
+   "label": "Seconds hand",
+   "group": "dial_and_hands",
+   "color": "red",
+   "explode": [
+    0.0,
+    -30.0,
+    0.0
+   ],
+   "file": "seconds-hand.glb",
+   "edges": "seconds-hand.edges.bin"
+  },
+  {
+   "id": "hour-hand",
+   "label": "Hour hand",
+   "group": "dial_and_hands",
+   "color": "#26282b",
+   "explode": [
+    0.0,
+    -50.0,
+    0.0
+   ],
+   "file": "hour-hand.glb",
+   "edges": "hour-hand.edges.bin"
+  },
+  {
+   "id": "minute-hand",
+   "label": "Minute hand",
+   "group": "dial_and_hands",
+   "color": "#26282b",
+   "explode": [
+    0.0,
+    -56.0,
+    0.0
+   ],
+   "file": "minute-hand.glb",
+   "edges": "minute-hand.edges.bin"
   },
   {
    "id": "front-plate",
    "label": "Front plate",
-   "group": "frame",
+   "group": "plates",
    "color": "lightgrey",
+   "finish": "metal",
    "explode": [
     0.0,
-    -20.0,
+    14.0,
     0.0
    ],
    "file": "front-plate.glb",
    "edges": "front-plate.edges.bin"
   },
   {
-   "id": "dial",
-   "label": "Dial",
-   "group": "frame",
-   "color": "white",
+   "id": "pillars",
+   "label": "Pillars",
+   "group": "plates",
+   "color": "lightgrey",
+   "finish": "metal",
    "explode": [
     0.0,
-    -70.0,
+    56.0,
     0.0
    ],
-   "file": "dial.glb",
-   "edges": "dial.edges.bin"
+   "file": "pillars.glb",
+   "edges": "pillars.edges.bin"
+  },
+  {
+   "id": "back-plate",
+   "label": "Back plate",
+   "group": "plates",
+   "color": "lightgrey",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    68.0,
+    0.0
+   ],
+   "file": "back-plate.glb",
+   "edges": "back-plate.edges.bin"
+  },
+  {
+   "id": "barrel",
+   "label": "Barrel",
+   "group": "going_train",
+   "explode": [
+    0.0,
+    44.0,
+    0.0
+   ],
+   "file": "barrel.glb",
+   "edges": "barrel.edges.bin"
+  },
+  {
+   "id": "barrel-arbor",
+   "label": "Barrel arbor",
+   "group": "going_train",
+   "explode": [
+    0.0,
+    86.0,
+    0.0
+   ],
+   "file": "barrel-arbor.glb",
+   "edges": "barrel-arbor.edges.bin"
   },
   {
    "id": "centre-wheel",
@@ -92,7 +240,7 @@
    "group": "going_train",
    "explode": [
     0.0,
-    20.0,
+    26.0,
     0.0
    ],
    "file": "centre-wheel.glb",
@@ -104,7 +252,7 @@
    "group": "going_train",
    "explode": [
     0.0,
-    10.0,
+    34.0,
     0.0
    ],
    "file": "third-wheel.glb",
@@ -116,11 +264,47 @@
    "group": "going_train",
    "explode": [
     0.0,
-    0.0,
+    40.0,
     0.0
    ],
    "file": "fourth-wheel.glb",
    "edges": "fourth-wheel.edges.bin"
+  },
+  {
+   "id": "escape-wheel",
+   "label": "Escape wheel",
+   "group": "escapement",
+   "explode": [
+    0.0,
+    24.0,
+    0.0
+   ],
+   "file": "escape-wheel.glb",
+   "edges": "escape-wheel.edges.bin"
+  },
+  {
+   "id": "pallet-fork",
+   "label": "Pallet fork",
+   "group": "escapement",
+   "explode": [
+    0.0,
+    30.0,
+    0.0
+   ],
+   "file": "pallet-fork.glb",
+   "edges": "pallet-fork.edges.bin"
+  },
+  {
+   "id": "balance",
+   "label": "Balance",
+   "group": "escapement",
+   "explode": [
+    0.0,
+    36.0,
+    0.0
+   ],
+   "file": "balance.glb",
+   "edges": "balance.edges.bin"
   },
   {
    "id": "minute-wheel",
@@ -128,7 +312,7 @@
    "group": "motion_work",
    "explode": [
     0.0,
-    -35.0,
+    -16.0,
     0.0
    ],
    "file": "minute-wheel.glb",
@@ -140,94 +324,166 @@
    "group": "motion_work",
    "explode": [
     0.0,
-    -50.0,
+    -24.0,
     0.0
    ],
    "file": "hour-wheel.glb",
    "edges": "hour-wheel.edges.bin"
   },
   {
-   "id": "seconds-hand",
-   "label": "Seconds hand",
-   "group": "hands",
+   "id": "setting-knob",
+   "label": "Setting knob",
+   "group": "motion_work",
    "explode": [
     0.0,
-    -85.0,
+    124.0,
     0.0
    ],
-   "file": "seconds-hand.glb",
-   "edges": "seconds-hand.edges.bin"
+   "file": "setting-knob.glb",
+   "edges": "setting-knob.edges.bin"
   },
   {
-   "id": "hour-hand",
-   "label": "Hour hand",
-   "group": "hands",
+   "id": "bezel-screws",
+   "label": "Bezel screws, M3 \u00d7 10",
+   "group": "screws",
+   "finish": "metal",
    "explode": [
     0.0,
-    -95.0,
+    -104.0,
     0.0
    ],
-   "file": "hour-hand.glb",
-   "edges": "hour-hand.edges.bin"
+   "file": "bezel-screws.glb",
+   "edges": "bezel-screws.edges.bin"
   },
   {
-   "id": "minute-hand",
-   "label": "Minute hand",
-   "group": "hands",
+   "id": "dial-screws",
+   "label": "Dial screws, M3 \u00d7 6",
+   "group": "screws",
+   "finish": "metal",
    "explode": [
     0.0,
-    -105.0,
+    -64.0,
     0.0
    ],
-   "file": "minute-hand.glb",
-   "edges": "minute-hand.edges.bin"
+   "file": "dial-screws.glb",
+   "edges": "dial-screws.edges.bin"
+  },
+  {
+   "id": "movement-screws",
+   "label": "Movement screws, M3 \u00d7 12",
+   "group": "screws",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    -8.0,
+    0.0
+   ],
+   "file": "movement-screws.glb",
+   "edges": "movement-screws.edges.bin"
+  },
+  {
+   "id": "plate-screws",
+   "label": "Plate screws, M3 \u00d7 6",
+   "group": "screws",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    78.0,
+    0.0
+   ],
+   "file": "plate-screws.glb",
+   "edges": "plate-screws.edges.bin"
+  },
+  {
+   "id": "cover-screws",
+   "label": "Back cover screws, M3 \u00d7 8",
+   "group": "screws",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    116.0,
+    0.0
+   ],
+   "file": "cover-screws.glb",
+   "edges": "cover-screws.edges.bin"
+  },
+  {
+   "id": "stand-screws",
+   "label": "Stand screws, M4 \u00d7 12",
+   "group": "screws",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    0.0,
+    -64.0
+   ],
+   "file": "stand-screws.glb",
+   "edges": "stand-screws.edges.bin"
   }
  ],
  "keepouts": [],
  "downloads": [
   {
-   "file": "step/clock_movement.step",
-   "name": "clock_movement.step",
-   "label": "Clock movement",
+   "file": "step/table_clock.step",
+   "name": "table_clock.step",
+   "label": "Table clock",
    "detail": "every part, in place",
    "kind": "full",
-   "bytes": 4455081
+   "bytes": 14006698
   },
   {
-   "file": "step/base.step",
-   "name": "base.step",
-   "label": "Base",
+   "file": "step/stand.step",
+   "name": "stand.step",
+   "label": "Stand",
    "detail": "",
    "kind": "part",
-   "part": "base",
-   "bytes": 37338
+   "part": "stand",
+   "bytes": 109877
   },
   {
-   "file": "step/back-plate.step",
-   "name": "back-plate.step",
-   "label": "Back plate",
+   "file": "step/feet.step",
+   "name": "feet.step",
+   "label": "Feet",
    "detail": "",
    "kind": "part",
-   "part": "back-plate",
-   "bytes": 18197
+   "part": "feet",
+   "bytes": 17912
   },
   {
-   "file": "step/pillars.step",
-   "name": "pillars.step",
-   "label": "Pillars",
+   "file": "step/case.step",
+   "name": "case.step",
+   "label": "Case",
    "detail": "",
    "kind": "part",
-   "part": "pillars",
-   "bytes": 19825
+   "part": "case",
+   "bytes": 148078
   },
   {
-   "file": "step/front-plate.step",
-   "name": "front-plate.step",
-   "label": "Front plate",
+   "file": "step/back-cover.step",
+   "name": "back-cover.step",
+   "label": "Back cover",
    "detail": "",
    "kind": "part",
-   "part": "front-plate",
-   "bytes": 81644
+   "part": "back-cover",
+   "bytes": 105335
+  },
+  {
+   "file": "step/bezel.step",
+   "name": "bezel.step",
+   "label": "Bezel",
+   "detail": "",
+   "kind": "part",
+   "part": "bezel",
+   "bytes": 58654
+  },
+  {
+   "file": "step/crystal.step",
+   "name": "crystal.step",
+   "label": "Crystal",
+   "detail": "",
+   "kind": "part",
+   "part": "crystal",
+   "bytes": 7206
   },
   {
    "file": "step/dial.step",
@@ -236,52 +492,16 @@
    "detail": "",
    "kind": "part",
    "part": "dial",
-   "bytes": 214305
+   "bytes": 231263
   },
   {
-   "file": "step/centre-wheel.step",
-   "name": "centre-wheel.step",
-   "label": "Centre wheel",
+   "file": "step/hour-marks.step",
+   "name": "hour-marks.step",
+   "label": "Hour marks",
    "detail": "",
    "kind": "part",
-   "part": "centre-wheel",
-   "bytes": 1233138
-  },
-  {
-   "file": "step/third-wheel.step",
-   "name": "third-wheel.step",
-   "label": "Third wheel",
-   "detail": "",
-   "kind": "part",
-   "part": "third-wheel",
-   "bytes": 1105955
-  },
-  {
-   "file": "step/fourth-wheel.step",
-   "name": "fourth-wheel.step",
-   "label": "Fourth wheel",
-   "detail": "",
-   "kind": "part",
-   "part": "fourth-wheel",
-   "bytes": 133008
-  },
-  {
-   "file": "step/minute-wheel.step",
-   "name": "minute-wheel.step",
-   "label": "Minute wheel",
-   "detail": "",
-   "kind": "part",
-   "part": "minute-wheel",
-   "bytes": 771407
-  },
-  {
-   "file": "step/hour-wheel.step",
-   "name": "hour-wheel.step",
-   "label": "Hour wheel",
-   "detail": "",
-   "kind": "part",
-   "part": "hour-wheel",
-   "bytes": 653407
+   "part": "hour-marks",
+   "bytes": 184600
   },
   {
    "file": "step/seconds-hand.step",
@@ -290,7 +510,7 @@
    "detail": "",
    "kind": "part",
    "part": "seconds-hand",
-   "bytes": 32202
+   "bytes": 35964
   },
   {
    "file": "step/hour-hand.step",
@@ -299,7 +519,7 @@
    "detail": "",
    "kind": "part",
    "part": "hour-hand",
-   "bytes": 21705
+   "bytes": 21736
   },
   {
    "file": "step/minute-hand.step",
@@ -308,7 +528,187 @@
    "detail": "",
    "kind": "part",
    "part": "minute-hand",
-   "bytes": 32248
+   "bytes": 36072
+  },
+  {
+   "file": "step/front-plate.step",
+   "name": "front-plate.step",
+   "label": "Front plate",
+   "detail": "",
+   "kind": "part",
+   "part": "front-plate",
+   "bytes": 188454
+  },
+  {
+   "file": "step/pillars.step",
+   "name": "pillars.step",
+   "label": "Pillars",
+   "detail": "",
+   "kind": "part",
+   "part": "pillars",
+   "bytes": 41194
+  },
+  {
+   "file": "step/back-plate.step",
+   "name": "back-plate.step",
+   "label": "Back plate",
+   "detail": "",
+   "kind": "part",
+   "part": "back-plate",
+   "bytes": 44684
+  },
+  {
+   "file": "step/barrel.step",
+   "name": "barrel.step",
+   "label": "Barrel",
+   "detail": "",
+   "kind": "part",
+   "part": "barrel",
+   "bytes": 1056174
+  },
+  {
+   "file": "step/barrel-arbor.step",
+   "name": "barrel-arbor.step",
+   "label": "Barrel arbor",
+   "detail": "",
+   "kind": "part",
+   "part": "barrel-arbor",
+   "bytes": 352072
+  },
+  {
+   "file": "step/centre-wheel.step",
+   "name": "centre-wheel.step",
+   "label": "Centre wheel",
+   "detail": "",
+   "kind": "part",
+   "part": "centre-wheel",
+   "bytes": 1366301
+  },
+  {
+   "file": "step/third-wheel.step",
+   "name": "third-wheel.step",
+   "label": "Third wheel",
+   "detail": "",
+   "kind": "part",
+   "part": "third-wheel",
+   "bytes": 1105982
+  },
+  {
+   "file": "step/fourth-wheel.step",
+   "name": "fourth-wheel.step",
+   "label": "Fourth wheel",
+   "detail": "",
+   "kind": "part",
+   "part": "fourth-wheel",
+   "bytes": 1040941
+  },
+  {
+   "file": "step/escape-wheel.step",
+   "name": "escape-wheel.step",
+   "label": "Escape wheel",
+   "detail": "",
+   "kind": "part",
+   "part": "escape-wheel",
+   "bytes": 410594
+  },
+  {
+   "file": "step/pallet-fork.step",
+   "name": "pallet-fork.step",
+   "label": "Pallet fork",
+   "detail": "",
+   "kind": "part",
+   "part": "pallet-fork",
+   "bytes": 119210
+  },
+  {
+   "file": "step/balance.step",
+   "name": "balance.step",
+   "label": "Balance",
+   "detail": "",
+   "kind": "part",
+   "part": "balance",
+   "bytes": 129313
+  },
+  {
+   "file": "step/minute-wheel.step",
+   "name": "minute-wheel.step",
+   "label": "Minute wheel",
+   "detail": "",
+   "kind": "part",
+   "part": "minute-wheel",
+   "bytes": 771436
+  },
+  {
+   "file": "step/hour-wheel.step",
+   "name": "hour-wheel.step",
+   "label": "Hour wheel",
+   "detail": "",
+   "kind": "part",
+   "part": "hour-wheel",
+   "bytes": 653428
+  },
+  {
+   "file": "step/setting-knob.step",
+   "name": "setting-knob.step",
+   "label": "Setting knob",
+   "detail": "",
+   "kind": "part",
+   "part": "setting-knob",
+   "bytes": 366645
+  },
+  {
+   "file": "step/bezel-screws.step",
+   "name": "bezel-screws.step",
+   "label": "Bezel screws, M3 \u00d7 10",
+   "detail": "",
+   "kind": "part",
+   "part": "bezel-screws",
+   "bytes": 232881
+  },
+  {
+   "file": "step/dial-screws.step",
+   "name": "dial-screws.step",
+   "label": "Dial screws, M3 \u00d7 6",
+   "detail": "",
+   "kind": "part",
+   "part": "dial-screws",
+   "bytes": 156896
+  },
+  {
+   "file": "step/movement-screws.step",
+   "name": "movement-screws.step",
+   "label": "Movement screws, M3 \u00d7 12",
+   "detail": "",
+   "kind": "part",
+   "part": "movement-screws",
+   "bytes": 300716
+  },
+  {
+   "file": "step/plate-screws.step",
+   "name": "plate-screws.step",
+   "label": "Plate screws, M3 \u00d7 6",
+   "detail": "",
+   "kind": "part",
+   "part": "plate-screws",
+   "bytes": 193334
+  },
+  {
+   "file": "step/cover-screws.step",
+   "name": "cover-screws.step",
+   "label": "Back cover screws, M3 \u00d7 8",
+   "detail": "",
+   "kind": "part",
+   "part": "cover-screws",
+   "bytes": 194179
+  },
+  {
+   "file": "step/stand-screws.step",
+   "name": "stand-screws.step",
+   "label": "Stand screws, M4 \u00d7 12",
+   "detail": "",
+   "kind": "part",
+   "part": "stand-screws",
+   "bytes": 241459
   }
  ]
 }

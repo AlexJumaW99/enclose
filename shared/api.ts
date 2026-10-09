@@ -125,6 +125,25 @@ export type PartRef = {
 export type PartNote = { part: PartRef; text: string }
 
 /**
+ * A picture put with a message: a photo, a sketch, a drawing. The app keeps a copy of
+ * it, with the project's others, and shows it from there.
+ */
+export type Attached = {
+  /** what the app keeps it as: its file's name, among the project's pictures */
+  id: string
+  /** what it was called where it came from: "image.png" */
+  name: string
+  mimeType: string
+  /** how big its file is, in bytes */
+  bytes: number
+  /**
+   * Which of the message's pictures it is, counted from 1: what "[Image 1]" stands for
+   * in what was written, where it was put there.
+   */
+  number: number
+}
+
+/**
  * Something Claude asks before it goes on, where a guess of its own would not do: the
  * question, and the answers it offers. Something else can always be said to it instead.
  */
@@ -155,6 +174,8 @@ export type ThreadItem =
        * the model: this is what the scene goes by.
        */
       reference?: string
+      /** the pictures that went with the message */
+      pictures?: Attached[]
       /**
        * Not said by the user: asked by the app itself of files just opened, that Claude
        * look their model over.
@@ -497,6 +518,18 @@ export type CadApi = {
     /** A project's own tools, as they are written in its folder: none if it has none. */
     read(projectId: string): Promise<ToolSource[]>
   }
+  pictures: {
+    /**
+     * Keep a picture that is to go with a project's next message. Resolves to what it
+     * is kept as, or to null if it is no picture an agent can be shown, or is too big.
+     */
+    add(
+      projectId: string,
+      picture: { name: string; mimeType: string; data: ArrayBuffer }
+    ): Promise<Omit<Attached, "number"> | null>
+    /** Forget one that was taken back off the message before it was sent. */
+    drop(projectId: string, id: string): Promise<void>
+  }
   thread: {
     items(projectId: string, conversationId: string): Promise<ThreadItem[]>
     /**
@@ -514,7 +547,9 @@ export type CadApi = {
        * the reference scene on screen, by what it is known by, when that is what the
        * message is about
        */
-      reference?: string | null
+      reference?: string | null,
+      /** the pictures that go with it, as the app keeps them */
+      pictures?: Attached[]
     ): Promise<string | null>
     /**
      * Have Claude look over the model of files just opened, from what the view shows of
@@ -577,6 +612,8 @@ export type CadApi = {
     chooseProjectsFolder(): Promise<Settings>
     /** show the folder new projects go in, making it if it is not there yet */
     revealProjectsFolder(): Promise<void>
+    /** how much room that folder takes, in bytes: nothing, if it is not there yet */
+    projectsFolderSize(): Promise<number>
     /** whether Claude is to look over files as they are opened; resolves likewise */
     setLookOver(on: boolean): Promise<Settings>
   }
@@ -603,6 +640,8 @@ export const CHANNEL = {
   modelNameGroup: "model:name-group",
   referenceScenes: "reference:scenes",
   toolsRead: "tools:read",
+  picturesAdd: "pictures:add",
+  picturesDrop: "pictures:drop",
   threadItems: "thread:items",
   threadSend: "thread:send",
   threadLookOver: "thread:look-over",
@@ -621,6 +660,7 @@ export const CHANNEL = {
   settingsGet: "settings:get",
   settingsChooseProjectsFolder: "settings:choose-projects-folder",
   settingsRevealProjectsFolder: "settings:reveal-projects-folder",
+  settingsProjectsFolderSize: "settings:projects-folder-size",
   settingsSetLookOver: "settings:set-look-over",
   viewportRequest: "viewport:request",
   viewportResponse: "viewport:response",
@@ -630,6 +670,8 @@ export const CHANNEL = {
  * The scheme the window loads model files through: cad-model://<project id>/<file>.
  * The files of a reference scene come the same way, from a host that says whose it is:
  * <project id>.reference for a project's own, and <name>.scene for one of the app's.
+ * And so do the pictures put with a project's messages: <project id>.picture.
  */
 export const MODEL_SCHEME = "cad-model"
 export const SCENE_HOST = { own: "reference", app: "scene" } as const
+export const PICTURE_HOST = "picture"

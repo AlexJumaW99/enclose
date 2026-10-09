@@ -125,10 +125,13 @@ function placeOf(part: LoadedPart, apart: number): THREE.Matrix4 {
 function laidOut(parts: LoadedPart[], apart: number) {
   const places = parts.map((part) => placeOf(part, apart))
   const bodies = parts.map((part, index): Body => ({
-    skins: part.skins.map(({ geometry }) => ({
-      position: geometry.attributes.position.array,
-      index: geometry.index!.array,
-    })),
+    // (what is made of something clear hides nothing: it is drawn, and seen through)
+    skins: part.part.clear
+      ? []
+      : part.skins.map(({ geometry }) => ({
+          position: geometry.attributes.position.array,
+          index: geometry.index!.array,
+        })),
     edges: part.edges,
     contours: part.contours,
     place: places[index].elements,

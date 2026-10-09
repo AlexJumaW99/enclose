@@ -17,6 +17,7 @@ import {
   CHANNEL,
   EFFORTS,
   MODEL_SCHEME,
+  PICTURE_HOST,
   OWN_SCENE,
   PROVIDERS,
   SCENE_HOST,
@@ -38,6 +39,7 @@ import {
   type ViewportRequest,
   type ViewportResponse,
 } from "../shared/api"
+import { PICTURE_TYPES } from "../shared/pictures"
 import { Changes } from "./changes"
 import { followRename, listCommands, lookAtClaude } from "./claude"
 import { lookAtCodex } from "./codex"
@@ -56,7 +58,14 @@ import {
 import { startFrom } from "./examples"
 import { standInName } from "./names"
 import { groupNameOf } from "./naming"
-import { folderName, makeFolder, Projects, resolveInside } from "./projects"
+import { Pictures } from "./pictures"
+import {
+  folderName,
+  folderSize,
+  makeFolder,
+  Projects,
+  resolveInside,
+} from "./projects"
 import { appScenes, readScene } from "./reference"
 import { cleanEnv, expandHome, Providers } from "./providers"
 import { SettingsStore, type Vault } from "./settings"
@@ -122,10 +131,15 @@ const MIME: Record<string, string> = {
   ".json": "application/json",
   ".step": "model/step",
   ".stp": "model/step",
+  // (the pictures put with messages: see shared/pictures.ts)
+  ...Object.fromEntries(
+    Object.entries(PICTURE_TYPES).map(([type, ending]) => [ending, type])
+  ),
 }
 
 let win: BrowserWindow | null = null
 let projects: Projects
+let pictures: Pictures
 let threads: Threads
 let changes: Changes
 let settings: SettingsStore
@@ -138,20 +152,22 @@ const KIT = path.join(app.getAppPath(), "kit", "enclose.py")
 /** the project the app has to start from, for someone with none of their own yet */
 const EXAMPLE = {
   dir: path.join(app.getAppPath(), "examples", "clock"),
-  name: "Clock movement",
+  name: "Table clock",
 }
 /** the reference scenes the app has of its own, for a model to be seen in */
 const SCENES = appScenes(path.join(app.getAppPath(), "kit", "scenes"))
 
 /**
  * The folder a file asked for is in, by the host it is asked of: a project's model, the
- * reference scene the project has of its own, or one of the app's.
+ * reference scene the project has of its own, one of the app's, or the pictures put
+ * with the project's messages.
  */
 function servedFrom(host: string): string | null {
   const [name, kind] = host.split(".")
   if (kind === SCENE_HOST.app)
     return SCENES.find((scene) => scene.id === name)?.dir ?? null
   const project = projects.get(name)
+  if (kind === PICTURE_HOST) return project ? pictures.folder(project.id) : null
   const manifest =
     kind === SCENE_HOST.own ? project?.reference : project?.manifest
   return manifest ? path.dirname(manifest) : null
@@ -719,6 +735,7 @@ function wire() {
     }
     threads.forget(project.id)
     changes.forget(project.id)
+    pictures.forget(project.id)
     // a model still being made of its files is given up on
     builds.get(project.id)?.()
     builds.delete(project.id)
@@ -878,6 +895,15 @@ function wire() {
     }
   )
 
+  ipcMain.handle(CHANNEL.picturesAdd, (_, id: string, picture: unknown) =>
+    projects.get(String(id))
+      ? pictures.add(String(id), picture as Parameters<Pictures["add"]>[1])
+      : null
+  )
+  ipcMain.handle(CHANNEL.picturesDrop, (_, id: string, picture: unknown) =>
+    pictures.drop(String(id), picture)
+  )
+
   ipcMain.handle(CHANNEL.threadItems, (_, id: string, conversationId: string) =>
     threads.items(String(id), String(conversationId))
   )
@@ -891,7 +917,8 @@ function wire() {
       notes: PartNote[] | null,
       objects: ObjectRef[] | null,
       manner: Partial<Manner> | null,
-      reference: unknown
+      reference: unknown,
+      attached: unknown
     ) => {
       // answers at once, with the conversation it went into: the turn runs for as long
       // as it runs, and reports through thread items
@@ -902,7 +929,8 @@ function wire() {
         Array.isArray(notes) ? notes.filter((note) => note?.part?.id) : [],
         objectsFrom(objects),
         mannerFrom(manner),
-        referencedBy(String(id), reference)
+        referencedBy(String(id), reference),
+        pictures.read(String(id), attached)
       )
       // the user has started on the project themselves: its model is theirs to have
       // put in order, by asking
@@ -992,6 +1020,9 @@ function wire() {
     fs.mkdirSync(projectsFolder, { recursive: true })
     void shell.openPath(projectsFolder)
   })
+  ipcMain.handle(CHANNEL.settingsProjectsFolderSize, () =>
+    folderSize(settings.get().projectsFolder)
+  )
   ipcMain.handle(CHANNEL.settingsSetLookOver, (_, on: unknown): Settings =>
     settings.set({ lookOver: on === true })
   )
@@ -1052,6 +1083,7 @@ if (!app.requestSingleInstanceLock()) {
     )
     projects = new Projects(path.join(data, "projects.json"), broadcast)
     changes = new Changes(path.join(data, "changes"))
+    pictures = new Pictures(path.join(data, "pictures"))
     threads = new Threads({
       dir: path.join(data, "threads"),
       projects,

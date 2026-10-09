@@ -11,6 +11,7 @@ import {
 import type { ConversationSummary, Project, ThreadItem } from "@shared/api"
 import { Composer } from "@/components/composer"
 import { ReferenceIcon } from "@/components/icons"
+import { Thumb } from "@/components/picture"
 import { QuestionCard } from "@/components/question"
 import { Reply } from "@/components/reply"
 import { Steps } from "@/components/steps"
@@ -41,10 +42,19 @@ import {
   VIEW_MIN,
 } from "@/lib/store"
 import { useNow } from "@/lib/time"
+import { atPictures, pictureName, pictureUrl } from "@shared/pictures"
 
 type Of<Kind extends ThreadItem["kind"]> = Extract<ThreadItem, { kind: Kind }>
 
-function UserMessage({ item }: { item: Of<"user"> }) {
+function UserMessage({
+  item,
+  project,
+}: {
+  item: Of<"user">
+  project: Project
+}) {
+  const pictures = item.pictures ?? []
+  const numbers = pictures.map((picture) => picture.number)
   const SAID =
     "max-w-[85%] rounded-2xl bg-muted px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap"
   // asked by the app itself, and so not shown as something the user said
@@ -84,6 +94,19 @@ function UserMessage({ item }: { item: Of<"user"> }) {
           ))}
         </div>
       )}
+      {/* the pictures that went with it, each to be looked at big */}
+      {pictures.length > 0 && (
+        <div className="flex max-w-[85%] flex-wrap justify-end gap-1.5">
+          {pictures.map((picture) => (
+            <Thumb
+              key={picture.id}
+              projectId={project.id}
+              picture={picture}
+              className="block size-24 rounded-xl ring-1 ring-foreground/10"
+            />
+          ))}
+        </div>
+      )}
       {/* what was said of parts, each under the name of its part */}
       {item.notes?.map((note, index) => (
         <div
@@ -109,7 +132,28 @@ function UserMessage({ item }: { item: Of<"user"> }) {
                 {stretch.text}
               </span>
             ) : (
-              stretch.text
+              // and so is the mark of a picture, where one was put in the words
+              atPictures(stretch.text, numbers).map((piece) => {
+                const picture = pictures.find(
+                  (one) => one.number === piece.picture
+                )
+                return picture ? (
+                  <span
+                    key={`${index}:${piece.from}`}
+                    className="rounded-md bg-foreground/10 px-1 py-0.5 font-medium whitespace-nowrap"
+                  >
+                    <img
+                      src={pictureUrl(project.id, picture.id)}
+                      alt=""
+                      draggable={false}
+                      className="mr-1 inline-block size-4 rounded-[0.2rem] object-cover align-[-0.2em]"
+                    />
+                    {pictureName(picture.number)}
+                  </span>
+                ) : (
+                  piece.text
+                )
+              })
             )
           )}
         </div>
@@ -171,7 +215,7 @@ function Item({
 }) {
   switch (item.kind) {
     case "user":
-      return <UserMessage item={item} />
+      return <UserMessage item={item} project={project} />
     case "assistant":
       return <Reply item={item} />
     case "permission":

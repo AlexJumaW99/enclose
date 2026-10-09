@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
   findModel,
   folderName,
+  folderSize,
   Projects,
   readBranch,
   resolveInside,
@@ -282,6 +283,27 @@ describe("Projects", () => {
     expect(projects.list(idle)[0]).toMatchObject({ name: "theirs" })
     expect(fs.existsSync(path.join(root, "theirs/model.json"))).toBe(true)
     projects.close()
+  })
+})
+
+describe("folderSize", () => {
+  it("adds up every file, however deep", async () => {
+    write("a.txt", "12345")
+    write("one/b.txt", "123")
+    write("one/two/c.txt", "12")
+    expect(await folderSize(root)).toBe(10)
+  })
+
+  it("counts a link as itself, not as what it points at", async () => {
+    write("big.txt", "x".repeat(1000))
+    fs.symlinkSync(path.join(root, "big.txt"), path.join(root, "link"))
+    const link = fs.lstatSync(path.join(root, "link")).size
+    expect(await folderSize(root)).toBe(1000 + link)
+  })
+
+  it("is nothing for a folder that is empty, or not there", async () => {
+    expect(await folderSize(root)).toBe(0)
+    expect(await folderSize(path.join(root, "nowhere"))).toBe(0)
   })
 })
 

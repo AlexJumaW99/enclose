@@ -88,9 +88,9 @@ export function ToolsPanel({
       // being the view's
       onMouseDown={(event) => event.preventDefault()}
       className={cn(
-        // in the blue of what is the project's own, and less rounded than the app's
-        // own panels are: its tabs run to its corners
-        "pointer-events-auto flex w-105 flex-col overflow-hidden rounded-[14px] bg-tool-panel text-white shadow-lg ring-1 ring-tool-line select-none",
+        // in the blue of what is the project's own, and rounded as a group's card in
+        // the list of parts is
+        "pointer-events-auto flex w-105 flex-col overflow-hidden rounded-2xl bg-tool-panel text-white shadow-lg ring-1 ring-tool-line select-none",
         className
       )}
     >

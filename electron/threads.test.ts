@@ -7,6 +7,8 @@ import {
   keeping,
   tooling,
   lookOverAsked,
+  pictured,
+  picturing,
   questionsOf,
   withNotes,
 } from "./threads"
@@ -230,6 +232,89 @@ describe("withNotes", () => {
     ).toContain(
       '<comment object="Main board" parts="pcb chip socket" part="Chip" id="chip" point='
     )
+  })
+})
+
+describe("pictured", () => {
+  const shown = (number: number, name = "image.png") => ({
+    id: `000000000000000${number}.png`,
+    name,
+    mimeType: "image/png",
+    bytes: 3,
+    number,
+    data: "AAAA",
+  })
+  const laidOut = (text: string, numbers: number[]) => {
+    const content = pictured(
+      text,
+      numbers.map((n) => shown(n))
+    )
+    if (typeof content === "string") throw new Error("not in pieces")
+    return content.map((block) =>
+      block.type === "text" ? block.text : block.type
+    )
+  }
+
+  it("leaves a message that came with no pictures as it is", () => {
+    expect(pictured("Make a box", [])).toBe("Make a box")
+    expect(pictured("Make a box", [], false)).toBe("Make a box")
+  })
+
+  it("gives each picture under what it goes by, and then the words", () => {
+    expect(
+      laidOut("Make [Image 1] with the knob of [Image 3]", [1, 3])
+    ).toEqual([
+      "Image 1:",
+      "image",
+      "Image 3:",
+      "image",
+      "Make [Image 1] with the knob of [Image 3]",
+    ])
+    const content = pictured("x", [shown(1)])
+    expect(typeof content === "string" ? null : content[1]).toEqual({
+      type: "image",
+      source: { type: "base64", media_type: "image/png", data: "AAAA" },
+    })
+  })
+
+  it("is the pictures alone, where nothing was written", () => {
+    expect(laidOut("", [1])).toEqual(["Image 1:", "image"])
+  })
+
+  it("still leads with a command", () => {
+    expect(laidOut("/review this", [1])).toEqual([
+      "/review this",
+      "Image 1:",
+      "image",
+    ])
+  })
+
+  it("tells an agent that takes no pictures that there were some, by name", () => {
+    expect(
+      pictured("Make this", [shown(1, 'my "speaker".png'), shown(2)], false)
+    ).toBe(
+      [
+        '<pictures count="2" shown-to-you="no">',
+        '<picture name="Image 1" file="my \'speaker\'.png" />',
+        '<picture name="Image 2" file="image.png" />',
+        "</pictures>",
+        "",
+        "Make this",
+      ].join("\n")
+    )
+    expect(pictured("/review", [shown(1)], false)).toMatch(
+      /^\/review\n\n<pictures /
+    )
+  })
+})
+
+describe("picturing", () => {
+  it("says what a picture is called, and names the screenshot tool as the agent knows it", () => {
+    const told = picturing((set, name) => `${set}__${name}`).join("\n")
+    expect(told).toContain("(Image 1)")
+    expect(told).toContain("[Image 1]")
+    expect(told).toContain("viewport__screenshot")
+    expect(told).toContain("<pictures>")
   })
 })
 

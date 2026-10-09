@@ -39,6 +39,16 @@ describe("readModel", () => {
     expect(model.keepoutsLabel).toBe("Keep-outs")
   })
 
+  it("knows a part that is made of something clear", () => {
+    const model = readModel({
+      parts: [{ ...part("window"), finish: "glass" }, part("frame")],
+    })
+    expect(model.parts.map((one) => [one.clear, one.metal])).toEqual([
+      [true, false],
+      [false, false],
+    ])
+  })
+
   it("reads the reference scene a model names, where it names one", () => {
     expect(readModel({ reference: "room", parts: [part("a")] }).reference).toBe(
       "room"

@@ -1,0 +1,1 @@
+{ "model": "build/enclose.model.json", "build": "python3 model.py" }

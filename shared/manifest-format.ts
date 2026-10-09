@@ -49,7 +49,7 @@ its own.
       "matrix": null,                    // optional: 16 numbers, row-major, placing the part
       "explode": [0, 0, 46],             // optional: where it goes when exploded, mm (worked out when no part says: the parts of a group that touch go together)
       "glass": true,                     // optional: force see-through (or not) in glass mode
-      "finish": "metal"                  // optional: drawn as bare metal (screws, pins)
+      "finish": "metal"                  // optional: "metal" is drawn as bare metal (screws, pins), "glass" see-through whatever the view (a window, a lens)
     }
   ],
   "keepouts": [                          // optional: space something needs that is not modelled

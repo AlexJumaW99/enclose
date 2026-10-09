@@ -83,6 +83,7 @@ from OCP.BRep import BRep_Builder, BRep_Tool
 from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
 from OCP.BRepBndLib import BRepBndLib
 from OCP.BRepGProp import BRepGProp
+from OCP.BRepMesh import BRepMesh_IncrementalMesh
 from OCP.Bnd import Bnd_Box
 from OCP.GCPnts import GCPnts_TangentialDeflection
 from OCP.GeomAbs import GeomAbs_Cylinder, GeomAbs_Line, GeomAbs_Plane
@@ -180,6 +181,37 @@ def _same_surface(f1, f2) -> bool:
             e.Axis(), 1e-4, 1e-4
         )
     return False
+
+
+# How a curve is cut into flats to be drawn: how far a flat may be from the curve, in
+# mm, and how far it may turn from the one before, in radians. As drawn, and `fine`.
+_FLATS = {False: (0.02, 0.5), True: (0.01, 0.35)}
+
+
+def _write_mesh(shape, id: str, path: str, fine: bool) -> None:
+    """Write a shape as the mesh the app draws, with its curves cut into flats."""
+    linear, angular = _FLATS[bool(fine)]
+    # A bare solid exports an empty mesh: it has to be in a compound. A copy goes in,
+    # because a shape that has been put inside another will not export as STEP
+    # afterwards, and the project's own shapes are not ours to re-parent.
+    wrapped = Compound(children=[copy.copy(shape)])
+    wrapped.label = id
+    # The curves are cut here, and not left to build123d, which measures how far a flat
+    # may be from its curve against the size of the curve: so the rim of a dial came out
+    # in as few flats as a pin, and showed every one. Measured in mm, a big curve gets
+    # many and a small one few, and all look as round. What is cut already is kept:
+    # build123d cuts only what has no flats within what it is told, which is anything.
+    # (It writes each shape of a part made of several from that shape's own copy.)
+    for node in (wrapped, *wrapped.descendants):
+        if node.wrapped is not None:
+            BRepMesh_IncrementalMesh(node.wrapped, linear, False, angular, True)
+    export_gltf(
+        wrapped,
+        path,
+        binary=True,
+        linear_deflection=1e6,
+        angular_deflection=angular,
+    )
 
 
 def _wound_fine(points, faces) -> bool:
@@ -460,8 +492,10 @@ class Model:
         fine: bool = False,
         reference: str | None = None,
     ):
-        """`out` is relative to the script being run. `fine` makes smoother curves and
-        bigger files: worth it for small round things, not for a whole enclosure.
+        """`out` is relative to the script being run. What is round is drawn round: in
+        flats that keep within a fiftieth of a millimetre of the curve, however big the
+        curve is. `fine` keeps them twice as near, which makes bigger files and is only
+        worth it for something to be looked at very closely.
         `reference` names the one of the app's reference scenes that the thing is best
         seen in, by where it is used: "table" for what stands on a desk or is held in
         the hand, "room" for what stands on the floor. Leave it out and the app goes by
@@ -509,7 +543,8 @@ class Model:
         (red, orange, yellow, lime, green, cyan, blue, indigo, violet, pink, white,
         lightgrey, grey), or as "#rrggbb", which is drawn as the nearest of those unless
         it is a grey.
-        `finish="metal"` draws bare metal.
+        `finish="metal"` draws bare metal, and `finish="glass"` what is made of
+        something clear, a window or a lens: it is seen through, whatever the view.
         `explode` is where the part goes when the model is pulled apart, in mm; leave
         it out and the app works one out."""
         if id in self._shapes:
@@ -543,7 +578,6 @@ class Model:
         if not self._parts:
             raise ValueError("a model needs at least one part")
         os.makedirs(os.path.join(self.out, "step"), exist_ok=True)
-        linear, angular = (0.02, 0.15) if self.fine else (0.08, 0.5)
         downloads = []
         # how many there are to write, then each as it is done: the app shows how far
         # along a model is from these lines
@@ -551,18 +585,7 @@ class Model:
         for entry in self._parts:
             started = time.time()
             id, shape = entry["id"], self._shapes[entry["id"]]
-            # A bare solid exports an empty mesh: it has to be in a compound. A copy goes
-            # in, because a shape that has been put inside another will not export as
-            # STEP afterwards, and the project's own shapes are not ours to re-parent.
-            wrapped = Compound(children=[copy.copy(shape)])
-            wrapped.label = id
-            export_gltf(
-                wrapped,
-                os.path.join(self.out, f"{id}.glb"),
-                binary=True,
-                linear_deflection=linear,
-                angular_deflection=angular,
-            )
+            _write_mesh(shape, id, os.path.join(self.out, f"{id}.glb"), self.fine)
             _write_edges(shape, os.path.join(self.out, f"{id}.edges.bin"))
             step = os.path.join(self.out, "step", f"{id}.step")
             export_step(shape, step)
@@ -758,7 +781,6 @@ class Reference:
         if not self._things:
             raise ValueError("a reference scene needs at least one part")
         os.makedirs(self.out, exist_ok=True)
-        linear, angular = (0.02, 0.15) if self.fine else (0.08, 0.5)
         parts = []
         for id, thing in self._things.items():
             to = os.path.join(self.out, f"{id}.glb")
@@ -768,15 +790,7 @@ class Reference:
                 if thing.figure:
                     part["figure"] = True
             else:
-                wrapped = Compound(children=[copy.copy(thing)])
-                wrapped.label = id
-                export_gltf(
-                    wrapped,
-                    to,
-                    binary=True,
-                    linear_deflection=linear,
-                    angular_deflection=angular,
-                )
+                _write_mesh(thing, id, to, self.fine)
             parts.append(part)
         against = [int(v) for v in self.against]
         manifest = {

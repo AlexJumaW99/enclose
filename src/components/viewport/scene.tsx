@@ -98,6 +98,11 @@ EVERY.enableAll()
 /** How see-through glass is: untouched, pointed at, and picked. */
 const GLASS_OPACITY = { plain: 0.2, hovered: 0.28, selected: 0.4 }
 /**
+ * The same for a part that is made of something clear, a window or a lens: there to be
+ * looked through, so that it takes little from what is behind it until it is pointed at.
+ */
+const CLEAR_OPACITY = { plain: 0.05, hovered: 0.16, selected: 0.4 }
+/**
  * How wide the lines of a part are, in pixels, when it is picked out; and, drawn by its
  * lines alone, when the pointer is on it. The rest are 1.
  */
@@ -505,6 +510,8 @@ export function appearance(
   if (view.mode === "wireframe") return { shown, look: "wire" }
   if (view.mode === "pattern") return { shown, look: "pattern" }
   if (view.mode === "outline") return { shown, look: "outline" }
+  // (a part that is made of something clear is seen through, drawn solid or not)
+  if (loaded.part.clear) return { shown, look: "glass" }
   if (view.mode === "solid") return { shown, look: "solid" }
   // Glass is for seeing inside: only the outside goes see-through. A model that does
   // not say which parts are its outside goes see-through as a whole.
@@ -745,11 +752,12 @@ const PartModel = React.memo(function PartModel({
     opacity: selected ? 1 : glass ? 0.28 : look === "outline" ? 0.6 : 0.85,
     linewidth: selected ? PICKED_LINE : lined && hovered ? HOVERED_LINE : 1,
   }
+  const through = part.clear ? CLEAR_OPACITY : GLASS_OPACITY
   const opacity = selected
-    ? GLASS_OPACITY.selected
+    ? through.selected
     : hovered
-      ? GLASS_OPACITY.hovered
-      : GLASS_OPACITY.plain
+      ? through.hovered
+      : through.plain
   // its own lines go over the hint of it, where they are seen at all
   const lineOrder =
     told.length > 0 ? ORDER.hinted : glass ? ORDER.glassEdges : ORDER.edges

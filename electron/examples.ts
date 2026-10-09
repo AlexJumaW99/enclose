@@ -19,10 +19,15 @@ export function ownExporter(script: string): string {
   return script.replace(/^sys\.path\.insert\(.*"kit"\)\)\r?\n/m, "")
 }
 
+/** The app's library of screws, beside its exporter: what a model that has screws reads. */
+const SCREWS = "screws.py"
+const USES_SCREWS = /^(?:from screws import|import screws)\b/m
+
 /**
  * Make a project of an example, in `into`, and return where it is. The example is
  * copied, its model with it if it has been built, and the copy gets the app's exporter
- * (`kit`) beside its model.py as any project has.
+ * (`kit`) beside its model.py as any project has, and the app's screws where its model
+ * is made with them.
  */
 export function startFrom(
   example: string,
@@ -41,8 +46,15 @@ export function startFrom(
     })
     fs.copyFileSync(kit, path.join(dir, "enclose.py"))
     const script = path.join(dir, SCRIPT)
-    if (fs.existsSync(script))
-      fs.writeFileSync(script, ownExporter(fs.readFileSync(script, "utf8")))
+    if (fs.existsSync(script)) {
+      const written = fs.readFileSync(script, "utf8")
+      fs.writeFileSync(script, ownExporter(written))
+      if (USES_SCREWS.test(written))
+        fs.copyFileSync(
+          path.join(path.dirname(kit), SCREWS),
+          path.join(dir, SCREWS)
+        )
+    }
   } catch (error) {
     // half a project is no project: the folder was made a moment ago, and is all copies
     fs.rmSync(dir, { recursive: true, force: true })

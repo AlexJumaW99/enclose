@@ -545,6 +545,7 @@ export function standInModel(): LoadedModel {
     explode: [0, 0, 0],
     glass: null,
     metal: false,
+    clear: false,
   }
   const box = geometry.boundingBox!.clone()
   // The view frames a model's box closely. Left to that the cube would fill the window,

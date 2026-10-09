@@ -48,6 +48,12 @@ const api: CadApi = {
   tools: {
     read: (projectId) => ipcRenderer.invoke(CHANNEL.toolsRead, projectId),
   },
+  pictures: {
+    add: (projectId, picture) =>
+      ipcRenderer.invoke(CHANNEL.picturesAdd, projectId, picture),
+    drop: (projectId, id) =>
+      ipcRenderer.invoke(CHANNEL.picturesDrop, projectId, id),
+  },
   changes: {
     undo: (projectId) => ipcRenderer.invoke(CHANNEL.changesUndo, projectId),
     redo: (projectId) => ipcRenderer.invoke(CHANNEL.changesRedo, projectId),
@@ -62,7 +68,8 @@ const api: CadApi = {
       notes,
       objects,
       manner,
-      reference
+      reference,
+      pictures
     ) =>
       ipcRenderer.invoke(
         CHANNEL.threadSend,
@@ -72,7 +79,8 @@ const api: CadApi = {
         notes,
         objects,
         manner,
-        reference ?? null
+        reference ?? null,
+        pictures ?? []
       ),
     lookOver: (projectId, seen, manner) =>
       ipcRenderer.invoke(CHANNEL.threadLookOver, projectId, seen, manner),
@@ -102,6 +110,8 @@ const api: CadApi = {
       ipcRenderer.invoke(CHANNEL.settingsChooseProjectsFolder),
     revealProjectsFolder: () =>
       ipcRenderer.invoke(CHANNEL.settingsRevealProjectsFolder),
+    projectsFolderSize: () =>
+      ipcRenderer.invoke(CHANNEL.settingsProjectsFolderSize),
     setLookOver: (on) => ipcRenderer.invoke(CHANNEL.settingsSetLookOver, on),
   },
   viewport: {

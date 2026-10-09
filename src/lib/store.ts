@@ -13,6 +13,7 @@ import { cutsOf, readCuts } from "@/lib/cuts"
 import { mannerOf, savedAccess } from "@/lib/manner"
 import { answering, offeredModels, usable } from "@/lib/providers"
 import { callingOn, notCalledOn } from "@/lib/mentions"
+import { fitted } from "@/lib/pictures"
 import { usePreferences } from "@/lib/preferences"
 import {
   back,
@@ -27,11 +28,13 @@ import {
   type History,
 } from "@/lib/undo"
 import { PALETTE, type PaletteName } from "@shared/palette"
+import { MOST_AT_ONCE, PICTURE_TYPES, withoutMark } from "@shared/pictures"
 
 import {
   EFFORTS,
   PROVIDERS,
   type Access,
+  type Attached,
   type Commands,
   type ConversationSummary,
   type Effort,
@@ -275,16 +278,20 @@ const savedScenes = (): Record<string, string> => {
 
 /**
  * What was waiting to be sent when the window was last up: what was said of parts, the
- * parts called on from the view, and what was written in the message boxes. Whatever of
- * it does not read as that is dropped.
+ * parts called on from the view, the pictures put on the message boxes, and what was
+ * written in them. Whatever of it does not read as that is dropped.
  */
-function savedWaiting(): Pick<State, "notes" | "drafts" | "called"> {
-  const nothing = { notes: {}, drafts: {}, called: {} }
+function savedWaiting(): Pick<
+  State,
+  "notes" | "drafts" | "called" | "pictures"
+> {
+  const nothing = { notes: {}, drafts: {}, called: {}, pictures: {} }
   try {
     const kept = JSON.parse(saved(WAITING_KEY) ?? "null") as {
       notes?: unknown
       drafts?: unknown
       called?: unknown
+      pictures?: unknown
     } | null
     if (!kept || typeof kept !== "object") return nothing
     const notes = Object.fromEntries(
@@ -323,7 +330,23 @@ function savedWaiting(): Pick<State, "notes" | "drafts" | "called"> {
         ]
       )
     )
-    return { notes, drafts, called }
+    const pictures = Object.fromEntries(
+      Object.entries((kept.pictures ?? {}) as Record<string, unknown>).map(
+        ([project, put]) => [
+          project,
+          (Array.isArray(put) ? put : []).filter(
+            (picture: Partial<Attached> | null): picture is Attached =>
+              typeof picture?.id === "string" &&
+              typeof picture.name === "string" &&
+              typeof picture.mimeType === "string" &&
+              picture.mimeType in PICTURE_TYPES &&
+              typeof picture.bytes === "number" &&
+              Number.isInteger(picture.number)
+          ),
+        ]
+      )
+    )
+    return { notes, drafts, called, pictures }
   } catch {
     return nothing
   }
@@ -492,6 +515,14 @@ type State = {
    */
   called: Record<string, Called[]>
   /**
+   * The pictures put on each project's message box, to go with its next message: a
+   * photo of the thing to make, a sketch, a drawing. The app keeps each from when it is
+   * put there. Until the message is sent each shows on the box.
+   */
+  pictures: Record<string, Attached[]>
+  /** why a picture just put on a message was not taken, in a line; null when all were */
+  pictureTrouble: string | null
+  /**
    * The colour the user has given a part, by project and part: one of the app's own, by
    * name. It is how the app draws the part, whatever the model says of its colour.
    */
@@ -576,6 +607,14 @@ type State = {
    */
   callOn(parts: Called[]): void
   dropCalled(id: string): void
+  /**
+   * Put pictures with the open project's next message: those of the files that are
+   * pictures, each made no bigger than an agent takes. Resolves to the ones that were
+   * put there. `bringUp` brings the message up to be written in as well.
+   */
+  attach(files: Blob[], bringUp?: boolean): Promise<Attached[]>
+  /** Take a picture back off the message, and out of what is written in it. */
+  dropPicture(id: string): void
   /** Give parts of the open project a colour of the app's, or (null) the model's own back. */
   setColour(partIds: string[], colour: PaletteName | null): void
   /**
@@ -767,6 +806,7 @@ export const useStore = create<State>()((set, get) => ({
   plain: false,
   writing: null,
   ...savedWaiting(),
+  pictureTrouble: null,
   colours: savedColours(),
   ...savedArranged(),
   naming: NONE,
@@ -1020,6 +1060,69 @@ export const useStore = create<State>()((set, get) => ({
     })
   },
 
+  async attach(files, bringUp = false) {
+    const projectId = get().activeId
+    if (!projectId) return []
+    const added: Attached[] = []
+    let trouble: string | null = null
+    for (const file of files) {
+      if ((get().pictures[projectId] ?? []).length >= MOST_AT_ONCE) {
+        trouble = `A message takes ${MOST_AT_ONCE} images at most.`
+        break
+      }
+      const fit = await fitted(file)
+      const kept =
+        fit &&
+        (await window.cad.pictures.add(projectId, {
+          name: file instanceof File && file.name ? file.name : "image",
+          ...fit,
+        }))
+      if (!kept) {
+        trouble = "That image could not be read."
+        continue
+      }
+      set((state) => {
+        const before = state.pictures[projectId] ?? []
+        // counted on from the last of them: no two on a message are called the same
+        const picture = {
+          ...kept,
+          number: Math.max(0, ...before.map((one) => one.number)) + 1,
+        }
+        added.push(picture)
+        return {
+          pictures: { ...state.pictures, [projectId]: [...before, picture] },
+        }
+      })
+    }
+    set((state) => ({
+      pictureTrouble: trouble,
+      ...(bringUp && added.length > 0
+        ? { threadOpen: true, writeRequests: state.writeRequests + 1 }
+        : {}),
+    }))
+    return added
+  },
+
+  dropPicture(id) {
+    const { activeId, pictures, drafts } = get()
+    if (!activeId) return
+    const picture = (pictures[activeId] ?? []).find((one) => one.id === id)
+    if (!picture) return
+    set({
+      pictures: {
+        ...pictures,
+        [activeId]: (pictures[activeId] ?? []).filter((one) => one.id !== id),
+      },
+      drafts: {
+        ...drafts,
+        [activeId]: withoutMark(drafts[activeId] ?? "", picture.number),
+      },
+      pictureTrouble: null,
+    })
+    // it went with no message: the app has no more use for its copy
+    void window.cad.pictures.drop(activeId, id)
+  },
+
   setColour(partIds, colour) {
     const { activeId, colours, history } = get()
     if (!activeId) return
@@ -1231,7 +1334,14 @@ export const useStore = create<State>()((set, get) => ({
     // and with the reference scene called on, it is the scene the message is about
     const reference = called.find((one) => one.scene)?.scene ?? null
     const notes = get().notes[project.id] ?? []
-    if (!message && notes.length === 0 && objects.length === 0 && !reference)
+    const pictures = get().pictures[project.id] ?? []
+    if (
+      !message &&
+      notes.length === 0 &&
+      objects.length === 0 &&
+      !reference &&
+      pictures.length === 0
+    )
       return
     // into the conversation the panel is showing; if that is a new one, this begins it
     const { open } = stackOf(
@@ -1246,6 +1356,9 @@ export const useStore = create<State>()((set, get) => ({
       drafts: { ...state.drafts, [project.id]: "" },
       notes: { ...state.notes, [project.id]: [] },
       called: { ...state.called, [project.id]: [] },
+      // (the app keeps its copies of them: they are the conversation's now)
+      pictures: { ...state.pictures, [project.id]: [] },
+      pictureTrouble: null,
     }))
     void window.cad.thread
       .send(
@@ -1255,7 +1368,8 @@ export const useStore = create<State>()((set, get) => ({
         notes.map(({ part, text }) => ({ part, text })),
         objects,
         mannerIn(get(), open),
-        reference
+        reference,
+        pictures
       )
       .then((id) => {
         // stay with it: a conversation that has just begun is not yet the one on the
@@ -1418,7 +1532,8 @@ export function connect() {
     if (
       state.notes !== was.notes ||
       state.drafts !== was.drafts ||
-      state.called !== was.called
+      state.called !== was.called ||
+      state.pictures !== was.pictures
     )
       localStorage.setItem(
         WAITING_KEY,
@@ -1426,6 +1541,7 @@ export function connect() {
           notes: state.notes,
           drafts: state.drafts,
           called: state.called,
+          pictures: state.pictures,
         })
       )
   })

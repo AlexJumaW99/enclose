@@ -106,6 +106,32 @@ export function makeFolder(parent: string, base: string): string {
   }
 }
 
+/**
+ * How much room a folder takes, in bytes: every file in it, however deep. A link counts
+ * as itself, not as what it points at. Nothing, for a folder that is not there.
+ */
+export async function folderSize(folder: string): Promise<number> {
+  let entries: fs.Dirent[]
+  try {
+    entries = await fs.promises.readdir(folder, { withFileTypes: true })
+  } catch {
+    return 0
+  }
+  const sizes = await Promise.all(
+    entries.map(async (entry) => {
+      const one = path.join(folder, entry.name)
+      if (entry.isDirectory()) return folderSize(one)
+      try {
+        return (await fs.promises.lstat(one)).size
+      } catch {
+        // gone since it was listed
+        return 0
+      }
+    })
+  )
+  return sizes.reduce((sum, size) => sum + size, 0)
+}
+
 const MAX_DEPTH = 6
 const MAX_FOLDERS = 4000
 const MAX_MANIFEST_BYTES = 5_000_000

@@ -57,9 +57,9 @@ export function ReferencePanel({
       // a press here picks, and takes the keys from nowhere: they go on being the view's
       onMouseDown={(event) => event.preventDefault()}
       className={cn(
-        // rounded and lined as the list of parts is, and a shade lighter than the view
-        // it lies over, in the dark as in the light
-        "pointer-events-auto flex w-72.5 flex-col overflow-hidden rounded-[28px] bg-background shadow-lg ring-1 ring-foreground/10 select-none dark:bg-[color-mix(in_srgb,var(--sidebar),var(--foreground)_2.6%)]",
+        // rounded as a group's card in the list of parts is and lined as the list is,
+        // and a shade lighter than the view it lies over, in the dark as in the light
+        "pointer-events-auto flex w-72.5 flex-col overflow-hidden rounded-2xl bg-background shadow-lg ring-1 ring-foreground/10 select-none dark:bg-[color-mix(in_srgb,var(--sidebar),var(--foreground)_2.6%)]",
         className
       )}
     >
