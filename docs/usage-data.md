@@ -24,8 +24,9 @@ Each thing counted is an event: its name, and a few words and numbers that say w
 | `provider switched` | Which agent, and whether on or off |
 | `update fetched` | The version |
 
-With every event go the app's version, your system (macOS, its version, and the kind of
-processor), and the name made up for your installation. PostHog sees the address an
+With every event go the app's version, whether it is the installed app, your system
+(macOS, its version, and the kind of processor), and the name made up for your
+installation. PostHog keeps what it is sent in the United States. It sees the address an
 event comes from, as any server does, and works out roughly where that is: a country and
 a city.
 

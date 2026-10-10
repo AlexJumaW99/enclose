@@ -36,6 +36,9 @@ where it is called Enclose (Alpha).
   opened from one of them.
 - With no project yet, start from one of the
   [examples](projects.md#starting-from-an-example): it is downloaded when you pick it.
+- Enclose counts how it is used from the first time it is opened, and sends that count
+  on: which features, and nothing from your projects or messages.
+  [Usage data](usage-data.md) says what is sent, and how to switch it off.
 
 If a message gets no answer, look at Providers in the [settings](settings.md): it shows
 which agents the app found, and takes the path to one it did not find.
