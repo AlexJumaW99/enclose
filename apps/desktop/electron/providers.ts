@@ -132,7 +132,11 @@ function onPath(name: string): string | null {
 /**
  * An app opened from the Dock or Finder gets a bare PATH, without the directories a
  * terminal adds - which is where `claude`, `python3` and the rest live. Ask the login
- * shell what PATH it would use, and adopt it. Once is enough.
+ * shell what PATH it would use, and adopt it. Once is enough, once it has answered. A
+ * shell with a lot in its profile can take many seconds over it, the first time after
+ * the machine was started above all: it is given that long, and one that was given up
+ * on is asked again the next time something is looked for, or the app would go on
+ * finding no agent until it was opened again.
  */
 let adopted: Promise<void> | null = null
 function adoptShellPath(): Promise<void> {
@@ -143,12 +147,13 @@ function adoptShellPath(): Promise<void> {
       const { stdout } = await run(
         shell,
         ["-ilc", 'printf "__PATH__%s__PATH__" "$PATH"'],
-        { timeout: 5000 }
+        { timeout: 20_000 }
       )
       const found = /__PATH__(.*)__PATH__/s.exec(stdout)?.[1]
       if (found) process.env.PATH = found
     } catch {
-      // keep the PATH we were started with
+      // keep the PATH we were started with, for now
+      adopted = null
     }
   })()
   return adopted
