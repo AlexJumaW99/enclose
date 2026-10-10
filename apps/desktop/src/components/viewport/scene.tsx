@@ -1551,7 +1551,11 @@ function Picker({
     canvas.addEventListener("click", click)
     window.addEventListener("keydown", key)
     window.addEventListener("keyup", key)
+    // what the camera turns about, where it is to turn about the place pointed at
+    bridge.under = (clientX, clientY) =>
+      cast({ clientX, clientY })?.point.clone() ?? null
     return () => {
+      bridge.under = null
       canvas.removeEventListener("pointerdown", down)
       canvas.removeEventListener("pointermove", move)
       canvas.removeEventListener("pointerleave", leave)

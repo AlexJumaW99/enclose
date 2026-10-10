@@ -1,6 +1,9 @@
+import * as THREE from "three"
 import { describe, expect, it } from "vitest"
 
 import {
+  carriedRound,
+  facingFrom,
   lowestPolar,
   nearestAxis,
   nearestTurn,
@@ -141,5 +144,67 @@ describe("VIEWS", () => {
       "Right +x",
       "Left -x",
     ])
+  })
+})
+
+describe("facingFrom", () => {
+  it("faces the way a camera does that is made to look at the middle", () => {
+    const [azimuth, polar] = [0.7, 1.1]
+    const camera = new THREE.PerspectiveCamera()
+    camera.position.setFromSphericalCoords(5, polar, azimuth)
+    camera.lookAt(0, 0, 0)
+    close(facingFrom(azimuth, polar).toArray(), camera.quaternion.toArray())
+  })
+
+  it("is still a way of facing from straight above, by the angle round", () => {
+    const right = (azimuth: number) =>
+      new THREE.Vector3(1, 0, 0).applyQuaternion(facingFrom(azimuth, 0))
+    close(right(0).toArray(), [1, 0, 0])
+    close(right(Math.PI / 2).toArray(), [0, 0, -1])
+  })
+
+  it("carries on unbroken over the top, the picture turned half round", () => {
+    // just short of straight above, and just past it down the far side
+    const before = facingFrom(0.4, 0.001)
+    const after = facingFrom(0.4 + Math.PI, 0.001, Math.PI)
+    expect(before.angleTo(after)).toBeLessThan(0.01)
+  })
+})
+
+describe("carriedRound", () => {
+  /** Where a point is in the picture of a camera that looks at `target` from `far` away. */
+  const seen = (
+    point: THREE.Vector3,
+    target: THREE.Vector3,
+    facing: THREE.Quaternion,
+    far: number
+  ) => {
+    const from = new THREE.Vector3(0, 0, far)
+      .applyQuaternion(facing)
+      .add(target)
+    return point.clone().sub(from).applyQuaternion(facing.clone().invert())
+  }
+
+  it("keeps the point turned about where it is in the picture", () => {
+    const target = new THREE.Vector3(1, 2, 3)
+    const about = new THREE.Vector3(-4, 0.5, 6)
+    const was = facingFrom(0.3, 1.2)
+    const is = facingFrom(1.4, 0.6)
+    const moved = carriedRound(target, about, was, is)
+    close(
+      seen(about, moved, is, 20).toArray(),
+      seen(about, target, was, 20).toArray()
+    )
+  })
+
+  it("leaves what the camera looks at alone when that is what it turns about", () => {
+    const target = new THREE.Vector3(1, 2, 3)
+    const moved = carriedRound(
+      target,
+      target,
+      facingFrom(0, 1),
+      facingFrom(2, 0.3)
+    )
+    close(moved.toArray(), target.toArray())
   })
 })

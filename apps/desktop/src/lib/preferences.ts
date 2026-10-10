@@ -4,18 +4,34 @@
 import { create } from "zustand"
 
 import { SETTLE_DAYS } from "@/lib/conversations"
+import { PRESETS, type Buttons, type Drag } from "@/lib/navigation"
 
 /** auto: told apart by how the scroll moves. Or always the one, or always the other. */
 export type Scrolling = "auto" | "trackpad" | "wheel"
 
+/**
+ * What stays where it is as the view is turned: what the camera looks at, in the middle
+ * of the view; the middle of what is picked out; or the place on the model that was
+ * under the pointer as the turn began.
+ */
+export type Pivot = "view" | "selection" | "pointer"
+
 /** What a length is said in: millimetres, or inches. */
 export type Unit = "mm" | "in"
 
-export type Preferences = {
+export type Preferences = Buttons & {
   /** what a scroll is taken to come from */
   scrolling: Scrolling
   /** how fast the view turns under the hand, against the speed it comes with */
   turnSpeed: number
+  /** and how fast it zooms */
+  zoomSpeed: number
+  /** a wheel zooms the other way round: out where it zoomed in */
+  wheelReversed: boolean
+  /** a turn stops straight above the model and straight below, and does not go on over */
+  upright: boolean
+  /** what the view turns about */
+  pivot: Pivot
   /** how many days a conversation is left alone before it goes under its project's card */
   settleDays: number
   /** what the lengths written on a blueprint are in */
@@ -23,13 +39,27 @@ export type Preferences = {
 }
 
 export const TURN_SPEED = { min: 0.4, max: 2.5 }
+export const ZOOM_SPEED = { min: 0.4, max: 2.5 }
 const DEFAULTS: Preferences = {
   scrolling: "auto",
+  ...PRESETS.enclose,
   turnSpeed: 1,
+  zoomSpeed: 1,
+  wheelReversed: false,
+  upright: false,
+  pivot: "view",
   settleDays: SETTLE_DAYS.initial,
   units: "mm",
 }
 const KEY = "enclose:preferences"
+
+const isDrag = (read: unknown): read is Drag =>
+  read === "turn" || read === "pan" || read === "zoom"
+/** A speed that was kept, within what it may be: or the speed it comes with. */
+const speed = (read: unknown, { min, max }: { min: number; max: number }) =>
+  typeof read === "number" && Number.isFinite(read)
+    ? Math.min(max, Math.max(min, read))
+    : 1
 
 function saved(): Preferences {
   try {
@@ -40,16 +70,30 @@ function saved(): Preferences {
       read.scrolling === "trackpad" || read.scrolling === "wheel"
         ? read.scrolling
         : DEFAULTS.scrolling
-    const turnSpeed =
-      typeof read.turnSpeed === "number" && Number.isFinite(read.turnSpeed)
-        ? Math.min(TURN_SPEED.max, Math.max(TURN_SPEED.min, read.turnSpeed))
-        : DEFAULTS.turnSpeed
     const settleDays =
       typeof read.settleDays === "number" && Number.isInteger(read.settleDays)
         ? Math.min(SETTLE_DAYS.max, Math.max(SETTLE_DAYS.min, read.settleDays))
         : DEFAULTS.settleDays
-    const units = read.units === "in" ? "in" : DEFAULTS.units
-    return { scrolling, turnSpeed, settleDays, units }
+    return {
+      scrolling,
+      middle: isDrag(read.middle) ? read.middle : DEFAULTS.middle,
+      right:
+        read.right === "turn" || read.right === "pan"
+          ? read.right
+          : DEFAULTS.right,
+      shift: isDrag(read.shift) ? read.shift : DEFAULTS.shift,
+      ctrl: isDrag(read.ctrl) ? read.ctrl : DEFAULTS.ctrl,
+      turnSpeed: speed(read.turnSpeed, TURN_SPEED),
+      zoomSpeed: speed(read.zoomSpeed, ZOOM_SPEED),
+      wheelReversed: read.wheelReversed === true,
+      upright: read.upright === true,
+      pivot:
+        read.pivot === "selection" || read.pivot === "pointer"
+          ? read.pivot
+          : DEFAULTS.pivot,
+      settleDays,
+      units: read.units === "in" ? "in" : DEFAULTS.units,
+    }
   } catch {
     return DEFAULTS
   }
@@ -61,10 +105,10 @@ export const usePreferences = create<
   ...saved(),
   change(patch) {
     set(patch)
-    const { scrolling, turnSpeed, settleDays, units } = get()
-    localStorage.setItem(
-      KEY,
-      JSON.stringify({ scrolling, turnSpeed, settleDays, units })
+    // all that is kept of it is what was chosen: not the way of changing it
+    const kept = Object.fromEntries(
+      Object.entries(get()).filter(([key]) => key in DEFAULTS)
     )
+    localStorage.setItem(KEY, JSON.stringify(kept))
   },
 }))

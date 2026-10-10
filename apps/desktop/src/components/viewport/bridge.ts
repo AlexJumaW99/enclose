@@ -31,6 +31,13 @@ export const bridge: {
    */
   goTo: ((box: THREE.Box3, covered?: number) => void) | null
   /**
+   * where on the model a place in the window points, in the view's own frame: null
+   * where it points at none of it
+   */
+  under: ((clientX: number, clientY: number) => THREE.Vector3 | null) | null
+  /** the box that what is picked out fills, in the model's frame: null with nothing picked out */
+  picked: (() => THREE.Box3 | null) | null
+  /**
    * true while a handle in the view is being dragged, or a box drawn across it: not the
    * moment to pick the part under the pointer
    */
@@ -44,6 +51,8 @@ export const bridge: {
   flat: null,
   focus: null,
   goTo: null,
+  under: null,
+  picked: null,
   handling: false,
 }
 

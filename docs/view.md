@@ -15,12 +15,38 @@ Orbiting does not stop straight above the model or straight below: it carries on
 the top and round the far side, with the model upside down, as it does in Blender. A set
 view, or Cmd+1, brings it back the right way up, and goes there the short way however
 many times the view has been turned about. (In a [reference scene](reference-scenes.md)
-it stops at the ground the scene stands on.)
+it stops at the ground the scene stands on.) The [settings](settings.md) can keep the
+model upright instead: orbiting then stops straight above and straight below.
+
+The view turns about what the camera looks at, in the middle of the view. The settings
+can have it turn about what is picked out, or about the place on the model the pointer
+was on as the turn began, which then stays where it is while the rest goes round it.
 
 A trackpad and a wheel send the same scroll, so which one it was is read from how the
 scroll moves ([`scroll.ts`](../apps/desktop/src/lib/scroll.ts)). Holding Ctrl makes any
-scroll zoom, whatever it was taken for. The [settings](settings.md) can say which it is,
-and how fast the view turns.
+scroll zoom, whatever it was taken for. The settings can say which it is, how fast the
+view turns and zooms, and that a wheel zooms the other way round.
+
+### A mouse's buttons
+
+A drag with the middle button, which is the wheel pressed down, zooms as the wheel does:
+up the window to zoom in, on the place the drag began. Holding Ctrl makes a drag with
+either button zoom, as it does a scroll.
+
+What each button does is yours to say in the settings, and so is what Shift and Ctrl
+make of a drag: one by one, or all at once to how another program has them.
+
+| | Middle button | Right button | With Shift | With Ctrl |
+|---|---|---|---|---|
+| Enclose | Zoom | Turn | Pan | Zoom |
+| Blender | Turn | Turn | Pan | Zoom |
+| Fusion | Pan | Turn | Turn | Zoom |
+| Onshape | Pan | Turn | Pan | Pan |
+| SolidWorks | Turn | Turn | Zoom | Pan |
+
+A key does what it does with either button, and with both keys held a drag zooms. Where
+those programs give the right button to a menu of their own, it turns the view here.
+([`navigation.ts`](../apps/desktop/src/lib/navigation.ts) has them.)
 
 ## Set views
 

@@ -1209,6 +1209,14 @@ function Model({ project }: { project: Project }) {
     bridge.focus?.(boxRound(loaded, near, explode), underList())
   }, [loaded, near, explode])
 
+  // what the camera turns about, where it is to turn about what is picked out
+  React.useEffect(() => {
+    bridge.picked = () => boxRound(loaded, pickedOut(), explode)
+    return () => {
+      bridge.picked = null
+    }
+  }, [loaded, explode])
+
   // Z is the shading menu's key. While the model is cut open a tap of it still chooses
   // the cut across Z, and the menu comes up when the key is held instead.
   const cut = view.section !== null

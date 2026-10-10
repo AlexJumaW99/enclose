@@ -28,13 +28,17 @@ import { useFrame, useThree } from "@react-three/fiber"
 import { CameraControls, CameraControlsImpl } from "@react-three/drei"
 
 import type { Vec3 } from "@shared/api"
+import { dragOf, type Button } from "@/lib/navigation"
 import {
+  carriedRound,
+  facingFrom,
   lowestPolar,
   nearestTurn,
   viewFrom,
   type Axis,
   type Sign,
 } from "@/lib/orient"
+import { MAC } from "@/lib/platform"
 import { usePreferences } from "@/lib/preferences"
 import { SCROLL_PAUSE, scrollSource } from "@/lib/scroll"
 import { bridge, publishOrientation } from "./bridge"
@@ -100,6 +104,36 @@ const HOME_MARGIN = 1.18
 const WATCHING = 0.75
 
 const { ACTION } = CameraControlsImpl
+/**
+ * What a drag is to the controls, by what it does to the view. One that zooms is not
+ * theirs: it is passed on as so many turns of a wheel, so that every zoom is of the one
+ * kind, with the lens and without it.
+ */
+const DRAGGED = {
+  turn: ACTION.ROTATE,
+  pan: ACTION.TRUCK,
+  zoom: ACTION.NONE,
+} as const
+/** How far a wheel would have to scroll to zoom as a drag does, for each pixel of the drag. */
+const DRAG_ZOOM = 0.2
+
+/**
+ * What a turn of the view goes about, as the user has it: the middle of what is picked
+ * out; or the place on the model under the pointer, `at`, where there is a pointer. Null
+ * for what the camera looks at, which is what the controls turn it about themselves.
+ */
+function turnedAbout(
+  at: { clientX: number; clientY: number } | null
+): THREE.Vector3 | null {
+  const { pivot } = usePreferences.getState()
+  if (pivot === "selection") {
+    const box = bridge.picked?.()
+    return box ? toWorld(box.getCenter(new THREE.Vector3())) : null
+  }
+  if (pivot === "pointer" && at)
+    return bridge.under?.(at.clientX, at.clientY) ?? null
+  return null
+}
 
 /** What ties the lens to the turn of the camera, while something does. */
 type Tie =
@@ -187,6 +221,8 @@ function direct(stage: {
   let surrounded = false
   /** the ground that what the camera looks at was last kept above; null with none */
   let grounded: number | null = null
+  /** the point a drag that turns the view has hold of it by, and turns it about */
+  let held: THREE.Vector3 | null = null
 
   /**
    * How far down round what it looks at the camera can be, as the angle from straight
@@ -685,7 +721,7 @@ function direct(stage: {
     zoomFlat(delta: number, across: number, up: number) {
       const { width, height } = stage.size()
       const scale = THREE.MathUtils.clamp(
-        goal * Math.pow(0.95, (delta / 10) * ZOOM_SPEED),
+        goal * Math.pow(0.95, (delta / 10) * controls.dollySpeed),
         controls.minZoom,
         controls.maxZoom
       )
@@ -708,20 +744,31 @@ function direct(stage: {
       stage.redraw()
     },
 
-    /** Orbit by these angles, the way a drag to the right and down turns the view. */
-    orbit(right: number, down: number) {
+    /**
+     * Orbit by these angles, the way a drag to the right and down turns the view: about
+     * what the camera looks at, or about some other point.
+     */
+    orbit(right: number, down: number, about: THREE.Vector3 | null = null) {
       atHome = false
       letGo()
-      void controls.rotate(-right, -down, false)
+      void this.turn(-right, -down, about)
       stage.redraw()
+    },
+
+    /** A drag that turns the view has hold of it by this point, or (null) has let go. */
+    hold(point: THREE.Vector3 | null) {
+      held = point
     },
 
     /**
      * Turn the camera by these angles, the way the controls would - but on past straight
      * above and straight below, where they stop. Every turn the hand makes comes through
      * here: a drag, fingers on the trackpad, a drag on the axes in the corner.
+     *
+     * It goes about what the camera looks at, or about some other point, `about`: the
+     * one a drag has hold of the view by, unless another is given.
      */
-    turn(azimuth: number, polar: number) {
+    turn(azimuth: number, polar: number, about: THREE.Vector3 | null = held) {
       // seen upside down, the same movement of the hand turns the camera the other way
       const way = rollTo === 0 ? 1 : -1
       // From where the camera is, not from where a flight was taking it: the hand takes
@@ -729,19 +776,35 @@ function direct(stage: {
       let theta = controls.azimuthAngle + way * azimuth
       // down as far as the ground and no further: and from there, if a zoom or a pan
       // has left the camera for the moment lower than it is drawn
-      const most = lowest(
-        controls.getTarget(new THREE.Vector3(), false),
-        controls.distance
-      )
-      let phi = Math.min(controls.polarAngle, most) + way * polar
+      const target = controls.getTarget(new THREE.Vector3(), false)
+      const most = lowest(target, controls.distance)
+      const from = Math.min(controls.polarAngle, most)
+      const was = facingFrom(controls.azimuthAngle, from, rollTo)
+      let phi = from + way * polar
       if (most < Math.PI) phi = Math.min(phi, most)
       if (phi < 0 || phi > Math.PI) {
-        // over the top, or under the bottom: on down the far side, the other way up
-        phi = phi < 0 ? -phi : 2 * Math.PI - phi
-        theta += Math.PI
-        const half = rollTo === 0 ? Math.PI : -Math.PI
-        rollTo += half
-        roll += half
+        if (rollTo === 0 && usePreferences.getState().upright) {
+          // kept the right way up: straight above, or straight below, is as far as it goes
+          phi = phi < 0 ? 0 : Math.PI
+        } else {
+          // over the top, or under the bottom: on down the far side, the other way up
+          phi = phi < 0 ? -phi : 2 * Math.PI - phi
+          theta += Math.PI
+          const half = rollTo === 0 ? Math.PI : -Math.PI
+          rollTo += half
+          roll += half
+        }
+      }
+      if (about) {
+        // what the camera looks at goes round the point with it, which leaves the point
+        // where it is in the picture
+        const to = carriedRound(
+          target,
+          about,
+          was,
+          facingFrom(theta, phi, rollTo)
+        )
+        void controls.moveTo(to.x, to.y, to.z, false)
       }
       return controls.rotateTo(theta, phi, false)
     },
@@ -953,6 +1016,7 @@ export function Rig({
   const size = useThree((state) => state.size)
   const aspect = size.width / size.height
   const turnSpeed = usePreferences((state) => state.turnSpeed)
+  const zoomSpeed = usePreferences((state) => state.zoomSpeed)
 
   const latest = React.useRef(box)
   React.useEffect(() => {
@@ -983,10 +1047,9 @@ export function Rig({
     const rotate = impl.rotate.bind(impl)
     impl.rotate = (azimuth, polar) => made.turn(azimuth, polar)
     // The main button is not the camera's: it picks parts out, at a click or by drawing
-    // a box across them (see Marquee). With a mouse it is the other button that turns
-    // the view.
+    // a box across them (see Marquee). With a mouse it is the other buttons that move
+    // the view, each as the user has it: a press of one says what it does.
     impl.mouseButtons.left = ACTION.NONE
-    impl.mouseButtons.right = ACTION.ROTATE
     const made = direct({
       controls: impl,
       lens,
@@ -1003,7 +1066,8 @@ export function Rig({
     director.current = made
     // what the axis gizmo, the section planes and the keyboard move the camera with
     bridge.lookFrom = (axis, sign) => made.lookFrom(axis, sign)
-    bridge.orbit = (dx, dy) => made.orbit(dx * TURN.axes, dy * TURN.axes)
+    bridge.orbit = (dx, dy) =>
+      made.orbit(dx * TURN.axes, dy * TURN.axes, turnedAbout(null))
     bridge.eye = () => made.eye()
     bridge.flat = () => made.isFlat()
     bridge.focus = (box, covered) => made.focus(box, covered)
@@ -1066,8 +1130,9 @@ export function Rig({
   }, [around, more])
 
   // What the hand does on the view. Fingers moving across a trackpad turn the model, a
-  // pinch zooms, and so does a mouse wheel. Holding Shift pans instead: with the fingers,
-  // and with a drag, which is a drag with a mouse's other button.
+  // pinch zooms, and so does a mouse wheel; with Shift held, either pans. A drag with a
+  // mouse's right button, or its middle one, does what the user has said that button
+  // does, and what they have said a key held with it makes of that (see navigation.ts).
   React.useEffect(() => {
     const canvas = gl.domElement
     const around = canvas.parentElement
@@ -1077,28 +1142,110 @@ export function Rig({
     const passed = new WeakSet<Event>()
     /** when the last pinch came */
     let pinched = -Infinity
-    /** the swipe under way: when it last moved, how far it has gone, and `sends` then */
-    const swipe = { at: -Infinity, travel: 0, sends: 0 }
+    /**
+     * The swipe under way: when it last moved, how far it has gone, `sends` then, and
+     * what it turns the view about.
+     */
+    const swipe = {
+      at: -Infinity,
+      travel: 0,
+      sends: 0,
+      about: null as THREE.Vector3 | null,
+    }
+    /** the drag that is zooming: where it began, and how far down the window it has got */
+    let zooming: { x: number; y: number; last: number } | null = null
 
-    const choose = (event: WheelEvent | PointerEvent) => {
-      const camera = controls.current
-      if (!camera) return
-      camera.mouseButtons.right = event.shiftKey ? ACTION.TRUCK : ACTION.ROTATE
-      camera.mouseButtons.wheel = event.shiftKey ? ACTION.TRUCK : ACTION.DOLLY
-    }
-    // The controls sit a press of the main button out altogether: left to hear of it,
-    // they would take the view for moved by a drag that moves nothing.
-    const press = (event: PointerEvent) => {
-      choose(event)
-      if (event.button === 0 && controls.current)
-        controls.current.enabled = false
-    }
-    const lift = () => {
-      if (controls.current) controls.current.enabled = true
-    }
+    /** The button that a press is of, of those that move the view: a finger has none. */
+    const buttonOf = (event: PointerEvent): Button | null =>
+      event.pointerType === "touch"
+        ? null
+        : event.button === 1
+          ? "middle"
+          : event.button === 2
+            ? "right"
+            : null
     const swallow = (event: Event) => {
       event.preventDefault()
       event.stopPropagation()
+    }
+
+    /**
+     * Zoom as a wheel would that scrolled this far, in pixels (or in lines, where `mode`
+     * is 1), on the place in the window it is given. The controls would answer a pinch
+     * by changing the lens instead of moving the camera, and a drag in their own way:
+     * so all of them go to the controls as a turn of a wheel, and every zoom is the same
+     * kind, towards the pointer and within the same limits. And upside down, the
+     * controls have to be told where the pointer is in the picture as they know it.
+     */
+    const zoom = (delta: number, x: number, y: number, mode = 0) => {
+      const camera = controls.current
+      const made = director.current
+      if (!camera || !made) return
+      // a zoom should keep up with the hand
+      camera.smoothTime = SMOOTH.zoom
+      const rect = canvas.getBoundingClientRect()
+      if (made.isFlat()) {
+        made.zoomFlat(
+          // a mouse wheel may count in lines
+          delta * (mode === 1 ? 10 : 1),
+          ((x - rect.left) / rect.width) * 2 - 1,
+          1 - ((y - rect.top) / rect.height) * 2
+        )
+        return
+      }
+      // (whatever a key held with it would make of a wheel that was really turned)
+      camera.mouseButtons.wheel = ACTION.DOLLY
+      const at = made.asControlsSee(x, y, rect)
+      const plain = new WheelEvent("wheel", {
+        deltaY: delta,
+        deltaMode: mode,
+        clientX: at.x,
+        clientY: at.y,
+        bubbles: true,
+        cancelable: true,
+      })
+      passed.add(plain)
+      canvas.dispatchEvent(plain)
+    }
+
+    const press = (event: PointerEvent) => {
+      const camera = controls.current
+      const made = director.current
+      if (!camera || !made) return
+      // The controls sit a press of the main button out altogether: left to hear of
+      // it, they would take the view for moved by a drag that moves nothing.
+      if (event.button === 0) {
+        camera.enabled = false
+        return
+      }
+      const button = buttonOf(event)
+      if (!button) return
+      const buttons = usePreferences.getState()
+      const held = { shift: event.shiftKey, ctrl: event.ctrlKey }
+      camera.mouseButtons.right = DRAGGED[dragOf(buttons, "right", held)]
+      camera.mouseButtons.middle = DRAGGED[dragOf(buttons, "middle", held)]
+      const does = dragOf(buttons, button, held)
+      if (does === "zoom")
+        zooming = { x: event.clientX, y: event.clientY, last: event.clientY }
+      // a turn may go about the place the drag began on, or about what is picked out
+      else if (does === "turn") made.hold(turnedAbout(event))
+    }
+    const drag = (event: PointerEvent) => {
+      const made = director.current
+      if (!zooming || !made) return
+      const down = event.clientY - zooming.last
+      zooming.last = event.clientY
+      if (down === 0) return
+      // Up the window zooms in, as a wheel turned away does, on the place the drag
+      // began. (Off a Mac the controls count a wheel's pixels for a third as much,
+      // a notch of one sending so many more of them there: a drag's are made up for it.)
+      const counted = MAC || made.isFlat() ? 1 : 3
+      zoom(down * DRAG_ZOOM * counted, zooming.x, zooming.y)
+    }
+    const lift = () => {
+      zooming = null
+      director.current?.hold(null)
+      if (controls.current) controls.current.enabled = true
     }
 
     const turn = (event: WheelEvent, now: number) => {
@@ -1109,6 +1256,7 @@ export function Rig({
       if (now - swipe.at > SCROLL_PAUSE) {
         swipe.travel = 0
         swipe.sends = made.sends()
+        swipe.about = turnedAbout(event)
       }
       swipe.at = now
       // Fingers drift as they pinch, and a swipe coasts on after they lift. Neither
@@ -1120,79 +1268,53 @@ export function Rig({
       camera.smoothTime = SMOOTH.turn
       // the model goes the way the fingers do, as it does under a drag
       const rate = TURN.swipe * usePreferences.getState().turnSpeed
-      made.orbit(-event.deltaX * rate, -event.deltaY * rate)
+      made.orbit(-event.deltaX * rate, -event.deltaY * rate, swipe.about)
     }
 
     const wheel = (event: WheelEvent) => {
       const camera = controls.current
       const made = director.current
       if (!camera || !made || passed.has(event)) return
-      choose(event)
-      // a zoom or a pan should keep up with the fingers
+      camera.mouseButtons.wheel = event.shiftKey ? ACTION.TRUCK : ACTION.DOLLY
+      // a pan should keep up with the fingers
       camera.smoothTime = SMOOTH.zoom
       if (event.shiftKey) return
       const now = performance.now()
       // what it was made with is worked out, unless the user has said which it always is
-      const { scrolling } = usePreferences.getState()
+      const { scrolling, wheelReversed } = usePreferences.getState()
       const from =
         scrolling === "auto"
           ? source(event, now)
           : scrolling === "trackpad"
             ? "fingers"
             : "wheel"
+      swallow(event)
       // a pinch arrives as a scroll with Ctrl held
       if (!event.ctrlKey && from === "fingers") {
-        swallow(event)
         turn(event, now)
         return
       }
       if (event.ctrlKey) pinched = now
-      // a mouse wheel may count in lines
-      const delta =
-        event.deltaY *
-        (event.ctrlKey ? PINCH : 1) *
-        (event.deltaMode === 1 ? 10 : 1)
-      if (made.isFlat()) {
-        swallow(event)
-        const rect = canvas.getBoundingClientRect()
-        made.zoomFlat(
-          delta,
-          ((event.clientX - rect.left) / rect.width) * 2 - 1,
-          1 - ((event.clientY - rect.top) / rect.height) * 2
-        )
-        return
-      }
-      // The controls would answer a pinch by changing the lens instead of moving the
-      // camera. Pass it on as a turn of a wheel, so every zoom is the same kind: towards
-      // the pointer, within the same limits. And upside down, they have to be told where
-      // the pointer is in the picture as they know it.
-      const at = made.asControlsSee(
+      // a wheel zooms the other way round for whoever has asked it to: not a pinch,
+      // which goes the way the fingers do
+      const way = !event.ctrlKey && wheelReversed ? -1 : 1
+      zoom(
+        event.deltaY * (event.ctrlKey ? PINCH : 1) * way,
         event.clientX,
         event.clientY,
-        canvas.getBoundingClientRect()
+        event.deltaMode
       )
-      if (!event.ctrlKey && at.x === event.clientX && at.y === event.clientY)
-        return
-      swallow(event)
-      const plain = new WheelEvent("wheel", {
-        deltaY: event.deltaY * (event.ctrlKey ? PINCH : 1),
-        deltaMode: event.deltaMode,
-        clientX: at.x,
-        clientY: at.y,
-        bubbles: true,
-        cancelable: true,
-      })
-      passed.add(plain)
-      canvas.dispatchEvent(plain)
     }
     // capturing, one element up: these run before the controls' own listeners on the canvas
     around.addEventListener("wheel", wheel, { capture: true, passive: false })
     around.addEventListener("pointerdown", press, { capture: true })
+    window.addEventListener("pointermove", drag)
     window.addEventListener("pointerup", lift)
     window.addEventListener("pointercancel", lift)
     return () => {
       around.removeEventListener("wheel", wheel, { capture: true })
       around.removeEventListener("pointerdown", press, { capture: true })
+      window.removeEventListener("pointermove", drag)
       window.removeEventListener("pointerup", lift)
       window.removeEventListener("pointercancel", lift)
     }
@@ -1223,7 +1345,8 @@ export function Rig({
       // a drag turns as fast as the user has asked the view to turn
       azimuthRotateSpeed={turnSpeed}
       polarRotateSpeed={turnSpeed}
-      dollySpeed={ZOOM_SPEED}
+      // and a wheel zooms as fast as they have asked it to zoom
+      dollySpeed={ZOOM_SPEED * zoomSpeed}
       dollyToCursor
       smoothTime={SMOOTH.turn}
       draggingSmoothTime={0.08}

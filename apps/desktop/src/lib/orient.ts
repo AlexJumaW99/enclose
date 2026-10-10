@@ -82,6 +82,43 @@ export function lowestPolar(above: number, distance: number): number {
   return Math.acos(Math.min(1, Math.max(-1, -above / distance)))
 }
 
+/**
+ * Which way a camera faces that looks at something from round it: `azimuth` round the
+ * vertical and `polar` down from straight above, as three.js measures them (its vertical
+ * is Y), with the picture turned `roll` about its middle. Straight above and straight
+ * below it is still a way of facing: what is to the right of the picture is known from
+ * the angle round the vertical alone.
+ */
+export function facingFrom(
+  azimuth: number,
+  polar: number,
+  roll = 0
+): THREE.Quaternion {
+  const back = new THREE.Vector3().setFromSphericalCoords(1, polar, azimuth)
+  const right = new THREE.Vector3(Math.cos(azimuth), 0, -Math.sin(azimuth))
+  const up = back.clone().cross(right)
+  return new THREE.Quaternion()
+    .setFromRotationMatrix(new THREE.Matrix4().makeBasis(right, up, back))
+    .multiply(
+      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), roll)
+    )
+}
+
+/**
+ * Where what a camera looks at goes when the camera is turned about some other point,
+ * from facing one way to facing another: round that point, by the same turn. So that
+ * the point stays where it is in the picture, and all the rest goes round it.
+ */
+export function carriedRound(
+  target: THREE.Vector3,
+  about: THREE.Vector3,
+  was: THREE.Quaternion,
+  is: THREE.Quaternion
+): THREE.Vector3 {
+  const turn = is.clone().multiply(was.clone().invert())
+  return target.clone().sub(about).applyQuaternion(turn).add(about)
+}
+
 /** `to`, shifted by whole turns to be as near `from` as it can get: the short way round. */
 export function nearestTurn(from: number, to: number): number {
   const full = Math.PI * 2

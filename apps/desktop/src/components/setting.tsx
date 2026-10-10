@@ -21,24 +21,29 @@ export function Group({
 
 /**
  * One setting: what it is and what it does on the left, the control on the right. One
- * that may `wrap` puts its control underneath where there is no room beside.
+ * that may `wrap` puts its control underneath where there is no room beside. One in
+ * `halves` gives each side half of the row, whatever is on it, for the control to fill:
+ * a run of them lines up down the middle.
  */
 export function Row({
   title,
   detail,
   wrap,
+  halves,
   children,
 }: {
   title: React.ReactNode
   detail?: React.ReactNode
   wrap?: boolean
+  halves?: boolean
   children?: React.ReactNode
 }) {
   return (
     <div
       className={cn(
         "flex items-center justify-between gap-x-6 gap-y-2.5 px-4 py-3.5",
-        wrap && "flex-wrap"
+        wrap && "flex-wrap",
+        halves && "grid grid-cols-2"
       )}
     >
       <div
@@ -53,7 +58,14 @@ export function Row({
         )}
       </div>
       {children && (
-        <div className="flex shrink-0 items-center gap-2">{children}</div>
+        <div
+          className={cn(
+            "flex shrink-0 items-center gap-2",
+            halves && "min-w-0 shrink"
+          )}
+        >
+          {children}
+        </div>
       )}
     </div>
   )

@@ -2,6 +2,7 @@ import * as React from "react"
 import { cn } from "cn"
 import {
   ArrowLeftIcon,
+  ChevronDownIcon,
   InfoIcon,
   KeyboardIcon,
   PaletteIcon,
@@ -17,14 +18,31 @@ import { Providers } from "@/components/providers"
 import { Group, Row } from "@/components/setting"
 import { useTheme } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Kbd } from "@/components/ui/kbd"
 import { Slider } from "@/components/ui/slider"
+import { Switch } from "@/components/ui/switch"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { SETTLE_DAYS } from "@/lib/conversations"
 import { ACCESS_WORDS } from "@/lib/manner"
+import {
+  PRESET_WORDS,
+  PRESETS,
+  presetOf,
+  waysOf,
+  type Drag,
+  type Preset,
+  type Way,
+} from "@/lib/navigation"
 import { MAC } from "@/lib/platform"
-import { TURN_SPEED, usePreferences } from "@/lib/preferences"
+import { TURN_SPEED, usePreferences, ZOOM_SPEED } from "@/lib/preferences"
 import { useStore } from "@/lib/store"
 
 const SECTIONS = [
@@ -38,17 +56,22 @@ const SECTIONS = [
 
 type SectionId = (typeof SECTIONS)[number]["id"]
 
-/** A choice of one out of a few, all of them in view. */
+/**
+ * A choice of one out of a few, all of them in view. One that is to `fill` is as wide as
+ * what holds it, and its options as wide as each other.
+ */
 function Choice<Value extends string>({
   value,
   onChange,
   options,
   label,
+  fill,
 }: {
   value: Value
   onChange: (value: Value) => void
   options: { value: Value; label: string }[]
   label: string
+  fill?: boolean
 }) {
   return (
     <ToggleGroup
@@ -56,6 +79,7 @@ function Choice<Value extends string>({
       variant="outline"
       size="sm"
       spacing={0}
+      className={cn(fill && "w-full")}
       value={[value]}
       // one is always chosen: pressing the chosen one again changes nothing
       onValueChange={(chosen) => {
@@ -68,7 +92,10 @@ function Choice<Value extends string>({
           key={option.value}
           value={option.value}
           // the chosen one is lit the way a button that is on is
-          className="aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary/85 aria-pressed:hover:text-primary-foreground"
+          className={cn(
+            "aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary/85 aria-pressed:hover:text-primary-foreground",
+            fill && "flex-1"
+          )}
         >
           {option.label}
         </ToggleGroupItem>
@@ -191,18 +218,12 @@ function General() {
           title="Opened files"
           detail="Names and groups the parts of CAD files you open."
         >
-          <Choice
-            label="Look over opened files"
-            value={settings?.lookOver === false ? "off" : "on"}
-            onChange={(value) =>
-              void window.cad.settings
-                .setLookOver(value === "on")
-                .then(setSettings)
+          <Switch
+            aria-label="Look over opened files"
+            checked={settings?.lookOver !== false}
+            onCheckedChange={(on) =>
+              void window.cad.settings.setLookOver(on).then(setSettings)
             }
-            options={[
-              { value: "on", label: "On" },
-              { value: "off", label: "Off" },
-            ]}
           />
         </Row>
       </Group>
@@ -287,49 +308,250 @@ function Appearance() {
   )
 }
 
+/**
+ * How fast, against the speed it comes with: said as a share of that, and set by a
+ * slider that takes up what room there is beside it.
+ */
+function Speed({
+  label,
+  value,
+  range,
+  onChange,
+}: {
+  label: string
+  value: number
+  range: { min: number; max: number }
+  onChange: (value: number) => void
+}) {
+  return (
+    <>
+      <span className="w-10 text-sm text-muted-foreground tabular-nums">
+        {Math.round(value * 100)}%
+      </span>
+      <div className="min-w-0 flex-1">
+        <Slider
+          aria-label={label}
+          min={range.min}
+          max={range.max}
+          step={0.05}
+          value={[value]}
+          onValueChange={(next) =>
+            onChange(Array.isArray(next) ? next[0] : next)
+          }
+        />
+      </div>
+    </>
+  )
+}
+
+const DRAGS: { value: Drag; label: string }[] = [
+  { value: "turn", label: "Turn" },
+  { value: "pan", label: "Pan" },
+  { value: "zoom", label: "Zoom" },
+]
+
+/**
+ * Whose buttons a mouse's are set as, in a list that opens: there are more programs than
+ * stand side by side in half a row. With a button set by hand they are nobody's.
+ */
+function Like({
+  value,
+  onChange,
+}: {
+  value: Preset | null
+  onChange: (name: Preset) => void
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label="Mouse buttons set up like"
+            // drawn as the choices under it are, and as wide
+            className="w-full justify-between border-input bg-transparent hover:bg-muted"
+          />
+        }
+      >
+        {value ? PRESET_WORDS[value] : "Your own"}
+        <ChevronDownIcon className="text-muted-foreground" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent>
+        <DropdownMenuRadioGroup
+          value={value ?? ""}
+          onValueChange={(name) => onChange(name as Preset)}
+        >
+          {(Object.keys(PRESET_WORDS) as Preset[]).map((name) => (
+            <DropdownMenuRadioItem key={name} value={name} closeOnClick>
+              {PRESET_WORDS[name]}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+// Each row is in halves, what it is said in few words: there are many of them, and they
+// are read down the page, the words on one side and what is chosen on the other.
 function Navigation() {
   const scrolling = usePreferences((state) => state.scrolling)
   const turnSpeed = usePreferences((state) => state.turnSpeed)
+  const zoomSpeed = usePreferences((state) => state.zoomSpeed)
+  const wheelReversed = usePreferences((state) => state.wheelReversed)
+  const pivot = usePreferences((state) => state.pivot)
+  const upright = usePreferences((state) => state.upright)
+  const middle = usePreferences((state) => state.middle)
+  const right = usePreferences((state) => state.right)
+  const shift = usePreferences((state) => state.shift)
+  const ctrl = usePreferences((state) => state.ctrl)
   const change = usePreferences((state) => state.change)
   return (
-    <Group title="Moving around the model">
-      <Row
-        title="Scrolling"
-        detail="Scrolling turns the model on a trackpad and zooms with a mouse wheel."
-      >
-        <Choice
-          label="Scrolling"
-          value={scrolling}
-          onChange={(value) => change({ scrolling: value })}
-          options={[
-            { value: "auto", label: "Automatic" },
-            { value: "trackpad", label: "Trackpad" },
-            { value: "wheel", label: "Mouse" },
-          ]}
-        />
-      </Row>
-      <Row
-        title="Turning speed"
-        detail="How far the model turns as you scroll or drag."
-      >
-        <span className="w-10 text-right text-sm text-muted-foreground tabular-nums">
-          {Math.round(turnSpeed * 100)}%
-        </span>
-        {/* the slider is as wide as what holds it, which has to say how wide that is */}
-        <div className="w-40">
-          <Slider
-            aria-label="Turning speed"
-            min={TURN_SPEED.min}
-            max={TURN_SPEED.max}
-            step={0.05}
-            value={[turnSpeed]}
-            onValueChange={(value) =>
-              change({ turnSpeed: Array.isArray(value) ? value[0] : value })
-            }
+    <>
+      <Group title="Moving around the model">
+        <Row
+          halves
+          title="Scrolling"
+          detail="Turns on a trackpad, zooms with a wheel."
+        >
+          <Choice
+            fill
+            label="Scrolling"
+            value={scrolling}
+            onChange={(value) => change({ scrolling: value })}
+            options={[
+              { value: "auto", label: "Automatic" },
+              { value: "trackpad", label: "Trackpad" },
+              { value: "wheel", label: "Mouse" },
+            ]}
           />
-        </div>
-      </Row>
-    </Group>
+        </Row>
+        <Row halves title="Turning speed" detail="How fast the view turns.">
+          <Speed
+            label="Turning speed"
+            value={turnSpeed}
+            range={TURN_SPEED}
+            onChange={(value) => change({ turnSpeed: value })}
+          />
+        </Row>
+        <Row halves title="Zoom speed" detail="How fast the view zooms.">
+          <Speed
+            label="Zoom speed"
+            value={zoomSpeed}
+            range={ZOOM_SPEED}
+            onChange={(value) => change({ zoomSpeed: value })}
+          />
+        </Row>
+        <Row
+          halves
+          title="Reverse the wheel"
+          detail="The wheel zooms the other way."
+        >
+          {/* on or off is a switch, at the far side of its half */}
+          <Switch
+            aria-label="Reverse the wheel"
+            checked={wheelReversed}
+            onCheckedChange={(on) => change({ wheelReversed: on })}
+            className="ml-auto"
+          />
+        </Row>
+      </Group>
+      <Group title="Turning">
+        <Row
+          halves
+          title="Turn about"
+          detail="What stays still as the view turns."
+        >
+          <Choice
+            fill
+            label="Turn about"
+            value={pivot}
+            onChange={(value) => change({ pivot: value })}
+            options={[
+              { value: "view", label: "View" },
+              { value: "selection", label: "Selection" },
+              { value: "pointer", label: "Pointer" },
+            ]}
+          />
+        </Row>
+        <Row
+          halves
+          title="Keep the model upright"
+          detail="Turning stops straight above and below."
+        >
+          <Switch
+            aria-label="Keep the model upright"
+            checked={upright}
+            onCheckedChange={(on) => change({ upright: on })}
+            className="ml-auto"
+          />
+        </Row>
+      </Group>
+      <Group title="Mouse buttons">
+        <Row halves title="Set up like" detail="Sets the four below to match.">
+          <Like
+            value={presetOf({ middle, right, shift, ctrl })}
+            onChange={(name) => change(PRESETS[name])}
+          />
+        </Row>
+        <Row
+          halves
+          title="Middle button"
+          detail="Press the wheel and move the mouse."
+        >
+          <Choice
+            fill
+            label="Middle button"
+            value={middle}
+            onChange={(value) => change({ middle: value })}
+            options={DRAGS}
+          />
+        </Row>
+        <Row
+          halves
+          title="Right button"
+          detail="Hold it down and move the mouse."
+        >
+          <Choice
+            fill
+            label="Right button"
+            value={right}
+            onChange={(value) => change({ right: value })}
+            options={[
+              { value: "turn", label: "Turn" },
+              { value: "pan", label: "Pan" },
+            ]}
+          />
+        </Row>
+        <Row
+          halves
+          title="With Shift held"
+          detail="Either button, while Shift is down."
+        >
+          <Choice
+            fill
+            label="Either button with Shift held"
+            value={shift}
+            onChange={(value) => change({ shift: value })}
+            options={DRAGS}
+          />
+        </Row>
+        <Row
+          halves
+          title="With Ctrl held"
+          detail="Either button. Both keys together zoom."
+        >
+          <Choice
+            fill
+            label="Either button with Ctrl held"
+            value={ctrl}
+            onChange={(value) => change({ ctrl: value })}
+            options={DRAGS}
+          />
+        </Row>
+      </Group>
+    </>
   )
 }
 
@@ -337,7 +559,11 @@ const CMD = MAC ? "⌘" : "Ctrl"
 const SHIFT = MAC ? "⇧" : "Shift"
 /** Stands between two ways of doing the same thing: a word, where the rest are keys. */
 const OR = "or"
-const KEYS: { title: string; rows: [string, string[]][] }[] = [
+/**
+ * What is done, and with what. A third thing on a row says that there are drags with a
+ * mouse's buttons that do it too: whichever have been set to, in the settings for those.
+ */
+const KEYS: { title: string; rows: [string, string[], Drag?][] }[] = [
   {
     title: "Views",
     rows: [
@@ -388,9 +614,9 @@ const KEYS: { title: string; rows: [string, string[]][] }[] = [
   {
     title: "Mouse",
     rows: [
-      ["Turn", ["Right drag"]],
-      ["Zoom", ["Wheel"]],
-      ["Pan", [SHIFT, "Right drag"]],
+      ["Turn", [], "turn"],
+      ["Zoom", ["Wheel"], "zoom"],
+      ["Pan", [], "pan"],
     ],
   },
   {
@@ -407,24 +633,44 @@ const KEYS: { title: string; rows: [string, string[]][] }[] = [
   },
 ]
 
+/** A drag with a mouse's button, as the keys it is done with. */
+const dragKeys = ({ button, held }: Way) => [
+  ...(held === "shift" ? [SHIFT] : held === "ctrl" ? ["Ctrl"] : []),
+  button === "right" ? "Right drag" : "Middle drag",
+]
+
 function Shortcuts() {
+  const middle = usePreferences((state) => state.middle)
+  const right = usePreferences((state) => state.right)
+  const shift = usePreferences((state) => state.shift)
+  const ctrl = usePreferences((state) => state.ctrl)
+  const ways = waysOf({ middle, right, shift, ctrl })
   return (
     <>
       {KEYS.map((group) => (
         <Group key={group.title} title={group.title}>
-          {group.rows.map(([what, keys]) => (
-            <Row key={what} title={what}>
-              {keys.map((key) =>
-                key === OR ? (
-                  <span key={key} className="text-xs text-muted-foreground">
-                    {key}
-                  </span>
-                ) : (
-                  <Kbd key={key}>{key}</Kbd>
-                )
-              )}
-            </Row>
-          ))}
+          {group.rows.map(([what, keys, drag]) => {
+            // each way of doing it, one after another with a word between
+            const all = [
+              ...(keys.length > 0 ? [keys] : []),
+              ...(drag ? ways[drag].map(dragKeys) : []),
+            ].flatMap((way, index) => (index > 0 ? [OR, ...way] : way))
+            // (a mouse may have been left with no way to do one of these)
+            if (all.length === 0) return null
+            return (
+              <Row key={what} title={what}>
+                {all.map((key, index) =>
+                  key === OR ? (
+                    <span key={index} className="text-xs text-muted-foreground">
+                      {key}
+                    </span>
+                  ) : (
+                    <Kbd key={index}>{key}</Kbd>
+                  )
+                )}
+              </Row>
+            )
+          })}
         </Group>
       ))}
     </>

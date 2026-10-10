@@ -51,7 +51,10 @@ is Ctrl off a Mac.
 | Zoom | Pinch | Wheel |
 | Pan | Shift and two fingers | Shift and right drag |
 
-Holding Ctrl makes any scroll zoom.
+Holding Ctrl makes any scroll zoom, and any drag with a mouse's right or middle button.
+A drag with the middle button zooms by itself. That is how a mouse's buttons come:
+[what each does](view.md#a-mouses-buttons) can be set, and the list of shortcuts in the
+settings follows what they are set to.
 
 ## Picking parts out
 
