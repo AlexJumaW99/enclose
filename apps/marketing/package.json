@@ -10,7 +10,8 @@
     "preview": "node preview.mjs",
     "check": "modulato check && tsc --noEmit",
     "model": "node scripts/pack-model.mjs",
-    "blueprints": "tsx --tsconfig ../desktop/tsconfig.app.json scripts/blueprints.ts"
+    "blueprints": "tsx --tsconfig ../desktop/tsconfig.app.json scripts/blueprints.ts",
+    "og": "tsx scripts/og.ts"
   },
   "engines": {
     "node": ">=24"
@@ -39,6 +40,7 @@
     "@vitejs/plugin-react": "^5.0.0",
     "meshoptimizer": "^1.3.0",
     "portless": "^0.15.0",
+    "puppeteer-core": "^25.13.0",
     "sass": "^1.86.0",
     "tsx": "^4.23.15",
     "typescript": "^7.0.0",

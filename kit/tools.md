@@ -36,8 +36,10 @@ export default {
     },
   },
   frame(tool) {
+    // the lid follows the slider as a lid with some weight to it would, and not at a jump
+    const angle = tool.glide("lid", tool.values.angle, 0.3)
     // the hinge runs along X, at the back edge of the box, 40 mm up
-    tool.part("lid").turn({ by: -tool.values.angle, axis: "x", about: [0, 30, 40] })
+    tool.part("lid").turn({ by: -angle, axis: "x", about: [0, 30, 40] })
   },
 }
 ```
@@ -98,6 +100,9 @@ change to Enclose itself, which is not made from a project.
   take is an error.
 - `tool.dt`: seconds since the frame before, never more than a tenth. Multiply speeds
   by it. `tool.elapsed`: seconds the tool has been running.
+- `tool.glide(name, to, seconds)`: a number on its way to `to`, as a machine would take
+  it there: where it has got to by this frame. It is how nearly everything is moved
+  (see "Moving as a machine does").
 - `tool.part(id)`: one part of the model, by its id in the manifest.
   `tool.parts(id, id, ...)`: several, held as one. `tool.group(id)`: all the parts of a
   group. An id the model does not have is an error that names the ones it has.
@@ -125,6 +130,53 @@ Moving parts in `press` or `change` is an error: those happen once, and every fr
 drawn afresh. Have them change a variable or a control's value, and move the parts by
 it in `frame`.
 
+## Moving as a machine does
+
+Nothing a well-made machine moves is at its full pace the instant it starts, or stops
+dead where it arrives. It sets off gently, comes up to its pace, and comes gently to
+rest. So a tool does not put a part straight where a control says, and does not step it
+there at one pace (`angle += SPEED * tool.dt` until it arrives). It asks `tool.glide`
+where the part has got to, and puts it there:
+
+```js
+frame(tool) {
+  // a button or a toggle says where the lid is to be; the lid takes a second to go
+  const angle = tool.glide("lid", tool.values.open ? 110 : 0, 1)
+  tool.part("lid").turn({ by: -angle, axis: "x", about: [0, 30, 40] })
+}
+```
+
+`tool.glide(name, to, seconds)` gives back a number that is on its way to `to`. `name`
+is a word of your own for that number, the same every frame; `seconds` is how long the
+move takes (0.6 if left out). Call it in `frame`, every frame, whether or not anything
+is moving, and move the part by what it gives back. It starts at rest, wherever it is
+first told to be, so the tool starts as built.
+
+- **When `to` jumps** (a button, a toggle, a choice, a pose) the number takes `seconds`
+  to get there, all of it and no more, from rest to rest. Sent somewhere else on the
+  way, it comes round without a jerk.
+- **When `to` wanders** (a slider or a pad under the user's hand) the number follows
+  half of `seconds` behind, and the stops and starts of the hand are rounded off.
+- **It is never past where it was told to be.** A part its control keeps within a range
+  stays within it.
+- **Several sent at once, with the same `seconds`, arrive together**, however far each
+  has to go. That is how the joints of an arm go to a pose as one move: glide each
+  joint's angle, all with the one time.
+
+Give a move the time the real thing would take. A catch or a button, a quarter of a
+second. A lid, a door or a drawer, about a second. An arm going to a pose, a second or
+two. What is bigger and heavier takes longer. Under the user's hand, 0.2 to 0.4, so
+that the part still answers at once. `seconds` can be different from one frame to the
+next (short under a hand, long on the way to a pose): a move under way comes round to
+it.
+
+Something that runs comes up to its speed and runs down from it. Glide the speed, and
+step the angle by it (see "Something that runs").
+
+What does not glide is what is exact by its nature, or sudden: the hands of a clock
+that shows the time it is set to, the tick of an escapement, a part hidden or coloured.
+A press, a catch let go or a blow is quick, but still takes its tenth of a second.
+
 ## Things that ride on other things
 
 A part that is carried by another has to be told both moves, its own first and then
@@ -141,7 +193,8 @@ frame(tool) {
 ```
 
 The points are where the joints are as built: each later turn carries the earlier ones
-round with it.
+round with it. (Each of those angles would be glided first, all in the same time:
+`tool.glide("elbow", elbow, 0.3)`.)
 
 ## Something that runs
 
@@ -156,7 +209,9 @@ export default {
     speed: { kind: "slider", title: "Speed", description: "Turns a second.", min: 0, max: 5, value: 1 },
   },
   frame(tool) {
-    if (tool.values.run) angle += 360 * tool.values.speed * tool.dt
+    // it spins up to its speed over a second and a half, and runs down as long
+    const speed = tool.glide("speed", tool.values.run ? tool.values.speed : 0, 1.5)
+    angle += 360 * speed * tool.dt
     tool.part("blades").turn({ by: angle, about: [0, 0, 120] })
   },
 }
@@ -177,6 +232,10 @@ survive that goes in a control's value, not only in a variable.
 - **Gears and anything else that drives another** turn by their ratio, in opposite
   directions where they mesh. Work the ratios out from the model, and say them in a
   comment.
+- **Nothing jumps, and nothing goes at one pace.** Whatever goes from one place to
+  another glides there (`tool.glide`), in the time the real thing would take; whatever
+  runs spins up and runs down. A model that snaps from shut to open, or is carried at
+  the same pace from start to stop, looks drawn and not made.
 - **Few controls, well named.** Three good controls beat ten. Give each the range the
   real thing has: a lid that opens to 110°, not a slider from 0 to 360.
 - **Start as built.** With its controls as the file sets them, a tool should leave the
@@ -190,7 +249,9 @@ After writing or changing a tool, check it the way you check a change to the mod
    failed while running, comes back with its error and the line.
 2. Work a control (its `tool` tool: set a value or press a button), and take a
    screenshot. Look at whether the part went where it should, about the right point and
-   the right way round. Try both ends of a slider.
+   the right way round. Try both ends of a slider. The app waits for what the control
+   set gliding to come to rest before it answers, up to six seconds, so the screenshot
+   is of the model where the tool leaves it.
 
 An error stops the tool until its file is written again; the user sees it in the tab,
 with a button that brings it to you.

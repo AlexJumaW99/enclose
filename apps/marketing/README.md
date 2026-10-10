@@ -51,6 +51,21 @@ npm run blueprints   # public/blueprint: its sheets, as the app would save them
 `npm run blueprints` runs the desktop app's own drawing code, so `apps/desktop`
 has to have its packages installed.
 
+## What the page says, and its link card
+
+The headline, the line under it and what search engines are told are in
+`content/site.json` (run `npx modulato content` after changing it). Each page's title,
+description and address go through `content/seo.ts`; what is the same on every page is
+in `modulato.config.ts`.
+
+```sh
+npm run og           # public/og.png: the mark over the headline, 1200 by 630
+```
+
+Run it again when the headline or the mark changes. It is drawn by the Chrome on this
+machine (`CHROME_PATH` names another), and the picture's alt text in
+`modulato.config.ts` repeats the headline, so change that too.
+
 ## Type
 
 The type is Inter Display: Inter's variable font, loaded in `app.tsx` and held

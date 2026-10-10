@@ -80,7 +80,7 @@ function tryingTools(
     ),
     appTool(
       "tool",
-      "Work one control of one of the project's own tools, as the user's hand would: set its value, or press one of its buttons. The model in the view moves as the tool has it. Returns that tool as it stands a moment later; take a screenshot afterwards to see the model.",
+      "Work one control of one of the project's own tools, as the user's hand would: set its value, or press one of its buttons. The model in the view moves as the tool has it. Returns that tool as it stands once what it set moving has come to rest (or after six seconds, if it has not); take a screenshot afterwards to see the model.",
       {
         tool: z.string().describe('The tool, by its file\'s name: "clock".'),
         control: z.string().describe("The control, by its key in controls."),

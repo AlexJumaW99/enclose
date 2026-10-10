@@ -218,4 +218,52 @@ describe("a tool at work", () => {
     })
     expect(() => tool.press("go", "go")).toThrow(/moved in frame\(\) only/)
   })
+
+  it("takes a number where it is to be as a machine would, from rest to rest", () => {
+    const angles: number[] = []
+    const tool = run({
+      controls: {
+        open: { kind: "toggle", value: false },
+      },
+      frame(tool: Tool & { values: Record<string, unknown> }) {
+        const angle = tool.glide("lid", tool.values.open ? 110 : 0, 1)
+        // asked for again in the same frame, it is where it was
+        expect(tool.glide("lid", 55, 1)).toBe(angle)
+        angles.push(angle)
+        tool.part("arm").turn({ by: angle, about: [0, 0, 3] })
+      },
+    })
+    let now = 0
+    const frame = () => tool.tick((now += 1000 / 60), 0)
+    // as built, until something is asked of it
+    for (let n = 0; n < 5; n++) expect(frame().poses?.ids ?? []).toEqual([])
+    tool.set("open", true, true)
+    for (let n = 0; n < 31; n++) frame()
+    // half way, half the time on, and nowhere near it at one pace from the start
+    expect(angles.at(-1)!).toBeGreaterThan(50)
+    expect(angles.at(-1)!).toBeLessThan(60)
+    expect(angles.at(-26)!).toBeLessThan(110 / 60)
+    // it says that it is on its way, for whoever waits to see where it gets to
+    expect(frame().settling).toBe(true)
+    for (let n = 0; n < 35; n++) frame()
+    expect(angles.at(-1)).toBe(110)
+    // and at rest there, nothing more is said of the part
+    const rested = frame()
+    expect(rested.poses).toBeNull()
+    expect(rested.settling).toBe(false)
+  })
+
+  it("says what a number on its way has to be given", () => {
+    const failing = (frame: (tool: Tool) => void) => () =>
+      run({ frame }).tick(0, 0)
+    expect(failing((tool) => tool.glide(undefined, 1))).toThrow(
+      /name is what you call this number/
+    )
+    expect(failing((tool) => tool.glide("lid", "open"))).toThrow(
+      /to is where it is to be/
+    )
+    expect(failing((tool) => tool.glide("lid", 1, -1))).toThrow(
+      /seconds is how long/
+    )
+  })
 })

@@ -19,3 +19,9 @@
 // the other. Reach for a relative unit when the relationship is real — `em`
 // or `ch` for a measure that should track the type it holds — and for `clamp()`
 // or `vw` when a length should follow the viewport.
+:root {
+  // The room left either side of a page. The app's window is as wide as this leaves
+  // it, and the header and the footer keep to the same two edges, so that all three
+  // line up.
+  --edge: clamp(16px, 3.3vw, 64px);
+}

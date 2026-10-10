@@ -808,7 +808,7 @@ $tool-line: oklch(from var(--axis-z) calc(l + 0.066) calc(c - 0.056) calc(h + 2)
 
     p {
       margin: 0;
-      text-wrap: pretty;
+      text-wrap: balance;
     }
   }
 

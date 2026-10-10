@@ -22,7 +22,8 @@ const AT = {
 } as const
 
 type Stop = keyof typeof AT
-const STOPS = Object.keys(AT) as Stop[]
+/** The stops that say where the window is at them: all but the last. */
+const TOLD = (Object.keys(AT) as Stop[]).filter((name) => name !== 'outro') as Exclude<Stop, 'outro'>[]
 
 /** The arm's routine: where its joints are from one beat to the next. */
 const ROUTINE: Partial<Look>[] = [
@@ -97,11 +98,20 @@ export function runTour({
     said()
   }
 
+  // How far the eye still is from where the scroll has it, on its way round as the
+  // model arrives: see `arrive`. It is added to the look, so the scroll can go on
+  // under it.
+  const yet = { azimuth: 0, elevation: 0 }
+  const seen: Look = { ...REST }
+
   const render = () => {
     frame.style.transform = `translate3d(${cam.x - home.x}px, ${cam.y - home.y}px, 0) scale(${cam.s / home.s})`
-    draw(look)
+    Object.assign(seen, look)
+    seen.azimuth += yet.azimuth
+    seen.elevation += yet.elevation
+    draw(seen)
     gizmo.innerHTML = drawMark(
-      { ...GIZMO, azimuth: look.azimuth, elevation: look.elevation },
+      { ...GIZMO, azimuth: seen.azimuth, elevation: seen.elevation },
       GIZMO_PARTS,
     )
   }
@@ -115,10 +125,9 @@ export function runTour({
 
     const stops = resolveTokens(tokens).stops
     /** A stop as the screen has it: where the window is, and the model in it. */
-    const stop = (name: Stop) => {
+    const stop = (name: Exclude<Stop, 'outro'>) => {
       const at = stops[name]
-      let s = (at.wide * wide) / WINDOW.width
-      if ('tall' in at) s = Math.min(s, (at.tall * tall) / WINDOW.height)
+      const s = (at.wide * wide) / WINDOW.width
       const x = at.vx * wide - at.ax * s
       const y = at.vy * tall - at.ay * s
       return {
@@ -132,10 +141,20 @@ export function runTour({
         far: at.far,
       }
     }
-    const to = Object.fromEntries(STOPS.map((name) => [name, stop(name)])) as Record<
-      Stop,
-      ReturnType<typeof stop>
-    >
+    const to = {
+      ...Object.fromEntries(TOLD.map((name) => [name, stop(name)])),
+      // And the last, which is the page's opening the other way up: the window as big
+      // as it was then, with its foot as far from the foot of the screen as its top
+      // was from the top. The model is in the middle of what shows of its view.
+      outro: {
+        x: home.x,
+        y: tall - home.y - WINDOW.height * home.s,
+        s: home.s,
+        mx: REST.x,
+        my: Math.max(REST.y, WINDOW.height - (tall - home.y) / home.s / 2),
+        far: stops.outro.far,
+      },
+    } as Record<Stop, ReturnType<typeof stop>>
     // The conversation is gone to by its foot, where the message box is. But a window
     // that is no taller than the screen is all on it, in the middle.
     // (On a narrow screen the words are under the window, and it keeps clear of them.)
@@ -431,14 +450,26 @@ export function runTour({
   window.addEventListener('resize', resized)
 
   return {
-    /** Draw the window as the scroll has it: asked for when the model has arrived. */
-    render,
+    /**
+     * The model has arrived, and is drawn: from the front to begin with, and brought
+     * round to how the window has it.
+     */
+    arrive() {
+      const { azimuth, elevation, duration, ease } = resolveTokens(tokens).arrive
+      gsap.fromTo(
+        yet,
+        { azimuth: azimuth - REST.azimuth, elevation: elevation - REST.elevation },
+        { azimuth: 0, elevation: 0, duration, ease, onUpdate: render, overwrite: true },
+      )
+      render()
+    },
     /** The most the window is ever scaled, which is how sharp its view has to be. */
     most: () => {
       const stops = resolveTokens(tokens).stops
-      return Math.max(...STOPS.map((name) => (stops[name].wide * stage.clientWidth) / WINDOW.width))
+      return Math.max(...TOLD.map((name) => (stops[name].wide * stage.clientWidth) / WINDOW.width))
     },
     stop() {
+      gsap.killTweensOf(yet)
       window.clearInterval(counting)
       atWork.removeAttribute('data-working')
       window.removeEventListener('resize', resized)

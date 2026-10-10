@@ -1,4 +1,7 @@
 {
   "title": "Enclose",
-  "tagline": "Enclose is an open-source control plane for CAD with agents. Bring your own subscriptions. Fork the project and make it your own."
+  "url": "https://enclose.dev",
+  "headline": "Enclose is an open-source workbench for CAD made with agents.",
+  "description": "It runs on the Claude, Codex or Grok you already pay for, and the code is yours to change.",
+  "summary": "Enclose is an open-source Mac app for CAD made with agents. Click a part, say what should change, and Claude, Codex or Grok edits the code and rebuilds the model."
 }

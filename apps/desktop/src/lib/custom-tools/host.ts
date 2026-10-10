@@ -62,6 +62,8 @@ type Running = {
   /** where it has each part it has moved */
   poses: Map<string, THREE.Matrix4>
   looks: Looks
+  /** it has something on its way to where it was sent, as of the frame it last drew */
+  settling: boolean
 }
 
 /** The tools at work, in the order of their tabs. */
@@ -154,6 +156,7 @@ function hear(tool: Running, message: FromRunner) {
     })
   }
   tool.awaiting = null
+  tool.settling = message.settling
   if (message.poses) {
     const { ids, matrices: all } = message.poses
     tool.poses = new Map(
@@ -231,6 +234,7 @@ export function runTools(
       count: 0,
       poses: was?.poses ?? new Map(),
       looks: was?.looks ?? NO_LOOKS,
+      settling: false,
     }
     worker.onmessage = (event: MessageEvent<FromRunner>) =>
       hear(tool, event.data)
@@ -292,6 +296,14 @@ export function stopTools() {
   frame = null
   useTools.setState({ of: null, tools: [], looks: NO_LOOKS })
   compose()
+}
+
+/**
+ * Whether a tool has something on its way to where it was sent: the model is not yet
+ * as the tool's controls say it is to be.
+ */
+export function settling(toolId: string): boolean {
+  return running.some((tool) => tool.id === toolId && tool.settling)
 }
 
 /** Turn to a tool's tab. */

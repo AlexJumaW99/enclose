@@ -6,11 +6,16 @@ import type { Vec3 } from "@shared/api"
 import { PALETTE_NAMES, type PaletteName } from "@shared/palette"
 
 import { fitted, type Declared } from "./declare"
+import { Glide } from "./glide"
 import { after, AT_HOME, atHome, carrying, turning, type Pose } from "./pose"
 import type { Control, FromRunner, Looks, PartFact, Value } from "./types"
 
 /** The longest a frame is taken to have lasted, in seconds: a pause is not a leap. */
 const LONGEST_FRAME = 0.1
+/** How long a number takes to get where it is going, in seconds, unless the tool says. */
+const GLIDE_SECONDS = 0.6
+/** How many numbers a tool can have on their way at once: more is a name made up afresh every frame. */
+const MOST_GLIDES = 500
 
 const AXES: Record<string, Vec3> = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] }
 
@@ -76,6 +81,7 @@ export type Handed = {
   }
   dt: number
   elapsed: number
+  glide(name: unknown, to: unknown, seconds?: unknown): number
   part(id: unknown): Held
   parts(...ids: unknown[]): Held
   group(id: unknown): Held
@@ -94,6 +100,13 @@ export class Running {
   private last: number | null = null
   private elapsed = 0
   private dt = 0
+  /** how many frames it has drawn */
+  private frames = 0
+  /**
+   * The numbers it has on their way somewhere (see glide.ts), by what it calls each:
+   * and the frame each was last taken on in, which is done once a frame.
+   */
+  private glides = new Map<string, { glide: Glide; frame: number }>()
   /** what was last said of each of these, to say them again only when they change */
   private said = { poses: "", looks: "", controls: "" }
   /** what is handed to everything the tool's file does */
@@ -155,6 +168,7 @@ export class Running {
         : Math.min(LONGEST_FRAME, Math.max(0, (now - this.last) / 1000))
     this.last = now
     this.elapsed += this.dt
+    this.frames++
     this.tool.dt = this.dt
     this.tool.elapsed = this.elapsed
     this.poses.clear()
@@ -201,6 +215,11 @@ export class Running {
         said.controls === before.controls
           ? null
           : (JSON.parse(said.controls) as Control[]),
+      // (of the numbers it took on in this frame: one it has left off asking for is
+      // not waited for)
+      settling: [...this.glides.values()].some(
+        (going) => going.frame === this.frames && !going.glide.resting()
+      ),
       count,
     }
   }
@@ -343,6 +362,45 @@ export class Running {
       dt: 0,
       /** seconds the tool has been running */
       elapsed: 0,
+      /**
+       * A number of the tool's on its way to where it is to be, as a machine would take
+       * it there: where it has got to by this frame. It starts at rest, where it is
+       * first told to be.
+       */
+      glide: (name: unknown, to: unknown, seconds: unknown = GLIDE_SECONDS) => {
+        if (typeof name !== "string" || name === "")
+          throw new Error(
+            'glide(name, to, seconds): name is what you call this number, a word of your own: "lid".'
+          )
+        if (typeof to !== "number" || !Number.isFinite(to))
+          throw new Error(
+            `glide("${name}", to, seconds): to is where it is to be, a number.`
+          )
+        if (
+          typeof seconds !== "number" ||
+          !Number.isFinite(seconds) ||
+          seconds < 0
+        )
+          throw new Error(
+            `glide("${name}", to, seconds): seconds is how long it takes to get there, a number.`
+          )
+        const going = this.glides.get(name)
+        if (!going) {
+          if (this.glides.size >= MOST_GLIDES)
+            throw new Error(
+              `glide("${name}", ...): that is more than ${MOST_GLIDES} numbers on their way. Call each by the same name every frame.`
+            )
+          this.glides.set(name, {
+            glide: new Glide(to, seconds),
+            frame: this.frames,
+          })
+          return to
+        }
+        // asked for again in the same frame, it is where it was the first time
+        if (going.frame === this.frames) return going.glide.now()
+        going.frame = this.frames
+        return going.glide.next(to, this.dt, seconds)
+      },
       part: (id: unknown) => this.hold([this.find(id)]),
       parts: (...ids: unknown[]) =>
         this.hold(

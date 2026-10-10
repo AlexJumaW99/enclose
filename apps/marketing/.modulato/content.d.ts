@@ -6,7 +6,10 @@ declare module 'modulato/config' {
   interface ModulatoContent {
     site: {
       title: string
-      tagline: string
+      url: string
+      headline: string
+      description: string
+      summary: string
     }
   }
 }

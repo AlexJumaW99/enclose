@@ -49,17 +49,19 @@ html.lenis, html.lenis body { height: auto; }
     // page: in the middle, over the heading, and bigger. `--fly` is 1 there
     // and 0 at rest, and the page's scroll takes it from one to the other.
     --rest: 44px;
+    // (it keeps nearer the corner than the page's edge: the one thing that does)
+    --in: 20px;
     --fly: 0;
     --lift: var(--mark-lift, 96px);
     position: absolute;
     top: 14px;
-    left: 20px;
+    left: var(--in);
     display: block;
     width: var(--rest);
     height: var(--rest);
     transform:
       translate(
-        calc(var(--fly) * (50vw - 20px - var(--rest) / 2)),
+        calc(var(--fly) * (50vw - var(--in) - var(--rest) / 2)),
         calc(var(--fly) * (var(--lift) - 14px - var(--rest) / 2))
       )
       scale(calc(1 + var(--fly) * 0.45));
@@ -88,7 +90,7 @@ html.lenis, html.lenis body { height: auto; }
   }
 
   @media (max-width: 767px) {
-    &__mark { top: 10px; left: 12px; --rest: 40px; }
+    &__mark { top: 10px; --rest: 40px; --in: 12px; }
     &__source { top: 20px; right: 16px; }
   }
 }
@@ -100,7 +102,8 @@ html.lenis, html.lenis body { height: auto; }
   flex-wrap: wrap;
   gap: 8px 24px;
   justify-content: space-between;
-  padding: 24px;
+  // as far from the foot of the page as from its sides
+  padding: 24px var(--edge) var(--edge);
   color: var(--muted);
   background: var(--bg);
 
@@ -113,14 +116,14 @@ html.lenis, html.lenis body { height: auto; }
 
   &__links {
     display: flex;
-    gap: 20px;
+    gap: 12px;
     margin: 0;
     padding: 0;
     list-style: none;
   }
 
   @media (max-width: 767px) {
-    padding: 20px 16px;
+    padding: 20px var(--edge) var(--edge);
   }
 }
 

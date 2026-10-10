@@ -2,11 +2,32 @@ import { defineConfig } from 'modulato/config'
 import { localJson } from '@modulato/content-local'
 
 export default defineConfig({
-  // Site-wide <head>, SSR'd on every page.
+  // Site-wide <head>, SSR'd on every page. What a page says of itself (its title,
+  // what it is about, its own address) is in its config.ts, through content/seo.ts.
   head: {
+    lang: 'en',
     link: [
       { rel: 'icon', href: '/favicon.png', type: 'image/png' },
       { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
+    ],
+    meta: [
+      { name: 'theme-color', content: '#ffffff' },
+      { name: 'author', content: 'Glauber' },
+      // the card a link to the site is given when it is passed on: public/og.png,
+      // made by `npm run og`
+      { property: 'og:site_name', content: 'Enclose' },
+      { property: 'og:type', content: 'website' },
+      { property: 'og:locale', content: 'en_US' },
+      { property: 'og:image', content: 'https://enclose.dev/og.png' },
+      { property: 'og:image:type', content: 'image/png' },
+      { property: 'og:image:width', content: '1200' },
+      { property: 'og:image:height', content: '630' },
+      {
+        property: 'og:image:alt',
+        content: 'The Enclose mark over the words: Enclose is an open-source workbench for CAD made with agents.',
+      },
+      { name: 'twitter:card', content: 'summary_large_image' },
+      { name: 'twitter:image', content: 'https://enclose.dev/og.png' },
     ],
   },
   // content/*.json -> typed snapshot. Pull + typegen: npx modulato content

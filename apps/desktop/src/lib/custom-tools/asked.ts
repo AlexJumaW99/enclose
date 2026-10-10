@@ -5,12 +5,17 @@ import type { ToolUse } from "@shared/api"
 import { useStore } from "@/lib/store"
 
 import { fitted } from "./declare"
-import { pickTab, pressControl, setControl, useTools } from "./host"
+import { pickTab, pressControl, setControl, settling, useTools } from "./host"
 
 /** How long the tools are waited for to be loaded as they are now written, in ms. */
 const LOADED_WITHIN = 8000
 /** How many frames a tool is given to make something of what was done to it. */
 const FRAMES = 3
+/**
+ * How long what a tool has sent on its way is waited for to get there, in ms: what an
+ * agent then looks at is the model as the tool leaves it, and not part of the way.
+ */
+const ARRIVED_WITHIN = 6000
 
 const nextFrame = () =>
   new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
@@ -93,6 +98,8 @@ export async function toolUsed(projectId: string, use: ToolUse) {
     setControl(tool.id, control.id, value)
   }
   for (let frame = 0; frame < FRAMES; frame++) await nextFrame()
+  const until = performance.now() + ARRIVED_WITHIN
+  while (settling(tool.id) && performance.now() < until) await nextFrame()
   const now = useTools.getState().tools.find((one) => one.id === tool.id)
   return now ? described(now) : null
 }

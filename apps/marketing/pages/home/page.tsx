@@ -16,32 +16,32 @@ gsapCore.registerPlugin(ScrollTrigger)
 const STOPS = [
   {
     side: 'left',
-    title: 'Every project where you can see it',
-    says: 'A card for each project floats over the model and says what its conversation is up to. Earlier conversations wait under it, each keeping its own version of the model: click one and the model is as that conversation left it. Agents can be at work on several projects at once.',
+    title: 'Every project in view',
+    says: 'Each card says what its agent is up to. Every conversation keeps its own version of the model.',
   },
   {
     side: 'right',
-    title: 'One column for how you look',
-    says: 'Lay a grid under the model, cut it open, pull it apart, stand it beside something of a known size, find a part by name. Each is a button, and each has a key.',
+    title: 'The essentials,\nin one place',
+    says: 'The view tools you reach for most, each one a click or a key away.',
   },
   {
     side: 'right',
-    title: 'Say what should change',
-    says: 'Click the part you mean and say it. Claude, Codex or Grok, on your own subscription, edits the project’s code, builds the model again and tells you what it did.',
+    title: 'Edit everything at once',
+    says: 'Leave a note on each part you want changed and send them together. Less back and forth.',
   },
   {
     side: 'right',
     title: 'Tools made for your model',
-    says: 'Ask to see the model do something and the agent builds the tool for it: a lid on a slider, a clock set to a time, an arm run through a routine. They are the project’s own, and they are blue.',
+    says: 'No animation system to learn. Ask, and the agent builds the controls your model needs, from the same sliders and switches in every project.',
   },
   {
     side: 'left',
-    title: 'Drawings worked out from the model',
-    says: 'Every side and four corners, each on its own sheet, with whatever is behind something left out and the sizes written on. Save them as SVG, with the model’s parts as layers.',
+    title: 'Export high-definition drawings',
+    says: 'Vector sheets of the whole model or only the parts you pick, each part on its own layer in the SVG.',
   },
 ] as const
 
-export default function Home() {
+export default function Home({ headline, description }: { headline: string; description: string }) {
   const view = useRef<View | null>(null)
   const tour = useRef<ReturnType<typeof runTour> | null>(null)
 
@@ -70,7 +70,7 @@ export default function Home() {
       .then((opened) => {
         if (gone) return opened.dispose()
         view.current = opened
-        tour.current?.render()
+        tour.current?.arrive()
         canvas.dataset.ready = ''
         // once it has come in, it is the scroll's to show and hide, at the scroll's pace
         window.setTimeout(() => (canvas.style.transition = 'none'), 900)
@@ -93,12 +93,8 @@ export default function Home() {
       <div className="home__tour">
         <div className="home__stage">
           <div className="home__hero">
-            <h1 className="home__headline">
-              Enclose is an open-source control plane for CAD with agents.
-            </h1>
-            <p className="home__lede">
-              Bring your own subscriptions. Fork the project and make it your own.
-            </p>
+            <h1 className="home__headline">{headline}</h1>
+            <p className="home__lede">{description}</p>
             <Download />
           </div>
           <div className="home__window">

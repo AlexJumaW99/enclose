@@ -8,23 +8,33 @@ import { motion } from 'modulato'
 // middle of the window's view), and `far` how far off it is seen from, in its own
 // radius.
 export default motion({
+  // How the model comes into the window once it has loaded: looked at from here
+  // (the app's Front is from -90 round, level with the ground), and brought round to
+  // how the window has it, in this long, s.
+  arrive: {
+    azimuth: -90,
+    elevation: 0,
+    duration: 1.8,
+    ease: 'power2.inOut',
+    reduced: { duration: 0 },
+  },
   stops: {
     projects: {
       wide: 1.5, ax: 0, ay: 0, vx: 0.42, vy: 0.12,
       // the foot of the cards once they are all there, which is kept on the screen
       foot: 826, footAt: 0.95,
       mx: 0.86, my: 0.66, far: 3.9,
-      phone: { wide: 3.3, vx: 0.05, vy: 0.11, footAt: 0.64, mx: 1.2, my: 0.4 },
+      phone: { wide: 3.3, vx: 0.05, vy: 0.11, footAt: 0.8, mx: 1.2, my: 0.45 },
     },
     menu: {
       wide: 1.25, ax: 1720, ay: 500, vx: 0.72, vy: 0.5,
       mx: 0.34, my: 0.52, far: 4.2, apart: 6.6,
-      phone: { wide: 3, vx: 0.985, vy: 0.4, mx: 0.42, my: 0.42, far: 6, apart: 9 },
+      phone: { wide: 3, vx: 0.985, vy: 0.45, mx: 0.42, my: 0.46, far: 6, apart: 9 },
     },
     chat: {
       wide: 1.3, ax: 1720, ay: 1000, vx: 0.71, vy: 0.965,
       mx: 0.16, my: 0.5, far: 3.9,
-      phone: { wide: 3.1, vx: 0.985, vy: 0.66, mx: -0.3, my: 0.4 },
+      phone: { wide: 3.1, vx: 0.985, vy: 0.82, mx: -0.3, my: 0.45 },
     },
     tools: {
       wide: 1.2, ax: 1720, ay: 500, vx: 0.72, vy: 0.5,
@@ -34,19 +44,18 @@ export default motion({
     sheets: {
       wide: 1.1, ax: 0, ay: 500, vx: 0.4, vy: 0.5,
       mx: 0.7, my: 0.5, far: 3.6,
-      phone: { wide: 2.5, ax: 250, vx: 0, vy: 0.38 },
+      phone: { wide: 2.5, ax: 250, vx: 0, vy: 0.44 },
     },
-    outro: {
-      // as much of the window as the screen has room for, in its middle: and the
-      // model in the middle of its view, as when the page opened (so no `mx`, `my`)
-      wide: 0.9, tall: 0.8, ax: 860, ay: 500, vx: 0.5, vy: 0.53,
-      far: 3.6,
-      phone: { wide: 0.94, vy: 0.4 },
-    },
+    // The last stop is the page's opening, the other way up: the window as big as it
+    // was then and as far in from either side, but gone up off the top of the screen
+    // by as much as it was down off the foot of it. So what shows is its lower part,
+    // with the page's foot under it.
+    outro: { far: 3.6 },
   },
 })
 
 export const keywords: Record<string, string[]> = {
+  arrive: ['model intro', 'front view to perspective', 'on load'],
   'stops.projects': ['project cards', 'sidebar zoom', 'first stop'],
   'stops.menu': ['view buttons', 'explode', 'tool column'],
   'stops.chat': ['conversation', 'message box', 'thread'],

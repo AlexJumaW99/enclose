@@ -1,5 +1,10 @@
 // The arm's tool: it steers the arm joint by joint, and takes it to a pose.
 //
+// The controls say where each joint is to be, and the arm goes there as an arm does:
+// every joint off from rest gently and gently to rest again, all of them arriving
+// together however far each has to go (tool.glide). Sent to a pose it takes its time;
+// under a hand on a slider it follows closely.
+//
 // An arm is a chain (model.py): base, shoulder, upper arm, lower arm, wrist, gripper,
 // jaw. Each link is a group of the model, and each joint turns its link and every link
 // further out. So a frame starts at the jaw and works inwards: the jaw is turned about
@@ -39,13 +44,16 @@ const POSES = {
   ready: { turn: 0, shoulder: 90, elbow: 90, wrist: 0, roll: 0, grip: BUILT },
   reach: { turn: 35, shoulder: 140, elbow: 150, wrist: 20, roll: 0, grip: 70 },
 }
-const SPEED = 120 // degrees a second, on the way to a pose
+// How long the arm takes to get where its controls say, in seconds: to a pose, and
+// after a joint moved by hand.
+const TO_POSE = 1.6
+const BY_HAND = 0.3
 
-/** The pose it is on its way to: null when it is where the controls say. */
-let goal = null
+/** How long it is taking just now: a pose's time, until a joint is moved by hand. */
+let taking = BY_HAND
 
 const degrees = (value) => `${Math.round(value)}°`
-/** A joint's control: let go of a pose as soon as it is moved by hand. */
+/** A joint's control: moved by hand, the arm follows the hand again. */
 const joint = (title, description, min, max, value = 0) => ({
   kind: "slider",
   title,
@@ -56,7 +64,7 @@ const joint = (title, description, min, max, value = 0) => ({
   value,
   format: degrees,
   change() {
-    goal = null
+    taking = BY_HAND
   },
 })
 
@@ -72,8 +80,10 @@ export default {
         { id: "ready", label: "Ready" },
         { id: "reach", label: "Reach" },
       ],
-      press(id) {
-        goal = POSES[id]
+      press(id, tool) {
+        // the controls go to the pose at once, and the arm after them
+        for (const joint in POSES[id]) tool.values[joint] = POSES[id][joint]
+        taking = TO_POSE
       },
     },
     turn: joint("Turn", "Swings the arm round on its base.", -110, 110),
@@ -85,23 +95,13 @@ export default {
   },
 
   frame(tool) {
-    // on the way to a pose, every joint goes at the same pace
-    if (goal) {
-      let there = true
-      for (const id in goal) {
-        const left = goal[id] - tool.values[id]
-        const step = Math.sign(left) * Math.min(Math.abs(left), SPEED * tool.dt)
-        tool.values[id] = tool.values[id] + step
-        if (Math.abs(left) > 0.01) there = false
-      }
-      if (there) goal = null
-    }
-
     // from the jaw inwards: each joint turns its link and all that it carries
     let moved = false
     for (let n = JOINTS.length - 1; n >= 0; n--) {
       const { id, about, axis, way } = JOINTS[n]
-      const from = id === "grip" ? BUILT - tool.values.grip : tool.values[id]
+      // where the joint has got to, on its way to where its control says
+      const at = tool.glide(id, tool.values[id], taking)
+      const from = id === "grip" ? BUILT - at : at
       if (Math.abs(from) < 0.001) continue
       moved = true
       for (const link of CHAIN.slice(n))

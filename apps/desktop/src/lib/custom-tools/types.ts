@@ -104,6 +104,8 @@ export type FromRunner =
       poses: { ids: string[]; matrices: Float32Array } | null
       looks: Looks | null
       controls: Control[] | null
+      /** it has something on its way to where it was sent, and not there yet (glide.ts) */
+      settling: boolean
       /** how many things done to its controls it had heard of when it drew this */
       count: number
     }

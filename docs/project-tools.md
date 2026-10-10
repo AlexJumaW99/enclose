@@ -40,6 +40,14 @@ another colour. It changes nothing in the project's files; the parts are only dr
 where it has them. [`kit/tools.md`](../kit/tools.md) says how one is written, and is
 what Claude reads before it writes one.
 
+What a tool moves, it moves as a well-made machine would: off from rest gently, up to
+its pace, and gently to rest where it was going, never at a jump and never at one pace
+from start to stop. The app works that out for the tool (`tool.glide`), the way a
+machine's own controller does, so a lid sent open takes its second to get there, a part
+under a slider follows the hand with some weight to it, and the joints of an arm sent
+to a pose all arrive together. A tool written before the app could do this moves as it
+did: ask Claude to have it glide.
+
 A tool is run shut away from the rest of the app, in a worker of its own: it is told the
 parts' names and sizes, and has no way to the window, to files or to the network. It
 cannot bring code in from anywhere else, nor make any up to run. So a project that came
@@ -67,4 +75,4 @@ examples the window shows: that makes a project of a copy of it, where new proje
 [`examples/arm`](../examples/arm) is another: a robot arm that was not drawn here. It is
 the SO-101, an open-source arm, read from its makers' own CAD file
 ([where it is from](../examples/arm/source/README.md)), and its tool steers it joint by
-joint or takes it to a pose.
+joint or takes it to a pose, every joint setting off and arriving with the others.

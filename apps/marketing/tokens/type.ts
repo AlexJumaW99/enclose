@@ -51,9 +51,9 @@ export default typography({
   // numbers are what Tweak can put a slider on.
   scale: {
     // The page: one size for what is said, and a smaller one beside it.
-    small: 13,
-    prose: 16,
-    text: { min: 17, max: 20 },
+    small: 14,
+    prose: 18,
+    text: { min: 16, max: 18 },
     title: { min: 28, max: 40 },
     // The app's window, rebuilt on the page: the sizes the app itself is set in.
     'ui-xs': 12,
@@ -77,7 +77,7 @@ export default typography({
       leading: 1.2,
       tracking: -0.012,
       weight: 400,
-      wrap: 'pretty',
+      wrap: 'balance',
     },
     small: {
       font: 'sans',
@@ -85,6 +85,7 @@ export default typography({
       leading: 1.4,
       tracking: 0,
       weight: 400,
+      wrap: 'balance',
     },
     // The terms and the privacy page: long text, set to be read.
     title: {
@@ -98,10 +99,10 @@ export default typography({
     prose: {
       font: 'sans',
       size: 'prose',
-      leading: 1.6,
+      leading: 1.39,
       tracking: -0.005,
       weight: 400,
-      wrap: 'pretty',
+      wrap: 'balance',
     },
     // The app's window. `ui` is a card or a control, `ui-tight` the tools panel,
     // `ui-text` what is said in the conversation, `ui-title` a name over
