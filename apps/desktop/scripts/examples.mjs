@@ -16,13 +16,15 @@ import { join, resolve } from "node:path"
 import { pack } from "../electron/archive.ts"
 
 const ROOT = resolve(import.meta.dirname, "..")
+// (the examples are at the top of the repository, two folders up from the app)
+const EXAMPLES = resolve(ROOT, "../../examples")
 const LIST = join(ROOT, "shared/examples.json")
 const OUT = join(ROOT, "release/examples")
 
 const list = JSON.parse(readFileSync(LIST, "utf8"))
 mkdirSync(OUT, { recursive: true })
 for (const example of list.examples) {
-  const packed = pack(join(ROOT, "examples", example.id))
+  const packed = pack(join(EXAMPLES, example.id))
   writeFileSync(join(OUT, `${example.id}.tar.br`), packed)
   example.bytes = packed.length
   example.sha256 = createHash("sha256").update(packed).digest("hex")

@@ -1,4 +1,4 @@
-// The one description of the model manifest. The README points here, and Claude is
+// The one description of the model manifest. The docs point here, and Claude is
 // given this text when a folder has no model yet, so it can write one.
 
 import { PALETTE_NAMES } from "./palette"
@@ -6,13 +6,12 @@ import { PALETTE_NAMES } from "./palette"
 // the first is the name to write; the rest are what earlier projects wrote
 export const MANIFEST_NAMES = [
   "enclose.model.json",
-  "cad-ai.model.json",
   "report.json",
   "model.json",
 ]
 
 /** The file at the top of a project that says where its model is and how to build it. */
-export const CONFIG_NAMES = ["enclose.json", "cad-ai.json"]
+export const CONFIG_NAMES = ["enclose.json"]
 
 /**
  * The manifest of a reference scene, and where in a project it is looked for: in a

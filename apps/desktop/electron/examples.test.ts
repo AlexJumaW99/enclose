@@ -29,7 +29,7 @@ const SCRIPT = [
 ].join("\n")
 
 beforeEach(() => {
-  root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cad-ai-test-")))
+  root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "enclose-test-")))
 })
 afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true })

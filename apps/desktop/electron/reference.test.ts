@@ -73,7 +73,7 @@ describe("appScenes", () => {
   })
 
   it("has the scenes the app is kept with", () => {
-    const scenes = appScenes(path.join(import.meta.dirname, "../kit/scenes"))
+    const scenes = appScenes(path.join(import.meta.dirname, "../../../kit/scenes"))
     // from the one for the smallest things to the one for the biggest
     expect(scenes.map((scene) => scene.id)).toEqual(["table", "room", "person"])
     for (const scene of scenes) {

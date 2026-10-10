@@ -13,14 +13,17 @@ keep it manageable.
 
 ## Running it
 
-You need Node 22 or newer. macOS is the only system it has been tried on.
+You need Node 22 or newer. macOS is the only system it has been tried on. The app is in
+`apps/desktop`, and its commands are run from there.
 
 ```
+cd apps/desktop
 npm install
 npm run dev
 ```
 
-The [README](README.md) says how the app works and where things are.
+The [docs](docs/README.md) say how the app works, and
+[docs/development.md](docs/development.md) where things are.
 
 ## Before you open a pull request
 
@@ -37,8 +40,8 @@ npm run format      # .ts and .tsx only
 - Write as the code round your change is written. Comments say why a thing is so, in
   plain words.
 - Commit messages follow the history: `feat(view): ...`, `fix(chat): ...`.
-- Where your change makes the README wrong, change the README with it.
-- Leave `examples/` and `shared/examples.json` as they are. The examples are published
+- Where your change makes the README or a page in `docs/` wrong, change that with it.
+- Leave `examples/` and `apps/desktop/shared/examples.json` as they are. The examples are published
   as archives, and a change to one means a new release of them.
 
 ## Reporting a problem

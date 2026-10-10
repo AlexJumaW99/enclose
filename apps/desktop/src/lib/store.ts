@@ -173,10 +173,8 @@ const REFERENCE_KEY = "enclose:reference"
 const FIGURE_KEY = "enclose:figure"
 const WAITING_KEY = "enclose:waiting"
 
-/** What was saved under a key, or under the name the app had before it was Enclose. */
-const saved = (key: string) =>
-  localStorage.getItem(key) ??
-  localStorage.getItem(key.replace("enclose:", "cad-ai:"))
+/** What was saved under a key. */
+const saved = (key: string) => localStorage.getItem(key)
 
 const savedMode = (): DisplayMode => {
   const mode = saved(MODE_KEY)

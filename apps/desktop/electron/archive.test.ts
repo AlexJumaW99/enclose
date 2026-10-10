@@ -16,7 +16,7 @@ const read = (files: Filed[]) =>
   files.map((file) => [file.path, file.data.toString()])
 
 beforeEach(() => {
-  root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cad-ai-test-")))
+  root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "enclose-test-")))
 })
 afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true })

@@ -1,9 +1,11 @@
 {
-  "name": "cad-ai",
+  "name": "enclose",
   "productName": "Enclose",
   "private": true,
   "version": "0.0.1",
   "description": "CAD workbench with a Claude handoff",
+  "homepage": "https://enclose.dev",
+  "repository": "github:enclosedev/enclose",
   "license": "AGPL-3.0-only",
   "type": "module",
   "main": "dist-electron/main.js",

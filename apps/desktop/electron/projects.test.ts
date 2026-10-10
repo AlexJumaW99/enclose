@@ -25,7 +25,7 @@ const write = (file: string, content: unknown) => {
 const MANIFEST = { parts: [{ id: "a", file: "a.glb" }] }
 
 beforeEach(() => {
-  root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cad-ai-test-")))
+  root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "enclose-test-")))
 })
 afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true })
@@ -83,14 +83,6 @@ describe("findModel", () => {
     })
   })
 
-  it("still reads the file a project wrote before the app was called Enclose", () => {
-    write("deep/custom.json", MANIFEST)
-    write("cad-ai.json", { model: "deep/custom.json", build: "make" })
-    expect(findModel(root)).toEqual({
-      manifest: path.join(root, "deep/custom.json"),
-      build: "make",
-    })
-  })
 })
 
 describe("readBranch", () => {

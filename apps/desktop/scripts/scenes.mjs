@@ -8,7 +8,7 @@ import { spawnSync } from "node:child_process"
 import { existsSync, readdirSync } from "node:fs"
 import { join, resolve } from "node:path"
 
-const KIT = resolve(import.meta.dirname, "../kit")
+const KIT = resolve(import.meta.dirname, "../../../kit")
 const SCENES = join(KIT, "scenes")
 const python = process.env.PYTHON ?? "python3"
 

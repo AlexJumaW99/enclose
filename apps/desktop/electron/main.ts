@@ -95,29 +95,8 @@ const flag = (name: string) =>
 const CAPTURE = flag("capture")
 const EXAMPLES_FROM = process.env.ENCLOSE_EXAMPLES_URL || null
 
-// (the second is what the variable was called before the app had its name)
-const ELSEWHERE =
-  process.env.ENCLOSE_USER_DATA ?? process.env.CAD_AI_USER_DATA ?? null
+const ELSEWHERE = process.env.ENCLOSE_USER_DATA ?? null
 if (ELSEWHERE) app.setPath("userData", ELSEWHERE)
-else bringProfile()
-
-/**
- * The app kept its state in a folder named cad-ai before it had its name. What is there
- * is moved to where the app looks now, once, before anything is read from either. (To ask
- * Electron where the state is kept is to have the folder made, so it is not asked yet.)
- */
-function bringProfile() {
-  const before = path.join(app.getPath("appData"), "cad-ai")
-  const now = path.join(app.getPath("appData"), app.name)
-  if (fs.existsSync(now) || !fs.existsSync(before)) return
-  try {
-    fs.renameSync(before, now)
-  } catch (error) {
-    // better the old folder than an app with nothing in it
-    console.error("[profile]", error)
-    app.setPath("userData", before)
-  }
-}
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -153,12 +132,14 @@ let settings: SettingsStore
 let providers: Providers
 /** where the app's own tools answer, for an agent that cannot be handed them */
 const toolServer = new ToolServer()
+/** the top of the repository the app is in, which is two folders up from it (apps/desktop) */
+const TOP = path.join(app.getAppPath(), "../..")
 /** where the app keeps the exporter a project copies to write its model */
-const KIT = path.join(app.getAppPath(), "kit", "enclose.py")
-/** where the examples are when the app is run from its source: beside it */
-const EXAMPLES_HERE = path.join(app.getAppPath(), "examples")
+const KIT = path.join(TOP, "kit", "enclose.py")
+/** where the examples are when the app is run from its source: at the top, in examples/ */
+const EXAMPLES_HERE = path.join(TOP, "examples")
 /** the reference scenes the app has of its own, for a model to be seen in */
-const SCENES = appScenes(path.join(app.getAppPath(), "kit", "scenes"))
+const SCENES = appScenes(path.join(TOP, "kit", "scenes"))
 
 /**
  * The folder a file asked for is in, by the host it is asked of: a project's model, the

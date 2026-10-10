@@ -1,0 +1,104 @@
+# The view
+
+## Moving around
+
+| | Trackpad | Mouse |
+|---|---|---|
+| Orbit | Move two fingers across it | Drag with the right button |
+| Zoom | Pinch | Turn the wheel |
+| Pan | Hold Shift | Hold Shift with either |
+
+A pinch zooms in on whatever is under the pointer. The main button is not the camera's:
+it [picks parts out](selecting.md).
+
+Orbiting does not stop straight above the model or straight below: it carries on over
+the top and round the far side, with the model upside down, as it does in Blender. A set
+view, or Cmd+1, brings it back the right way up, and goes there the short way however
+many times the view has been turned about.
+
+A trackpad and a wheel send the same scroll, so which one it was is read from how the
+scroll moves ([`scroll.ts`](../apps/desktop/src/lib/scroll.ts)). Holding Ctrl makes any
+scroll zoom, whatever it was taken for. The [settings](settings.md) can say which it is,
+and how fast the view turns.
+
+## Set views
+
+The axes in the bottom right corner turn with the camera. Click the end of one to look
+at the model from there, click it again for the opposite side, or drag inside it to
+orbit.
+
+| | |
+|---|---|
+| Cmd+1 | The view a model opens with |
+| Cmd+2, Cmd+3 | Front, back |
+| Cmd+4, Cmd+5 | Top, bottom |
+| Cmd+6, Cmd+7 | Right, left |
+| Space | What is picked out, close to, from the side the camera is on |
+
+Those six views are flat: drawn with no perspective, so a side is seen exactly side-on,
+centred and fitted to the window. Panning and zooming keep a view flat. Orbiting brings
+the perspective back a little at a time, over the first 30° of the turn, and it goes the
+same way over the last 30° of the turn into a flat view: the lens changes while the
+model is turning, never while it is still.
+
+From above and from below alike, the model's back is at the top of the view: the bottom
+view turns the model over sideways, not end over end.
+
+## Light
+
+The model is lit from above. Looked at from below it would be in its own shadow, so a
+light under it comes up as the camera goes below the level: from straight below, what
+faces down is as light as what faces up is from straight above. From above nothing is
+changed by it.
+
+## Shading
+
+Shading is on Z, the way it is in Blender: the key brings solid, glass, pattern,
+wireframe and outline up in a circle round the pointer. Hold it, flick towards one and
+let go; or tap it, and click one. A choice is pointed at by direction, so the pointer
+need not reach it. Esc, Z again or a right-click puts the menu away.
+
+- **Solid** draws the model as it is.
+- **Glass** makes the outside see-through (the groups a manifest marks as `shell`, or
+  everything if it marks none).
+- **Pattern** is wireframe with every face ruled into squares, in three of the colours
+  parts are drawn in: one for the lines across each of the part's axes. Each face is
+  ruled into about as many squares as any other, so a small face is ruled finely and a
+  large one coarsely. Lines that would crowd one another on the screen are thinned out,
+  every other one at a time, so a model seen from far off is not a blur of them.
+- **Wireframe** draws the model's lines and nothing of its surfaces, which still hide
+  the lines behind them.
+- **Outline** draws every line, the hidden ones too.
+
+In all of these but solid a curved face is given the line where it turns out of sight,
+which is no edge of the model's and moves as the model is turned.
+
+## How a model is drawn
+
+The view draws each part as one mesh per colour, however many faces the CAD export
+wrote, which is what keeps large assemblies smooth (the benchmark behind that is in
+[`spikes/draw-calls`](../spikes/draw-calls)).
+
+### Colours
+
+Parts are drawn in the app's own colours: ten light ones round the whole circle of
+colour (red, orange, yellow, lime, green, cyan, blue, indigo, violet, pink), and white,
+a light grey and a grey. A model can name one for a part; any other colour it gives, or
+its files carry, is drawn as the nearest of them, except greys, white and black, which
+are drawn as they are, and bare metal. A part given no colour takes the one that falls
+to its group. Nothing in the project's files is changed by this: it is only how the app
+draws them.
+
+### Glass
+
+A part that is made of something clear, a window or the glass over a dial, is drawn
+see-through whatever the shading, with no colour unless it is given one: the model says
+so of the part (`finish="glass"`). A click on it picks what is behind it, and a
+blueprint draws what it covers.
+
+### Curves
+
+What is round is drawn round. The exporter cuts every curve into flats that keep within
+a fiftieth of a millimetre of it, however big the curve is, so the rim of a dial is as
+smooth as a pin; a model built before that was so is drawn in fewer, until its project's
+`enclose.py` is replaced with the app's and it is built again.
