@@ -1,7 +1,7 @@
-// The Enclose mark, and how it moves: the axes widget from the corner of the view, as the
+// The Enclose mark, and how it moves: the model's three axes as a camera sees them, as the
 // brand draws it. The drawing and the moves are the brand's own (enclose-brand: lib/mark.ts,
-// lib/glyphs.ts, lib/motion.ts): the mark with the numbers of its preset 2026-10-06-5, in
-// one colour, and the moves as the one preset that has any sets them.
+// lib/glyphs.ts, lib/motion.ts): the mark with the numbers of its preset 2026-10-09-3, as
+// its app icon has it and in one colour, and the moves as its preset 2026-10-06-6 sets them.
 
 export type Axis = "x" | "y" | "z"
 
@@ -10,40 +10,31 @@ export type View = { azimuth: number; elevation: number }
 
 /**
  * The mark's measures, in its own units: it reaches `EXTENT` from its middle, whichever
- * way it is turned. The dots at the ends an axis points away from are outlined, and
- * filled with a `tint` of the mark's colour. The letter's height is a share of its dot;
- * its strokes, and the uprights its diagonals start and end with, are shares of that
- * height.
+ * way it is turned. An axis is a line to the end it points to, and to the end it points
+ * away from a row of dots as wide as that line is thick, about `gap` apart. Both ends
+ * have a dot, `dot` in radius.
+ *
+ * The mark letters nothing. The letters measured here are for wherever the axes are
+ * named, the widget in the corner of the view for one: a letter's height is a share of
+ * the dot it stands on; its strokes, and the uprights its diagonals start and end with,
+ * are shares of that height.
  */
 export const MARK = {
-  length: 31,
-  weight: 2.75,
-  dot: 12,
-  outline: 3,
-  tint: 0.05,
+  length: 45,
+  weight: 3,
+  gap: 3.75,
+  dot: 5,
   labelSize: 0.4,
   labelWeight: 0.14,
   labelRise: 0.3,
 }
 export const EXTENT = MARK.length + MARK.dot
 
-/** Where it rests: the isometric view from below, the six dots evenly round the middle. */
-export const REST: View = { azimuth: -45, elevation: -35.26 }
-
 /**
- * The mark as the app's name goes with it, and as its icon has it (the brand's preset
- * 2026-10-06-6): heavier, the ends an axis points away from outlined and nothing more,
- * and seen from the other side of where it rests, its three letters to the left.
+ * Where it rests, and where its icon has it: the isometric view from below, the six dots
+ * evenly round the middle, the ends the axes point to at the top and to either side below.
  */
-export const LOGO = {
-  ...MARK,
-  weight: 4,
-  outline: 4.5,
-  tint: 0,
-  labelSize: 0.48,
-  labelRise: 0.28,
-}
-export const LOGO_VIEW: View = { azimuth: 135, elevation: -35.26 }
+export const REST: View = { azimuth: -135, elevation: -35.26 }
 
 /**
  * How wide the mark is at rest, as a share of the square it turns in (which is `EXTENT`
@@ -92,6 +83,39 @@ export function ends({ azimuth, elevation }: View) {
       depth: sign * toward[index],
     }))
   ).sort((a, b) => a.depth - b.depth)
+}
+
+/**
+ * The half of an axis that runs to the end it points away from, as the dots it is broken
+ * into: how far each is from the middle, in the mark's units, the outermost first. `seen`
+ * is how much of its length the axis keeps on the page, from 1 flat on to 0 pointing at
+ * the camera.
+ *
+ * The dots are set out along the axis as it is when seen flat on: as many as come nearest
+ * the gap asked for, with the gaps then evened out so that the row is whole. Seen at an
+ * angle, the row is squeezed into what is left of the axis. So the dots are as many
+ * however the mark is turned, and none slides in or out as it turns.
+ */
+export function beads(seen: number): number[] {
+  // a dot is as wide as the line is thick
+  const width = MARK.weight
+  const flat = MARK.length - MARK.dot
+  const left = seen * MARK.length - MARK.dot
+  // what the dots and the gaps between them have to share: from the edge of the dot at
+  // the end to the round end the lines have in the middle
+  const room = flat - width / 2
+  // nothing is left of an axis that points at the camera, nor of one its dot all but covers
+  if (left <= 0 || room <= width) return []
+  const count = Math.min(
+    Math.floor(room / width),
+    Math.max(1, Math.round((room - MARK.gap) / (MARK.gap + width)))
+  )
+  const gap = (room - count * width) / (count + 1)
+  const squeeze = left / flat
+  return Array.from(
+    { length: count },
+    (_, index) => (flat - gap - width / 2 - index * (gap + width)) * squeeze
+  )
 }
 
 // --- the letters ----------------------------------------------------------------------

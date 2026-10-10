@@ -2,13 +2,12 @@ import * as React from "react"
 import { cn } from "cn"
 
 import {
+  beads,
   choreograph,
   ends,
   EXTENT,
   letter,
   LETTER_WIDTH,
-  LOGO,
-  LOGO_VIEW,
   LOOP,
   MARK,
   REST,
@@ -47,9 +46,9 @@ function useTurning(moving: boolean): View {
 const MINUS = { bar: 0.4, gap: 0.22 }
 
 /**
- * An axis' letter as the mark draws it, `height` tall with its middle at (x, y): for
+ * An axis' letter as the brand draws it, `height` tall with its middle at (x, y): for
  * wherever the axes are named. With a `minus` before it, it names the end an axis points
- * away from: that bar is not the mark's, which letters only the ends it points to.
+ * away from.
  */
 export function Letter({
   axis,
@@ -88,21 +87,16 @@ export function Letter({
 }
 
 /**
- * The mark drawn in a square `size` px a side, seen from `view`, in the measures given:
- * a filled dot with its letter at the end each axis points to, and an outlined dot at the
- * end it points away from.
+ * The mark drawn in a square `size` px a side, seen from `view`: each axis a line to the
+ * end it points to and a row of dots to the end it points away from, with a dot at both.
  */
 function Drawn({
   view,
-  measures,
   size,
-  ink,
   className,
 }: {
   view: View
-  measures: typeof MARK
   size: number
-  ink: string
   className?: string
 }) {
   return (
@@ -111,42 +105,36 @@ function Drawn({
       width={size}
       height={size}
       aria-hidden
+      fill="currentColor"
       className={cn("shrink-0", className)}
     >
       {ends(view).map(({ axis, sign, x, y }) => {
-        const cx = x * measures.length
-        const cy = y * measures.length
-        return sign > 0 ? (
-          <g key={`${axis}+`}>
-            <line
-              x2={cx}
-              y2={cy}
-              stroke="currentColor"
-              strokeWidth={measures.weight}
-              strokeLinecap="round"
-            />
-            <circle cx={cx} cy={cy} r={measures.dot} fill="currentColor" />
-            <Letter
-              axis={axis}
-              x={cx}
-              y={cy}
-              height={measures.labelSize * 2 * measures.dot}
-              rise={measures.labelRise}
-              stroke={ink}
-            />
+        const cx = x * MARK.length
+        const cy = y * MARK.length
+        // how much of its length the axis keeps on the page
+        const seen = Math.hypot(x, y)
+        return (
+          <g key={`${axis}${sign > 0 ? "+" : "-"}`}>
+            {sign > 0 ? (
+              <line
+                x2={cx}
+                y2={cy}
+                stroke="currentColor"
+                strokeWidth={MARK.weight}
+                strokeLinecap="round"
+              />
+            ) : (
+              beads(seen).map((far, index) => (
+                <circle
+                  key={index}
+                  cx={(x / seen) * far}
+                  cy={(y / seen) * far}
+                  r={MARK.weight / 2}
+                />
+              ))
+            )}
+            <circle cx={cx} cy={cy} r={MARK.dot} />
           </g>
-        ) : (
-          // the outline is drawn inside the dot's size, round a tint of the same colour
-          <circle
-            key={`${axis}-`}
-            cx={cx}
-            cy={cy}
-            r={measures.dot - measures.outline / 2}
-            fill="currentColor"
-            fillOpacity={measures.tint}
-            stroke="currentColor"
-            strokeWidth={measures.outline}
-          />
         )
       })}
     </svg>
@@ -156,51 +144,28 @@ function Drawn({
 type MarkProps = {
   /** how big the square it turns in is, px: at rest it is narrower (`RESTING_WIDTH`) */
   size?: number
-  /** what its letters are written in, on the dots: as unlike the mark's colour as can be */
-  ink?: string
   className?: string
 }
 
 /**
- * The Enclose mark: the model's three axes as a camera sees them, a filled dot with its
- * letter at the end each one points to and an outlined dot at the end it points away
- * from. It is drawn in the colour of the words around it. `moving` turns it over and
- * over, for as long as something is being waited for.
+ * The Enclose mark: the model's three axes as a camera sees them, each a line to the end
+ * it points to and a row of dots to the end it points away from, with a dot at both. It
+ * is drawn in the colour of the words around it. `moving` turns it over and over, for as
+ * long as something is being waited for.
  */
 export function Mark({
   moving = false,
   size = 64,
-  ink = "var(--background)",
   className,
 }: MarkProps & { moving?: boolean }) {
   const view = useTurning(moving)
-  return (
-    <Drawn
-      view={view}
-      measures={MARK}
-      size={size}
-      ink={ink}
-      className={className}
-    />
-  )
+  return <Drawn view={view} size={size} className={className} />
 }
 
 /**
- * The mark as the app's name goes with it: the one on its icon, heavier than the mark
- * that turns and still, where the app says who it is and nothing is waited for.
+ * The mark as the app's name goes with it: the one on its icon, still, where the app
+ * says who it is and nothing is waited for.
  */
-export function Logo({
-  size = 64,
-  ink = "var(--background)",
-  className,
-}: MarkProps) {
-  return (
-    <Drawn
-      view={LOGO_VIEW}
-      measures={LOGO}
-      size={size}
-      ink={ink}
-      className={className}
-    />
-  )
+export function Logo({ size = 64, className }: MarkProps) {
+  return <Drawn view={REST} size={size} className={className} />
 }

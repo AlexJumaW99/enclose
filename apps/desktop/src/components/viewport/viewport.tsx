@@ -352,7 +352,7 @@ function Waiting({
         late ? "delay-300 duration-300" : "duration-200"
       )}
     >
-      <Logo size={MARK_SIZE} ink="var(--sidebar)" />
+      <Logo size={MARK_SIZE} />
       {/* The mark, the words and the bar each have room to themselves, and as much of
           it one way as the other by what is seen of them: the mark stops short of the
           edge of its square, and a line of words has a little over and under its

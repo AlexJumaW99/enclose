@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  beads,
   choreograph,
   ends,
   letter,
-  LOGO_VIEW,
   LOOP,
+  MARK,
   REST,
   rests,
   viewAt,
@@ -34,19 +35,46 @@ describe("ends", () => {
     for (const far of reach) expect(far).toBeCloseTo(reach[0], 3)
   })
 
-  it("has the logo's letters where its icon has them: Z up, Y and X to the left", () => {
-    const seen = ends(LOGO_VIEW)
-    const lettered = (axis: "x" | "y" | "z") =>
+  it("rests as its icon has it: Z up, X and Y to either side below", () => {
+    const seen = ends(REST)
+    const pointed = (axis: "x" | "y" | "z") =>
       seen.find((end) => end.axis === axis && end.sign > 0)!
-    const reach = seen.map((end) => Math.hypot(end.x, end.y))
-    for (const far of reach) expect(far).toBeCloseTo(reach[0], 3)
     // (y runs down the page)
-    expect(lettered("z").x).toBeCloseTo(0, 9)
-    expect(lettered("z").y).toBeLessThan(0)
-    expect(lettered("y").x).toBeLessThan(0)
-    expect(lettered("y").y).toBeLessThan(0)
-    expect(lettered("x").x).toBeLessThan(0)
-    expect(lettered("x").y).toBeGreaterThan(0)
+    expect(pointed("z").x).toBeCloseTo(0, 9)
+    expect(pointed("z").y).toBeLessThan(0)
+    expect(pointed("x").x).toBeGreaterThan(0)
+    expect(pointed("x").y).toBeGreaterThan(0)
+    expect(pointed("y").x).toBeLessThan(0)
+    expect(pointed("y").y).toBeGreaterThan(0)
+  })
+})
+
+describe("beads", () => {
+  // how much of its length an axis keeps on the page where the mark rests
+  const AT_REST = Math.cos((REST.elevation * Math.PI) / 180)
+
+  it("sets five dots along an axis at rest, where its icon has them", () => {
+    const end = AT_REST * MARK.length
+    const shares = beads(AT_REST).map((far) => far / end)
+    // (as shares of the way to the end, measured off the icon's drawing)
+    expect(shares).toHaveLength(5)
+    ;[0.7469, 0.5975, 0.4481, 0.2988, 0.1494].forEach((share, index) =>
+      expect(shares[index]).toBeCloseTo(share, 3)
+    )
+  })
+
+  it("keeps clear of the dot at the end and of the middle", () => {
+    const dots = beads(AT_REST)
+    const reach = MARK.weight / 2
+    expect(dots[0] + reach).toBeLessThan(AT_REST * MARK.length - MARK.dot)
+    expect(dots[dots.length - 1] - reach).toBeGreaterThan(reach)
+  })
+
+  it("has as many however the mark is turned, until its dot covers the axis", () => {
+    expect(beads(1)).toHaveLength(5)
+    expect(beads(0.5)).toHaveLength(5)
+    expect(beads(0.1)).toEqual([])
+    expect(beads(0)).toEqual([])
   })
 })
 

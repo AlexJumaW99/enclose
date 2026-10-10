@@ -11,6 +11,7 @@ import lamp from "@/assets/examples/lamp.webp"
 import stool from "@/assets/examples/stool.webp"
 import { Logo } from "@/components/mark"
 import { Button } from "@/components/ui/button"
+import { RESTING_WIDTH } from "@/lib/mark"
 import { sizeOf } from "@/lib/model"
 import { MAC } from "@/lib/platform"
 import { usePreferences } from "@/lib/preferences"
@@ -19,6 +20,11 @@ import { useStore } from "@/lib/store"
 
 /** How big the mark stands over the words of welcome, px. */
 const MARK_SIZE = 64
+/**
+ * How far the mark stops short of the side of its square, px. It is moved over by as
+ * much, so that it starts where the words under it do.
+ */
+const MARK_INSET = (MARK_SIZE * (1 - RESTING_WIDTH)) / 2
 
 /** The picture of each example, by example: its model, on nothing. */
 const PICTURES: Record<string, string> = { arm, clock, lamp, stool }
@@ -35,7 +41,9 @@ function Start() {
   const createProject = useStore((s) => s.createProject)
   return (
     <div className="mt-[7px] flex w-60 shrink-0 flex-col items-start">
-      <Logo size={MARK_SIZE} ink="var(--sidebar)" className="ml-0.5" />
+      <div style={{ marginLeft: -MARK_INSET }}>
+        <Logo size={MARK_SIZE} />
+      </div>
       <div className="mt-6 text-xl/[1.35]">
         <h1 className="font-bold">Welcome to Enclose</h1>
         <p className="text-foreground/45">Drop a file or folder here</p>
