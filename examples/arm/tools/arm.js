@@ -6,8 +6,8 @@
 // its own joint, then jaw and gripper about the gripper's, and so on down to the base.
 //
 // The model is built at rest, folded: the upper arm lying back, the lower arm forward
-// over it, the jaw wide open. Every control starts there, and says how far its joint is
-// from there.
+// over it, the jaw a little way open. Every control starts there, and says how far its
+// joint is from there.
 
 // Where each joint is as built, and the line it turns about, in mm: model.py prints
 // these when it builds, from the round of each servo's horn. `way` makes the control's
@@ -28,14 +28,16 @@ const JOINTS = [
 // the links from the shoulder out: a joint turns its own and all after it
 const CHAIN = JOINTS.map((joint) => joint.link)
 
-// How far open the jaw is as built, in degrees from shut.
+// How far open the jaw is as built, and how far it goes, in degrees from shut: model.py
+// prints the first.
+const BUILT = 20
 const OPEN = 105
 
 // The poses it goes to, by how each control stands.
 const POSES = {
-  rest: { turn: 0, shoulder: 0, elbow: 0, wrist: 0, roll: 0, grip: OPEN },
-  ready: { turn: 0, shoulder: 90, elbow: 90, wrist: 0, roll: 0, grip: OPEN },
-  reach: { turn: 35, shoulder: 140, elbow: 150, wrist: 20, roll: 0, grip: 30 },
+  rest: { turn: 0, shoulder: 0, elbow: 0, wrist: 0, roll: 0, grip: BUILT },
+  ready: { turn: 0, shoulder: 90, elbow: 90, wrist: 0, roll: 0, grip: BUILT },
+  reach: { turn: 35, shoulder: 140, elbow: 150, wrist: 20, roll: 0, grip: 70 },
 }
 const SPEED = 120 // degrees a second, on the way to a pose
 
@@ -79,7 +81,7 @@ export default {
     elbow: joint("Elbow", "Opens the lower arm.", 0, 180),
     wrist: joint("Wrist", "Tips the gripper up or down.", -95, 95),
     roll: joint("Roll", "Turns the gripper about its length.", -160, 160),
-    grip: joint("Grip", "How far the jaw is open.", 0, OPEN, OPEN),
+    grip: joint("Grip", "How far the jaw is open.", 0, OPEN, BUILT),
   },
 
   frame(tool) {
@@ -99,7 +101,7 @@ export default {
     let moved = false
     for (let n = JOINTS.length - 1; n >= 0; n--) {
       const { id, about, axis, way } = JOINTS[n]
-      const from = id === "grip" ? OPEN - tool.values.grip : tool.values[id]
+      const from = id === "grip" ? BUILT - tool.values.grip : tool.values[id]
       if (Math.abs(from) < 0.001) continue
       moved = true
       for (const link of CHAIN.slice(n))

@@ -40,76 +40,35 @@
    "id": "base",
    "label": "Base",
    "group": "base",
+   "explode": [
+    -0.7006671018318011,
+    16.717619219509167,
+    -80.22193337256572
+   ],
    "file": "base.glb",
    "edges": "base.edges.bin"
-  },
-  {
-   "id": "shoulder",
-   "label": "Shoulder",
-   "group": "shoulder",
-   "file": "shoulder.glb",
-   "edges": "shoulder.edges.bin"
-  },
-  {
-   "id": "upper-arm",
-   "label": "Upper arm",
-   "group": "upper-arm",
-   "file": "upper-arm.glb",
-   "edges": "upper-arm.edges.bin"
-  },
-  {
-   "id": "lower-arm",
-   "label": "Lower arm",
-   "group": "lower-arm",
-   "file": "lower-arm.glb",
-   "edges": "lower-arm.edges.bin"
   },
   {
    "id": "base-motor-holder",
    "label": "Base motor holder",
    "group": "base",
+   "explode": [
+    0.7960795089038013,
+    22.018672257141652,
+    -61.133750704292886
+   ],
    "file": "base-motor-holder.glb",
    "edges": "base-motor-holder.edges.bin"
-  },
-  {
-   "id": "shoulder-motor-holder",
-   "label": "Shoulder motor holder",
-   "group": "shoulder",
-   "file": "shoulder-motor-holder.glb",
-   "edges": "shoulder-motor-holder.edges.bin"
-  },
-  {
-   "id": "wrist-motor-holder",
-   "label": "Wrist motor holder",
-   "group": "lower-arm",
-   "file": "wrist-motor-holder.glb",
-   "edges": "wrist-motor-holder.edges.bin"
-  },
-  {
-   "id": "wrist",
-   "label": "Wrist",
-   "group": "wrist",
-   "file": "wrist.glb",
-   "edges": "wrist.edges.bin"
-  },
-  {
-   "id": "gripper",
-   "label": "Gripper",
-   "group": "gripper",
-   "file": "gripper.glb",
-   "edges": "gripper.edges.bin"
-  },
-  {
-   "id": "jaw",
-   "label": "Jaw",
-   "group": "jaw",
-   "file": "jaw.glb",
-   "edges": "jaw.edges.bin"
   },
   {
    "id": "board-mount",
    "label": "Board mount",
    "group": "base",
+   "explode": [
+    0.06049445934456833,
+    60.63850642822676,
+    -67.15887916843299
+   ],
    "file": "board-mount.glb",
    "edges": "board-mount.edges.bin"
   },
@@ -118,166 +77,1654 @@
    "label": "Servo driver board",
    "group": "base",
    "color": "green",
+   "explode": [
+    0.05127579015877513,
+    66.12513248930654,
+    -67.68400199870177
+   ],
    "file": "board.glb",
    "edges": "board.edges.bin"
   },
   {
-   "id": "servo-1",
-   "label": "Servo 1, shoulder pan",
+   "id": "servo-1-case",
+   "label": "Servo 1 case",
    "group": "base",
    "color": "grey",
-   "file": "servo-1.glb",
-   "edges": "servo-1.edges.bin"
+   "explode": [
+    -0.7647210249246393,
+    12.537665436093683,
+    -68.8676831736001
+   ],
+   "file": "servo-1-case.glb",
+   "edges": "servo-1-case.edges.bin"
   },
   {
-   "id": "horns-1",
-   "label": "Horns of servo 1",
-   "group": "shoulder",
-   "finish": "metal",
-   "file": "horns-1.glb",
-   "edges": "horns-1.edges.bin"
-  },
-  {
-   "id": "servo-2",
-   "label": "Servo 2, shoulder lift",
-   "group": "shoulder",
+   "id": "servo-1-top",
+   "label": "Servo 1 top cover",
+   "group": "base",
    "color": "grey",
-   "file": "servo-2.glb",
-   "edges": "servo-2.edges.bin"
+   "explode": [
+    -0.7647210249246174,
+    12.373778389131344,
+    -53.153477411028035
+   ],
+   "file": "servo-1-top.glb",
+   "edges": "servo-1-top.edges.bin"
   },
   {
-   "id": "horns-2",
-   "label": "Horns of servo 2",
-   "group": "upper-arm",
-   "finish": "metal",
-   "file": "horns-2.glb",
-   "edges": "horns-2.edges.bin"
-  },
-  {
-   "id": "servo-3",
-   "label": "Servo 3, elbow",
-   "group": "upper-arm",
+   "id": "servo-1-bottom",
+   "label": "Servo 1 bottom cover",
+   "group": "base",
    "color": "grey",
-   "file": "servo-3.glb",
-   "edges": "servo-3.edges.bin"
+   "explode": [
+    -0.7647210249247023,
+    12.538854581551313,
+    -86.54084616403205
+   ],
+   "file": "servo-1-bottom.glb",
+   "edges": "servo-1-bottom.edges.bin"
   },
   {
-   "id": "horns-3",
-   "label": "Horns of servo 3",
-   "group": "lower-arm",
-   "finish": "metal",
-   "file": "horns-3.glb",
-   "edges": "horns-3.edges.bin"
-  },
-  {
-   "id": "servo-4",
-   "label": "Servo 4, wrist flex",
-   "group": "lower-arm",
+   "id": "servo-1-motor",
+   "label": "Servo 1 motor",
+   "group": "base",
    "color": "grey",
-   "file": "servo-4.glb",
-   "edges": "servo-4.edges.bin"
+   "explode": [
+    -2.4503546857702134,
+    30.0402149734765,
+    -72.89994243352315
+   ],
+   "file": "servo-1-motor.glb",
+   "edges": "servo-1-motor.edges.bin"
   },
   {
-   "id": "horns-4",
-   "label": "Horns of servo 4",
-   "group": "wrist",
-   "finish": "metal",
-   "file": "horns-4.glb",
-   "edges": "horns-4.edges.bin"
-  },
-  {
-   "id": "servo-5",
-   "label": "Servo 5, wrist roll",
-   "group": "wrist",
+   "id": "servo-1-board",
+   "label": "Servo 1 board",
+   "group": "base",
    "color": "grey",
-   "file": "servo-5.glb",
-   "edges": "servo-5.edges.bin"
+   "explode": [
+    -0.7647210249246432,
+    3.227329860499461,
+    -81.55486297080027
+   ],
+   "file": "servo-1-board.glb",
+   "edges": "servo-1-board.edges.bin"
   },
   {
-   "id": "horns-5",
-   "label": "Horns of servo 5",
-   "group": "gripper",
-   "finish": "metal",
-   "file": "horns-5.glb",
-   "edges": "horns-5.edges.bin"
-  },
-  {
-   "id": "servo-6",
-   "label": "Servo 6, gripper",
-   "group": "gripper",
-   "color": "grey",
-   "file": "servo-6.glb",
-   "edges": "servo-6.edges.bin"
-  },
-  {
-   "id": "horns-6",
-   "label": "Horns of servo 6",
-   "group": "jaw",
-   "finish": "metal",
-   "file": "horns-6.glb",
-   "edges": "horns-6.edges.bin"
-  },
-  {
-   "id": "screws-base",
-   "label": "Screws, base",
+   "id": "screw-base-1",
+   "label": "Tapping screw",
    "group": "base",
    "finish": "metal",
-   "file": "screws-base.glb",
-   "edges": "screws-base.edges.bin"
+   "explode": [
+    0.0,
+    35.0,
+    -96.0
+   ],
+   "file": "screw-base-1.glb",
+   "edges": "screw-base-1.edges.bin"
   },
   {
-   "id": "screws-shoulder",
-   "label": "Screws, shoulder",
+   "id": "screw-base-2",
+   "label": "Tapping screw",
+   "group": "base",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    35.0,
+    -96.0
+   ],
+   "file": "screw-base-2.glb",
+   "edges": "screw-base-2.edges.bin"
+  },
+  {
+   "id": "screw-base-3",
+   "label": "Tapping screw",
+   "group": "base",
+   "finish": "metal",
+   "explode": [
+    26.0,
+    35.0,
+    -70.0
+   ],
+   "file": "screw-base-3.glb",
+   "edges": "screw-base-3.edges.bin"
+  },
+  {
+   "id": "screw-base-4",
+   "label": "Tapping screw",
+   "group": "base",
+   "finish": "metal",
+   "explode": [
+    -26.0,
+    35.0,
+    -70.0
+   ],
+   "file": "screw-base-4.glb",
+   "edges": "screw-base-4.edges.bin"
+  },
+  {
+   "id": "screw-base-5",
+   "label": "Tapping screw",
+   "group": "base",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    35.0,
+    -44.0
+   ],
+   "file": "screw-base-5.glb",
+   "edges": "screw-base-5.edges.bin"
+  },
+  {
+   "id": "screw-base-6",
+   "label": "Tapping screw",
+   "group": "base",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    35.0,
+    -44.0
+   ],
+   "file": "screw-base-6.glb",
+   "edges": "screw-base-6.edges.bin"
+  },
+  {
+   "id": "shoulder",
+   "label": "Shoulder",
+   "group": "shoulder",
+   "explode": [
+    -0.6318475638852261,
+    -7.143711047700088,
+    -45.561281403590456
+   ],
+   "file": "shoulder.glb",
+   "edges": "shoulder.edges.bin"
+  },
+  {
+   "id": "shoulder-motor-holder",
+   "label": "Shoulder motor holder",
+   "group": "shoulder",
+   "explode": [
+    0.6318475638852262,
+    -22.85628895229991,
+    -14.438718596409545
+   ],
+   "file": "shoulder-motor-holder.glb",
+   "edges": "shoulder-motor-holder.edges.bin"
+  },
+  {
+   "id": "servo-2-case",
+   "label": "Servo 2 case",
+   "group": "shoulder",
+   "color": "grey",
+   "explode": [
+    0.22846771383590847,
+    -20.11937110381947,
+    -3.0602098824664026
+   ],
+   "file": "servo-2-case.glb",
+   "edges": "servo-2-case.edges.bin"
+  },
+  {
+   "id": "servo-2-top",
+   "label": "Servo 2 top cover",
+   "group": "shoulder",
+   "color": "grey",
+   "explode": [
+    -15.469232271363799,
+    -20.28377385674432,
+    -3.061225492131547
+   ],
+   "file": "servo-2-top.glb",
+   "edges": "servo-2-top.edges.bin"
+  },
+  {
+   "id": "servo-2-bottom",
+   "label": "Servo 2 bottom cover",
+   "group": "shoulder",
+   "color": "grey",
+   "explode": [
+    17.892795087180275,
+    -20.118187237502788,
+    -3.060194031957056
+   ],
+   "file": "servo-2-bottom.glb",
+   "edges": "servo-2-bottom.edges.bin"
+  },
+  {
+   "id": "servo-2-motor",
+   "label": "Servo 2 motor",
+   "group": "shoulder",
+   "color": "grey",
+   "explode": [
+    4.456858997024874,
+    -21.68609683712321,
+    -20.57437797828919
+   ],
+   "file": "servo-2-motor.glb",
+   "edges": "servo-2-motor.edges.bin"
+  },
+  {
+   "id": "servo-2-board",
+   "label": "Servo 2 board",
+   "group": "shoulder",
+   "color": "grey",
+   "explode": [
+    12.948445115425088,
+    -20.190372823611515,
+    6.2316689217519095
+   ],
+   "file": "servo-2-board.glb",
+   "edges": "servo-2-board.edges.bin"
+  },
+  {
+   "id": "servo-1-shaft",
+   "label": "Servo 1 shaft",
    "group": "shoulder",
    "finish": "metal",
-   "file": "screws-shoulder.glb",
-   "edges": "screws-shoulder.edges.bin"
+   "explode": [
+    -0.4834091338495737,
+    6.252215255408924,
+    -47.22596060416819
+   ],
+   "file": "servo-1-shaft.glb",
+   "edges": "servo-1-shaft.edges.bin"
   },
   {
-   "id": "screws-upper-arm",
-   "label": "Screws, upper arm",
+   "id": "servo-1-horn",
+   "label": "Servo 1 horn",
+   "group": "shoulder",
+   "finish": "metal",
+   "explode": [
+    -0.5069521918459651,
+    7.197618084679519,
+    -40.5829620937845
+   ],
+   "file": "servo-1-horn.glb",
+   "edges": "servo-1-horn.edges.bin"
+  },
+  {
+   "id": "servo-1-idle-horn",
+   "label": "Servo 1 idle horn",
+   "group": "shoulder",
+   "finish": "metal",
+   "explode": [
+    -0.4300407814306133,
+    4.059673208579561,
+    -64.14424287253817
+   ],
+   "file": "servo-1-idle-horn.glb",
+   "edges": "servo-1-idle-horn.edges.bin"
+  },
+  {
+   "id": "screw-shoulder-1",
+   "label": "Tapping screw",
+   "group": "shoulder",
+   "finish": "metal",
+   "explode": [
+    26.0,
+    -15.0,
+    -30.0
+   ],
+   "file": "screw-shoulder-1.glb",
+   "edges": "screw-shoulder-1.edges.bin"
+  },
+  {
+   "id": "screw-shoulder-2",
+   "label": "Tapping screw",
+   "group": "shoulder",
+   "finish": "metal",
+   "explode": [
+    26.0,
+    -15.0,
+    -30.0
+   ],
+   "file": "screw-shoulder-2.glb",
+   "edges": "screw-shoulder-2.edges.bin"
+  },
+  {
+   "id": "screw-shoulder-3",
+   "label": "Tapping screw",
+   "group": "shoulder",
+   "finish": "metal",
+   "explode": [
+    -26.0,
+    -15.0,
+    -30.0
+   ],
+   "file": "screw-shoulder-3.glb",
+   "edges": "screw-shoulder-3.edges.bin"
+  },
+  {
+   "id": "screw-shoulder-4",
+   "label": "Tapping screw",
+   "group": "shoulder",
+   "finish": "metal",
+   "explode": [
+    -26.0,
+    -15.0,
+    -30.0
+   ],
+   "file": "screw-shoulder-4.glb",
+   "edges": "screw-shoulder-4.edges.bin"
+  },
+  {
+   "id": "screw-shoulder-5",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "shoulder",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    -15.0,
+    -56.0
+   ],
+   "file": "screw-shoulder-5.glb",
+   "edges": "screw-shoulder-5.edges.bin"
+  },
+  {
+   "id": "screw-shoulder-6",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "shoulder",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    -15.0,
+    -56.0
+   ],
+   "file": "screw-shoulder-6.glb",
+   "edges": "screw-shoulder-6.edges.bin"
+  },
+  {
+   "id": "screw-shoulder-7",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "shoulder",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    -15.0,
+    -56.0
+   ],
+   "file": "screw-shoulder-7.glb",
+   "edges": "screw-shoulder-7.edges.bin"
+  },
+  {
+   "id": "screw-shoulder-8",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "shoulder",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    -15.0,
+    -56.0
+   ],
+   "file": "screw-shoulder-8.glb",
+   "edges": "screw-shoulder-8.edges.bin"
+  },
+  {
+   "id": "screw-shoulder-9",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "shoulder",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    -15.0,
+    -56.0
+   ],
+   "file": "screw-shoulder-9.glb",
+   "edges": "screw-shoulder-9.edges.bin"
+  },
+  {
+   "id": "screw-shoulder-10",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "shoulder",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    -15.0,
+    -56.0
+   ],
+   "file": "screw-shoulder-10.glb",
+   "edges": "screw-shoulder-10.edges.bin"
+  },
+  {
+   "id": "screw-shoulder-11",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "shoulder",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    -15.0,
+    -56.0
+   ],
+   "file": "screw-shoulder-11.glb",
+   "edges": "screw-shoulder-11.edges.bin"
+  },
+  {
+   "id": "screw-shoulder-12",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "shoulder",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    -15.0,
+    -56.0
+   ],
+   "file": "screw-shoulder-12.glb",
+   "edges": "screw-shoulder-12.edges.bin"
+  },
+  {
+   "id": "upper-arm",
+   "label": "Upper arm",
+   "group": "upper-arm",
+   "explode": [
+    0.0,
+    70.0,
+    5.0
+   ],
+   "file": "upper-arm.glb",
+   "edges": "upper-arm.edges.bin"
+  },
+  {
+   "id": "servo-3-case",
+   "label": "Servo 3 case",
+   "group": "upper-arm",
+   "color": "grey",
+   "explode": [
+    -0.9534205053929006,
+    109.77641594327807,
+    16.583279096421446
+   ],
+   "file": "servo-3-case.glb",
+   "edges": "servo-3-case.edges.bin"
+  },
+  {
+   "id": "servo-3-top",
+   "label": "Servo 3 top cover",
+   "group": "upper-arm",
+   "color": "grey",
+   "explode": [
+    -16.584094342320245,
+    109.61301911880231,
+    16.417843149887666
+   ],
+   "file": "servo-3-top.glb",
+   "edges": "servo-3-top.edges.bin"
+  },
+  {
+   "id": "servo-3-bottom",
+   "label": "Servo 3 bottom cover",
+   "group": "upper-arm",
+   "color": "grey",
+   "explode": [
+    16.58270505058497,
+    109.77759376630857,
+    16.584488833658238
+   ],
+   "file": "servo-3-bottom.glb",
+   "edges": "servo-3-bottom.edges.bin"
+  },
+  {
+   "id": "servo-3-motor",
+   "label": "Servo 3 motor",
+   "group": "upper-arm",
+   "color": "grey",
+   "explode": [
+    3.418660246775186,
+    108.21292532096145,
+    -0.9380022451508623
+   ],
+   "file": "servo-3-motor.glb",
+   "edges": "servo-3-motor.edges.bin"
+  },
+  {
+   "id": "servo-3-board",
+   "label": "Servo 3 board",
+   "group": "upper-arm",
+   "color": "grey",
+   "explode": [
+    11.695940249184488,
+    109.70468562554731,
+    25.89089916680188
+   ],
+   "file": "servo-3-board.glb",
+   "edges": "servo-3-board.edges.bin"
+  },
+  {
+   "id": "servo-2-shaft",
+   "label": "Servo 2 shaft",
    "group": "upper-arm",
    "finish": "metal",
-   "file": "screws-upper-arm.glb",
-   "edges": "screws-upper-arm.edges.bin"
+   "explode": [
+    -7.009010458531826,
+    28.59284177513495,
+    4.43341361366322
+   ],
+   "file": "servo-2-shaft.glb",
+   "edges": "servo-2-shaft.edges.bin"
   },
   {
-   "id": "screws-lower-arm",
-   "label": "Screws, lower arm",
+   "id": "servo-2-horn",
+   "label": "Servo 2 horn",
+   "group": "upper-arm",
+   "finish": "metal",
+   "explode": [
+    -12.468224674892163,
+    29.89709949433489,
+    4.4515982411268755
+   ],
+   "file": "servo-2-horn.glb",
+   "edges": "servo-2-horn.edges.bin"
+  },
+  {
+   "id": "servo-2-idle-horn",
+   "label": "Servo 2 idle horn",
+   "group": "upper-arm",
+   "finish": "metal",
+   "explode": [
+    10.317801391404998,
+    29.290886656623492,
+    4.4422677670729795
+   ],
+   "file": "servo-2-idle-horn.glb",
+   "edges": "servo-2-idle-horn.edges.bin"
+  },
+  {
+   "id": "screw-upper-arm-1",
+   "label": "Tapping screw",
+   "group": "upper-arm",
+   "finish": "metal",
+   "explode": [
+    -26.0,
+    70.0,
+    5.0
+   ],
+   "file": "screw-upper-arm-1.glb",
+   "edges": "screw-upper-arm-1.edges.bin"
+  },
+  {
+   "id": "screw-upper-arm-2",
+   "label": "Tapping screw",
+   "group": "upper-arm",
+   "finish": "metal",
+   "explode": [
+    -26.0,
+    70.0,
+    5.0
+   ],
+   "file": "screw-upper-arm-2.glb",
+   "edges": "screw-upper-arm-2.edges.bin"
+  },
+  {
+   "id": "screw-upper-arm-3",
+   "label": "Tapping screw",
+   "group": "upper-arm",
+   "finish": "metal",
+   "explode": [
+    26.0,
+    70.0,
+    5.0
+   ],
+   "file": "screw-upper-arm-3.glb",
+   "edges": "screw-upper-arm-3.edges.bin"
+  },
+  {
+   "id": "screw-upper-arm-4",
+   "label": "Tapping screw",
+   "group": "upper-arm",
+   "finish": "metal",
+   "explode": [
+    26.0,
+    70.0,
+    5.0
+   ],
+   "file": "screw-upper-arm-4.glb",
+   "edges": "screw-upper-arm-4.edges.bin"
+  },
+  {
+   "id": "screw-upper-arm-5",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "upper-arm",
+   "finish": "metal",
+   "explode": [
+    26.0,
+    70.0,
+    5.0
+   ],
+   "file": "screw-upper-arm-5.glb",
+   "edges": "screw-upper-arm-5.edges.bin"
+  },
+  {
+   "id": "screw-upper-arm-6",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "upper-arm",
+   "finish": "metal",
+   "explode": [
+    26.0,
+    70.0,
+    5.0
+   ],
+   "file": "screw-upper-arm-6.glb",
+   "edges": "screw-upper-arm-6.edges.bin"
+  },
+  {
+   "id": "screw-upper-arm-7",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "upper-arm",
+   "finish": "metal",
+   "explode": [
+    26.0,
+    70.0,
+    5.0
+   ],
+   "file": "screw-upper-arm-7.glb",
+   "edges": "screw-upper-arm-7.edges.bin"
+  },
+  {
+   "id": "screw-upper-arm-8",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "upper-arm",
+   "finish": "metal",
+   "explode": [
+    26.0,
+    70.0,
+    5.0
+   ],
+   "file": "screw-upper-arm-8.glb",
+   "edges": "screw-upper-arm-8.edges.bin"
+  },
+  {
+   "id": "screw-upper-arm-9",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "upper-arm",
+   "finish": "metal",
+   "explode": [
+    -26.0,
+    70.0,
+    5.0
+   ],
+   "file": "screw-upper-arm-9.glb",
+   "edges": "screw-upper-arm-9.edges.bin"
+  },
+  {
+   "id": "screw-upper-arm-10",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "upper-arm",
+   "finish": "metal",
+   "explode": [
+    -26.0,
+    70.0,
+    5.0
+   ],
+   "file": "screw-upper-arm-10.glb",
+   "edges": "screw-upper-arm-10.edges.bin"
+  },
+  {
+   "id": "screw-upper-arm-11",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "upper-arm",
+   "finish": "metal",
+   "explode": [
+    -26.0,
+    70.0,
+    5.0
+   ],
+   "file": "screw-upper-arm-11.glb",
+   "edges": "screw-upper-arm-11.edges.bin"
+  },
+  {
+   "id": "screw-upper-arm-12",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "upper-arm",
+   "finish": "metal",
+   "explode": [
+    -26.0,
+    70.0,
+    5.0
+   ],
+   "file": "screw-upper-arm-12.glb",
+   "edges": "screw-upper-arm-12.edges.bin"
+  },
+  {
+   "id": "lower-arm",
+   "label": "Lower arm",
+   "group": "lower-arm",
+   "explode": [
+    -0.272457361204589,
+    83.3826462426604,
+    63.618363404313094
+   ],
+   "file": "lower-arm.glb",
+   "edges": "lower-arm.edges.bin"
+  },
+  {
+   "id": "wrist-motor-holder",
+   "label": "Wrist motor holder",
+   "group": "lower-arm",
+   "explode": [
+    0.272457361204589,
+    36.61735375733959,
+    66.3816365956869
+   ],
+   "file": "wrist-motor-holder.glb",
+   "edges": "wrist-motor-holder.edges.bin"
+  },
+  {
+   "id": "servo-4-case",
+   "label": "Servo 4 case",
+   "group": "lower-arm",
+   "color": "grey",
+   "explode": [
+    -1.2505715594756277,
+    26.381642058165156,
+    67.41487025311893
+   ],
+   "file": "servo-4-case.glb",
+   "edges": "servo-4-case.edges.bin"
+  },
+  {
+   "id": "servo-4-top",
+   "label": "Servo 4 top cover",
+   "group": "lower-arm",
+   "color": "grey",
+   "explode": [
+    -16.925061137470095,
+    26.384099631581858,
+    67.15291577868307
+   ],
+   "file": "servo-4-top.glb",
+   "edges": "servo-4-top.edges.bin"
+  },
+  {
+   "id": "servo-4-bottom",
+   "label": "Servo 4 bottom cover",
+   "group": "lower-arm",
+   "color": "grey",
+   "explode": [
+    16.377103927553097,
+    26.381615663420074,
+    67.5161408692407
+   ],
+   "file": "servo-4-bottom.glb",
+   "edges": "servo-4-bottom.edges.bin"
+  },
+  {
+   "id": "servo-4-motor",
+   "label": "Servo 4 motor",
+   "group": "lower-arm",
+   "color": "grey",
+   "explode": [
+    3.030048617453083,
+    43.893349679021554,
+    65.89741435796067
+   ],
+   "file": "servo-4-motor.glb",
+   "edges": "servo-4-motor.edges.bin"
+  },
+  {
+   "id": "servo-4-board",
+   "label": "Servo 4 board",
+   "group": "lower-arm",
+   "color": "grey",
+   "explode": [
+    11.468802309915684,
+    17.089665920702437,
+    67.42288170818543
+   ],
+   "file": "servo-4-board.glb",
+   "edges": "servo-4-board.edges.bin"
+  },
+  {
+   "id": "servo-3-shaft",
+   "label": "Servo 3 shaft",
    "group": "lower-arm",
    "finish": "metal",
-   "file": "screws-lower-arm.glb",
-   "edges": "screws-lower-arm.edges.bin"
+   "explode": [
+    -5.67409185440472,
+    101.61104641731328,
+    64.42947595670498
+   ],
+   "file": "servo-3-shaft.glb",
+   "edges": "servo-3-shaft.edges.bin"
   },
   {
-   "id": "screws-wrist",
-   "label": "Screws, wrist",
+   "id": "servo-3-horn",
+   "label": "Servo 3 horn",
+   "group": "lower-arm",
+   "finish": "metal",
+   "explode": [
+    -9.925598396504958,
+    100.80572269581324,
+    64.38722618880176
+   ],
+   "file": "servo-3-horn.glb",
+   "edges": "servo-3-horn.edges.bin"
+  },
+  {
+   "id": "servo-3-idle-horn",
+   "label": "Servo 3 idle horn",
+   "group": "lower-arm",
+   "finish": "metal",
+   "explode": [
+    7.406135739681078,
+    101.33931937033543,
+    64.54193078816768
+   ],
+   "file": "servo-3-idle-horn.glb",
+   "edges": "servo-3-idle-horn.edges.bin"
+  },
+  {
+   "id": "screw-lower-arm-1",
+   "label": "Tapping screw",
+   "group": "lower-arm",
+   "finish": "metal",
+   "explode": [
+    26.0,
+    60.0,
+    65.0
+   ],
+   "file": "screw-lower-arm-1.glb",
+   "edges": "screw-lower-arm-1.edges.bin"
+  },
+  {
+   "id": "screw-lower-arm-2",
+   "label": "Tapping screw",
+   "group": "lower-arm",
+   "finish": "metal",
+   "explode": [
+    26.0,
+    60.0,
+    65.0
+   ],
+   "file": "screw-lower-arm-2.glb",
+   "edges": "screw-lower-arm-2.edges.bin"
+  },
+  {
+   "id": "screw-lower-arm-3",
+   "label": "Tapping screw",
+   "group": "lower-arm",
+   "finish": "metal",
+   "explode": [
+    -26.0,
+    60.0,
+    65.0
+   ],
+   "file": "screw-lower-arm-3.glb",
+   "edges": "screw-lower-arm-3.edges.bin"
+  },
+  {
+   "id": "screw-lower-arm-4",
+   "label": "Tapping screw",
+   "group": "lower-arm",
+   "finish": "metal",
+   "explode": [
+    -26.0,
+    60.0,
+    65.0
+   ],
+   "file": "screw-lower-arm-4.glb",
+   "edges": "screw-lower-arm-4.edges.bin"
+  },
+  {
+   "id": "screw-lower-arm-5",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "lower-arm",
+   "finish": "metal",
+   "explode": [
+    26.0,
+    60.0,
+    65.0
+   ],
+   "file": "screw-lower-arm-5.glb",
+   "edges": "screw-lower-arm-5.edges.bin"
+  },
+  {
+   "id": "screw-lower-arm-6",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "lower-arm",
+   "finish": "metal",
+   "explode": [
+    26.0,
+    60.0,
+    65.0
+   ],
+   "file": "screw-lower-arm-6.glb",
+   "edges": "screw-lower-arm-6.edges.bin"
+  },
+  {
+   "id": "screw-lower-arm-7",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "lower-arm",
+   "finish": "metal",
+   "explode": [
+    26.0,
+    60.0,
+    65.0
+   ],
+   "file": "screw-lower-arm-7.glb",
+   "edges": "screw-lower-arm-7.edges.bin"
+  },
+  {
+   "id": "screw-lower-arm-8",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "lower-arm",
+   "finish": "metal",
+   "explode": [
+    26.0,
+    60.0,
+    65.0
+   ],
+   "file": "screw-lower-arm-8.glb",
+   "edges": "screw-lower-arm-8.edges.bin"
+  },
+  {
+   "id": "screw-lower-arm-9",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "lower-arm",
+   "finish": "metal",
+   "explode": [
+    -26.0,
+    60.0,
+    65.0
+   ],
+   "file": "screw-lower-arm-9.glb",
+   "edges": "screw-lower-arm-9.edges.bin"
+  },
+  {
+   "id": "screw-lower-arm-10",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "lower-arm",
+   "finish": "metal",
+   "explode": [
+    -26.0,
+    60.0,
+    65.0
+   ],
+   "file": "screw-lower-arm-10.glb",
+   "edges": "screw-lower-arm-10.edges.bin"
+  },
+  {
+   "id": "screw-lower-arm-11",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "lower-arm",
+   "finish": "metal",
+   "explode": [
+    -26.0,
+    60.0,
+    65.0
+   ],
+   "file": "screw-lower-arm-11.glb",
+   "edges": "screw-lower-arm-11.edges.bin"
+  },
+  {
+   "id": "screw-lower-arm-12",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "lower-arm",
+   "finish": "metal",
+   "explode": [
+    -26.0,
+    60.0,
+    65.0
+   ],
+   "file": "screw-lower-arm-12.glb",
+   "edges": "screw-lower-arm-12.edges.bin"
+  },
+  {
+   "id": "wrist",
+   "label": "Wrist",
+   "group": "wrist",
+   "explode": [
+    0.0,
+    -25.0,
+    70.0
+   ],
+   "file": "wrist.glb",
+   "edges": "wrist.edges.bin"
+  },
+  {
+   "id": "servo-5-case",
+   "label": "Servo 5 case",
+   "group": "wrist",
+   "color": "grey",
+   "explode": [
+    10.054298693743537,
+    -41.84633489576254,
+    68.14560978736773
+   ],
+   "file": "servo-5-case.glb",
+   "edges": "servo-5-case.edges.bin"
+  },
+  {
+   "id": "servo-5-top",
+   "label": "Servo 5 top cover",
+   "group": "wrist",
+   "color": "grey",
+   "explode": [
+    10.053480235806092,
+    -57.543884497436515,
+    67.9794876988253
+   ],
+   "file": "servo-5-top.glb",
+   "edges": "servo-5-top.edges.bin"
+  },
+  {
+   "id": "servo-5-bottom",
+   "label": "Servo 5 bottom cover",
+   "group": "wrist",
+   "color": "grey",
+   "explode": [
+    10.054287604875304,
+    -24.182783871964368,
+    68.14692410791741
+   ],
+   "file": "servo-5-bottom.glb",
+   "edges": "servo-5-bottom.edges.bin"
+  },
+  {
+   "id": "servo-5-motor",
+   "label": "Servo 5 motor",
+   "group": "wrist",
+   "color": "grey",
+   "explode": [
+    27.5210952901201,
+    -37.6477254381024,
+    70.0902157898957
+   ],
+   "file": "servo-5-motor.glb",
+   "edges": "servo-5-motor.edges.bin"
+  },
+  {
+   "id": "servo-5-board",
+   "label": "Servo 5 board",
+   "group": "wrist",
+   "color": "grey",
+   "explode": [
+    0.7732634911655385,
+    -29.12469974633987,
+    68.00498574363738
+   ],
+   "file": "servo-5-board.glb",
+   "edges": "servo-5-board.edges.bin"
+  },
+  {
+   "id": "servo-4-shaft",
+   "label": "Servo 4 shaft",
    "group": "wrist",
    "finish": "metal",
-   "file": "screws-wrist.glb",
-   "edges": "screws-wrist.edges.bin"
+   "explode": [
+    -10.759544557137977,
+    -1.4630806090264699,
+    68.38004168078736
+   ],
+   "file": "servo-4-shaft.glb",
+   "edges": "servo-4-shaft.edges.bin"
   },
   {
-   "id": "screws-gripper",
-   "label": "Screws, gripper",
+   "id": "servo-4-horn",
+   "label": "Servo 4 horn",
+   "group": "wrist",
+   "finish": "metal",
+   "explode": [
+    -17.352978652957688,
+    -2.3887530543214694,
+    68.27584541534381
+   ],
+   "file": "servo-4-horn.glb",
+   "edges": "servo-4-horn.edges.bin"
+  },
+  {
+   "id": "servo-4-idle-horn",
+   "label": "Servo 4 idle horn",
+   "group": "wrist",
+   "finish": "metal",
+   "explode": [
+    10.91159998905508,
+    -1.4783060666082726,
+    68.73427507439057
+   ],
+   "file": "servo-4-idle-horn.glb",
+   "edges": "servo-4-idle-horn.edges.bin"
+  },
+  {
+   "id": "screw-wrist-1",
+   "label": "Tapping screw",
+   "group": "wrist",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    -51.0,
+    70.0
+   ],
+   "file": "screw-wrist-1.glb",
+   "edges": "screw-wrist-1.edges.bin"
+  },
+  {
+   "id": "screw-wrist-2",
+   "label": "Tapping screw",
+   "group": "wrist",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    -51.0,
+    70.0
+   ],
+   "file": "screw-wrist-2.glb",
+   "edges": "screw-wrist-2.edges.bin"
+  },
+  {
+   "id": "screw-wrist-3",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "wrist",
+   "finish": "metal",
+   "explode": [
+    -26.0,
+    -25.0,
+    70.0
+   ],
+   "file": "screw-wrist-3.glb",
+   "edges": "screw-wrist-3.edges.bin"
+  },
+  {
+   "id": "screw-wrist-4",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "wrist",
+   "finish": "metal",
+   "explode": [
+    -26.0,
+    -25.0,
+    70.0
+   ],
+   "file": "screw-wrist-4.glb",
+   "edges": "screw-wrist-4.edges.bin"
+  },
+  {
+   "id": "screw-wrist-5",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "wrist",
+   "finish": "metal",
+   "explode": [
+    -26.0,
+    -25.0,
+    70.0
+   ],
+   "file": "screw-wrist-5.glb",
+   "edges": "screw-wrist-5.edges.bin"
+  },
+  {
+   "id": "screw-wrist-6",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "wrist",
+   "finish": "metal",
+   "explode": [
+    -26.0,
+    -25.0,
+    70.0
+   ],
+   "file": "screw-wrist-6.glb",
+   "edges": "screw-wrist-6.edges.bin"
+  },
+  {
+   "id": "screw-wrist-7",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "wrist",
+   "finish": "metal",
+   "explode": [
+    26.0,
+    -25.0,
+    70.0
+   ],
+   "file": "screw-wrist-7.glb",
+   "edges": "screw-wrist-7.edges.bin"
+  },
+  {
+   "id": "screw-wrist-8",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "wrist",
+   "finish": "metal",
+   "explode": [
+    26.0,
+    -25.0,
+    70.0
+   ],
+   "file": "screw-wrist-8.glb",
+   "edges": "screw-wrist-8.edges.bin"
+  },
+  {
+   "id": "screw-wrist-9",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "wrist",
+   "finish": "metal",
+   "explode": [
+    26.0,
+    -25.0,
+    70.0
+   ],
+   "file": "screw-wrist-9.glb",
+   "edges": "screw-wrist-9.edges.bin"
+  },
+  {
+   "id": "screw-wrist-10",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "wrist",
+   "finish": "metal",
+   "explode": [
+    26.0,
+    -25.0,
+    70.0
+   ],
+   "file": "screw-wrist-10.glb",
+   "edges": "screw-wrist-10.edges.bin"
+  },
+  {
+   "id": "gripper",
+   "label": "Gripper",
+   "group": "gripper",
+   "explode": [
+    0.0,
+    -95.0,
+    10.0
+   ],
+   "file": "gripper.glb",
+   "edges": "gripper.edges.bin"
+  },
+  {
+   "id": "servo-6-case",
+   "label": "Servo 6 case",
+   "group": "gripper",
+   "color": "grey",
+   "explode": [
+    2.962252769824769,
+    -70.5989691699303,
+    18.746610807299994
+   ],
+   "file": "servo-6-case.glb",
+   "edges": "servo-6-case.edges.bin"
+  },
+  {
+   "id": "servo-6-top",
+   "label": "Servo 6 top cover",
+   "group": "gripper",
+   "color": "grey",
+   "explode": [
+    18.67645604977424,
+    -70.60081812085961,
+    18.910904256243498
+   ],
+   "file": "servo-6-top.glb",
+   "edges": "servo-6-top.edges.bin"
+  },
+  {
+   "id": "servo-6-bottom",
+   "label": "Servo 6 bottom cover",
+   "group": "gripper",
+   "color": "grey",
+   "explode": [
+    -14.710908568166253,
+    -70.59896431197788,
+    18.745427338558237
+   ],
+   "file": "servo-6-bottom.glb",
+   "edges": "servo-6-bottom.edges.bin"
+  },
+  {
+   "id": "servo-6-motor",
+   "label": "Servo 6 motor",
+   "group": "gripper",
+   "color": "grey",
+   "explode": [
+    -1.070722894503764,
+    -68.76787493649434,
+    1.2653822769523657
+   ],
+   "file": "servo-6-motor.glb",
+   "edges": "servo-6-motor.edges.bin"
+  },
+  {
+   "id": "servo-6-board",
+   "label": "Servo 6 board",
+   "group": "gripper",
+   "color": "grey",
+   "explode": [
+    -9.72704852458372,
+    -70.66937429996574,
+    28.046576103851855
+   ],
+   "file": "servo-6-board.glb",
+   "edges": "servo-6-board.edges.bin"
+  },
+  {
+   "id": "servo-5-shaft",
+   "label": "Servo 5 shaft",
    "group": "gripper",
    "finish": "metal",
-   "file": "screws-gripper.glb",
-   "edges": "screws-gripper.edges.bin"
+   "explode": [
+    1.3499697109489182,
+    -53.06706132386541,
+    11.950957652809633
+   ],
+   "file": "servo-5-shaft.glb",
+   "edges": "servo-5-shaft.edges.bin"
   },
   {
-   "id": "screws-jaw",
-   "label": "Screws, jaw",
+   "id": "servo-5-horn",
+   "label": "Servo 5 horn",
+   "group": "gripper",
+   "finish": "metal",
+   "explode": [
+    1.5006004488152616,
+    -54.68344492758686,
+    12.092573265259066
+   ],
+   "file": "servo-5-horn.glb",
+   "edges": "servo-5-horn.edges.bin"
+  },
+  {
+   "id": "screw-gripper-1",
+   "label": "Tapping screw",
+   "group": "gripper",
+   "finish": "metal",
+   "explode": [
+    -26.0,
+    -95.0,
+    10.0
+   ],
+   "file": "screw-gripper-1.glb",
+   "edges": "screw-gripper-1.edges.bin"
+  },
+  {
+   "id": "screw-gripper-2",
+   "label": "Tapping screw",
+   "group": "gripper",
+   "finish": "metal",
+   "explode": [
+    -26.0,
+    -95.0,
+    10.0
+   ],
+   "file": "screw-gripper-2.glb",
+   "edges": "screw-gripper-2.edges.bin"
+  },
+  {
+   "id": "screw-gripper-3",
+   "label": "Tapping screw",
+   "group": "gripper",
+   "finish": "metal",
+   "explode": [
+    26.0,
+    -95.0,
+    10.0
+   ],
+   "file": "screw-gripper-3.glb",
+   "edges": "screw-gripper-3.edges.bin"
+  },
+  {
+   "id": "screw-gripper-4",
+   "label": "Tapping screw",
+   "group": "gripper",
+   "finish": "metal",
+   "explode": [
+    26.0,
+    -95.0,
+    10.0
+   ],
+   "file": "screw-gripper-4.glb",
+   "edges": "screw-gripper-4.edges.bin"
+  },
+  {
+   "id": "screw-gripper-5",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "gripper",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    -69.0,
+    10.0
+   ],
+   "file": "screw-gripper-5.glb",
+   "edges": "screw-gripper-5.edges.bin"
+  },
+  {
+   "id": "screw-gripper-6",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "gripper",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    -69.0,
+    10.0
+   ],
+   "file": "screw-gripper-6.glb",
+   "edges": "screw-gripper-6.edges.bin"
+  },
+  {
+   "id": "screw-gripper-7",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "gripper",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    -69.0,
+    10.0
+   ],
+   "file": "screw-gripper-7.glb",
+   "edges": "screw-gripper-7.edges.bin"
+  },
+  {
+   "id": "screw-gripper-8",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "gripper",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    -69.0,
+    10.0
+   ],
+   "file": "screw-gripper-8.glb",
+   "edges": "screw-gripper-8.edges.bin"
+  },
+  {
+   "id": "screw-gripper-9",
+   "label": "Nut, M3",
+   "group": "gripper",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    -69.0,
+    10.0
+   ],
+   "file": "screw-gripper-9.glb",
+   "edges": "screw-gripper-9.edges.bin"
+  },
+  {
+   "id": "screw-gripper-10",
+   "label": "Nut, M3",
+   "group": "gripper",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    -69.0,
+    10.0
+   ],
+   "file": "screw-gripper-10.glb",
+   "edges": "screw-gripper-10.edges.bin"
+  },
+  {
+   "id": "screw-gripper-11",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "gripper",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    -69.0,
+    10.0
+   ],
+   "file": "screw-gripper-11.glb",
+   "edges": "screw-gripper-11.edges.bin"
+  },
+  {
+   "id": "jaw",
+   "label": "Jaw",
+   "group": "jaw",
+   "explode": [
+    0.0,
+    -110.0,
+    85.0
+   ],
+   "file": "jaw.glb",
+   "edges": "jaw.edges.bin"
+  },
+  {
+   "id": "servo-6-shaft",
+   "label": "Servo 6 shaft",
    "group": "jaw",
    "finish": "metal",
-   "file": "screws-jaw.glb",
-   "edges": "screws-jaw.edges.bin"
+   "explode": [
+    7.4142425791801445,
+    -80.45037084222461,
+    85.04580979594057
+   ],
+   "file": "servo-6-shaft.glb",
+   "edges": "servo-6-shaft.edges.bin"
+  },
+  {
+   "id": "servo-6-horn",
+   "label": "Servo 6 horn",
+   "group": "jaw",
+   "finish": "metal",
+   "explode": [
+    13.98992382285589,
+    -81.00527823605458,
+    85.12541640676424
+   ],
+   "file": "servo-6-horn.glb",
+   "edges": "servo-6-horn.edges.bin"
+  },
+  {
+   "id": "servo-6-idle-horn",
+   "label": "Servo 6 idle horn",
+   "group": "jaw",
+   "finish": "metal",
+   "explode": [
+    -12.703370993441318,
+    -80.8760234689907,
+    84.88176125906223
+   ],
+   "file": "servo-6-idle-horn.glb",
+   "edges": "servo-6-idle-horn.edges.bin"
+  },
+  {
+   "id": "screw-jaw-1",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "jaw",
+   "finish": "metal",
+   "explode": [
+    -26.0,
+    -110.0,
+    85.0
+   ],
+   "file": "screw-jaw-1.glb",
+   "edges": "screw-jaw-1.edges.bin"
+  },
+  {
+   "id": "screw-jaw-2",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "jaw",
+   "finish": "metal",
+   "explode": [
+    -26.0,
+    -110.0,
+    85.0
+   ],
+   "file": "screw-jaw-2.glb",
+   "edges": "screw-jaw-2.edges.bin"
+  },
+  {
+   "id": "screw-jaw-3",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "jaw",
+   "finish": "metal",
+   "explode": [
+    -26.0,
+    -110.0,
+    85.0
+   ],
+   "file": "screw-jaw-3.glb",
+   "edges": "screw-jaw-3.edges.bin"
+  },
+  {
+   "id": "screw-jaw-4",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "jaw",
+   "finish": "metal",
+   "explode": [
+    -26.0,
+    -110.0,
+    85.0
+   ],
+   "file": "screw-jaw-4.glb",
+   "edges": "screw-jaw-4.edges.bin"
+  },
+  {
+   "id": "screw-jaw-5",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "jaw",
+   "finish": "metal",
+   "explode": [
+    26.0,
+    -110.0,
+    85.0
+   ],
+   "file": "screw-jaw-5.glb",
+   "edges": "screw-jaw-5.edges.bin"
+  },
+  {
+   "id": "screw-jaw-6",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "jaw",
+   "finish": "metal",
+   "explode": [
+    26.0,
+    -110.0,
+    85.0
+   ],
+   "file": "screw-jaw-6.glb",
+   "edges": "screw-jaw-6.edges.bin"
+  },
+  {
+   "id": "screw-jaw-7",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "jaw",
+   "finish": "metal",
+   "explode": [
+    26.0,
+    -110.0,
+    85.0
+   ],
+   "file": "screw-jaw-7.glb",
+   "edges": "screw-jaw-7.edges.bin"
+  },
+  {
+   "id": "screw-jaw-8",
+   "label": "Screw, M3 \u00d7 6",
+   "group": "jaw",
+   "finish": "metal",
+   "explode": [
+    26.0,
+    -110.0,
+    85.0
+   ],
+   "file": "screw-jaw-8.glb",
+   "edges": "screw-jaw-8.edges.bin"
   },
   {
    "id": "cable-1",
    "label": "Cable 1",
    "group": "cables",
    "color": "grey",
+   "explode": [
+    13.047864808293744,
+    61.43674663389181,
+    -64.46145659995182
+   ],
    "file": "cable-1.glb",
    "edges": "cable-1.edges.bin"
   },
@@ -286,6 +1733,11 @@
    "label": "Cable 2",
    "group": "cables",
    "color": "grey",
+   "explode": [
+    26.34967409618571,
+    85.96304616691782,
+    -4.006166338178829
+   ],
    "file": "cable-2.glb",
    "edges": "cable-2.edges.bin"
   },
@@ -294,6 +1746,11 @@
    "label": "Cable 3",
    "group": "cables",
    "color": "grey",
+   "explode": [
+    24.645440923585877,
+    84.43744552533032,
+    19.050460226433227
+   ],
    "file": "cable-3.glb",
    "edges": "cable-3.edges.bin"
   },
@@ -302,6 +1759,11 @@
    "label": "Cable 4",
    "group": "cables",
    "color": "grey",
+   "explode": [
+    64.22378810172529,
+    -14.170014196545306,
+    53.59885860545047
+   ],
    "file": "cable-4.glb",
    "edges": "cable-4.edges.bin"
   },
@@ -310,6 +1772,11 @@
    "label": "Cable 5",
    "group": "cables",
    "color": "grey",
+   "explode": [
+    -5.74145106574421,
+    -69.69974179287684,
+    56.64787492630206
+   ],
    "file": "cable-5.glb",
    "edges": "cable-5.edges.bin"
   },
@@ -318,6 +1785,11 @@
    "label": "Cable 6",
    "group": "cables",
    "color": "grey",
+   "explode": [
+    -4.8582785072565935,
+    72.63233504258288,
+    -52.923917430665675
+   ],
    "file": "cable-6.glb",
    "edges": "cable-6.edges.bin"
   }
