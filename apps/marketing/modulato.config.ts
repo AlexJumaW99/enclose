@@ -29,6 +29,17 @@ export default defineConfig({
       { name: 'twitter:card', content: 'summary_large_image' },
       { name: 'twitter:image', content: 'https://enclose.dev/og.png' },
     ],
+    // How many come to the site, and to which page: counted by Simple Analytics, which
+    // sets no cookie and keeps no address, and so is asked to count a visit whatever
+    // the browser's Do Not Track says. It sees a page changed without a reload by
+    // itself. What it keeps is said on the privacy page, which has to stay true to this.
+    script: [
+      {
+        src: 'https://scripts.simpleanalyticscdn.com/latest.js',
+        async: true,
+        'data-collect-dnt': 'true',
+      },
+    ],
   },
   // content/*.json -> typed snapshot. Pull + typegen: npx modulato content
   content: localJson({ dir: 'content' }),

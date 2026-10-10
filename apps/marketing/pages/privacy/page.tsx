@@ -8,7 +8,8 @@ export default function Privacy() {
         Enclose is an open-source project maintained by Glauber. This page says what the
         Enclose app and this website send anywhere, and what they do not. In short: the app
         needs no account, your projects stay on your Mac, and the installed app counts how
-        it is used, without your name, unless you switch that off.
+        it is used, without your name, unless you switch that off. This website counts its
+        visits, without cookies and without knowing whose they are.
       </p>
 
       <h2>Usage data from the app</h2>
@@ -86,10 +87,30 @@ export default function Privacy() {
 
       <h2>This website</h2>
       <p>
-        This site sets no cookies and runs no analytics or advertising scripts. Its fonts
-        and its pictures are served from the site itself. The host that serves it keeps the
-        ordinary logs a web server keeps: the address a request came from, the browser, the
-        page asked for, and when.
+        This site sets no cookies and shows no advertising. Its fonts and its pictures are
+        served from the site itself. The host that serves it keeps the ordinary logs a web
+        server keeps: the address a request came from, the browser, the page asked for, and
+        when.
+      </p>
+      <p>
+        It counts its visits with{' '}
+        <a href="https://www.simpleanalytics.com">Simple Analytics</a>, which is made to
+        count without knowing who is visiting. It sets no cookie, puts nothing on your
+        device, and keeps no IP address, so there is nothing to tell one visitor from
+        another by.
+      </p>
+      <p>What it keeps of a visit:</p>
+      <ul>
+        <li>the page looked at, and the page that linked to it;</li>
+        <li>the kind of browser, system and device, and the size of the screen and window;</li>
+        <li>the browser’s language, and a country worked out from its time zone;</li>
+        <li>how long the page was open, and how far down it was scrolled.</li>
+      </ul>
+      <p>
+        Simple Analytics keeps that on servers in the Netherlands, and{' '}
+        <a href="https://docs.simpleanalytics.com/what-we-collect">says more of it</a>{' '}
+        itself. A visit is counted whether or not your browser asks not to be tracked,
+        because nothing that is kept says who you are. A content blocker stops it.
       </p>
       <p>
         To point its download button at the newest release, the page asks GitHub which one

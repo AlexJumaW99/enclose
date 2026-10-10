@@ -51,6 +51,16 @@ npm run blueprints   # public/blueprint: its sheets, as the app would save them
 `npm run blueprints` runs the desktop app's own drawing code, so `apps/desktop`
 has to have its packages installed.
 
+## Deploying
+
+The site is the Vercel project `enclose`, in the team `glauber-house`, connected to this
+repository: a push to `main` puts it up, and any other branch gets a preview. A push
+that changes nothing in this folder deploys nothing.
+
+The project's root directory is `apps/marketing`, and nothing else in its build settings
+is set: Vercel runs `npm run build`, which writes the output Vercel takes as it is
+(`.vercel/output`), on Node 24.
+
 ## The download
 
 `/download` and `/download/intel` send whoever asks to the newest disk image for each
