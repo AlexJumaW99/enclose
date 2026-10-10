@@ -10,13 +10,13 @@ The key sets the model in the scene that suits it, at once, and again takes it b
 
 | Scene | For | What is in it |
 |---|---|---|
-| Desk | A thing small enough to stand on one | A desk 58 inches by 29, with the model in the middle of its top |
+| Table | A thing small enough to stand on a desk | A desk 58 inches by 29, with the model in the middle of its top |
 | Room | A thing that stands on the floor | An empty room 12 feet by 10, with a doorway in the far wall |
 | Person | A thing too big for a room | A man 5 feet 9 tall, standing beside it |
 
 Which of them suits is for whoever builds the model to say, by where the thing is used:
 Claude is told to, with `reference="room"` in the model's script (`"reference"` in a
-manifest written some other way). Where nothing is said it goes by size, and a model too
+manifest written some other way): the names are `table`, `room` and `person`. Where nothing is said it goes by size, and a model too
 big for the desk is shown in the room, and one too big for the room beside the person.
 
 The button brings up the list of scenes, each with a picture, its name and its sizes:
@@ -34,7 +34,9 @@ over the scene, which goes down as far as the model's lowest part does.
 
 The camera goes to the view a model opens with, from above and in front, to take all of
 the scene in, whichever side the model was being looked at from; and when the model is
-taken out it goes back to where it was, unless the view was turned meanwhile. Cmd+1 and
+taken out it goes back to where it was, unless the view was moved meanwhile. From the
+view a model opens with, or a set view, there is nowhere to go back to: those are views
+of the whole. Cmd+1 and
 the set views frame the scene with the model for as long as it is there.
 
 The camera keeps above the ground the scene stands on, as an eye would: it goes down

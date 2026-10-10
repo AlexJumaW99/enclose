@@ -22,6 +22,8 @@ A message that begins with / is a command: any that you, the project or a plugin
 given Claude Code, and three of its own that mean something here (compact, context and
 usage). Esc puts the list away.
 
+$ and / are Claude's: with Codex or Grok answering, they are only what was typed.
+
 ## What was said of parts
 
 What you say of a part in the view, and the parts you add to chat from it, show as chips
@@ -55,4 +57,5 @@ conversation says so.
 More can be said in a conversation Claude is at work in. It waits its turn, marked
 Queued, and is sent when the turn is over. A message that waits can be sent at once
 (Send now), which stops the turn for it, or taken back. After a turn that was stopped or
-that failed, what waits is not sent by itself: it is left for you to send.
+that failed, what waits is not sent by itself: it is left for you to send, or goes after
+the next turn that gets through. What waits is kept only while the app is open.

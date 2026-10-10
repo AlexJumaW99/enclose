@@ -1,5 +1,5 @@
 // The projects the app has to start from, for someone with none of their own yet. They
-// are not in the app, which would be six times the size for them: each is one archive,
+// are not in the app, to keep it small: each is one archive,
 // kept with the app's releases, fetched when it is asked for and unpacked where new
 // projects go. What the app has of them is this list (scripts/examples.mjs writes the
 // sizes and the sums into examples.json as it packs them) and a picture of each.

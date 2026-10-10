@@ -1,6 +1,7 @@
 # Keyboard shortcuts
 
-The app has the same list in its settings (Shortcuts). Cmd is Ctrl off a Mac.
+The app has the same list in its settings (Shortcuts), all but the keys for writing. Cmd
+is Ctrl off a Mac.
 
 ## Views
 
@@ -40,6 +41,7 @@ The app has the same list in its settings (Shortcuts). Cmd is Ctrl off a Mac.
 |---|---|
 | Cmd+B | The conversation |
 | Cmd+, | [Settings](settings.md) |
+| D | The light theme, or the dark |
 
 ## Moving around
 
@@ -70,13 +72,25 @@ Holding Ctrl makes any scroll zoom.
 | Enter | In the box at a part: keep what you wrote for the next message |
 | Cmd+Enter | In the box at a part: send at once, with everything gathered |
 | @ | [A part by name](messages.md#parts-skills-and-commands-by-name) |
-| $ | A skill by name |
-| / | A command, at the start of a message |
+| $ | A skill by name, where it is Claude that answers |
+| / | A command, at the start of a message, where it is Claude that answers |
 
 ## What Esc steps back through
 
 Esc puts the search away if it is up, and then the parts list, the list of reference
 scenes, or the project's tools. After that it gets back out of the section, the explode,
-the reference scene, the tools' hold on the model, whatever is showing on its own and
+the blueprint, the reference scene, the tools' hold on the model, whatever is showing on its own and
 whatever was put out of sight, one press each, starting with whichever you went into
 last.
+
+## When a key does nothing
+
+- While a box is being written in, the plain keys are the writing's: letters, Space,
+  Shift+G and Esc. The ones with Cmd still work, and Cmd+Z only in a box that is empty.
+- Under a blueprint the keys of the view wait until it is back: Cmd+1 to 7, Space, Z, S,
+  X and Y, Shift+G, Cmd+/ and T.
+- T is there only in a project with tools of its own, and B and Cmd+F only once there
+  is a model. Cmd+B needs a project to be open.
+- In a reference scene there is no view from below, so Cmd+5 does nothing.
+- No key of the view works with Settings open, or while Claude looks over files that
+  were just opened.

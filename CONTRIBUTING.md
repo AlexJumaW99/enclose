@@ -53,7 +53,7 @@ more than anything, if it is one you can share.
 ## What you agree to
 
 Enclose is licensed under the GNU Affero General Public License, version 3 (see
-[LICENSE](LICENSE) and the README's last section). By sending a contribution you say
+[LICENSE](LICENSE) and [NOTICE.md](NOTICE.md)). By sending a contribution you say
 that it is yours to give, and you license it to the project and everyone who gets it
 under those same terms. Do not bring in code, models or pictures whose terms do not
 allow that, and say where anything that is not your own comes from.

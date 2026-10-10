@@ -14,7 +14,8 @@ it [picks parts out](selecting.md).
 Orbiting does not stop straight above the model or straight below: it carries on over
 the top and round the far side, with the model upside down, as it does in Blender. A set
 view, or Cmd+1, brings it back the right way up, and goes there the short way however
-many times the view has been turned about.
+many times the view has been turned about. (In a [reference scene](reference-scenes.md)
+it stops at the ground the scene stands on.)
 
 A trackpad and a wheel send the same scroll, so which one it was is read from how the
 scroll moves ([`scroll.ts`](../apps/desktop/src/lib/scroll.ts)). Holding Ctrl makes any
@@ -56,11 +57,14 @@ changed by it.
 Shading is on Z, the way it is in Blender: the key brings solid, glass, pattern,
 wireframe and outline up in a circle round the pointer. Hold it, flick towards one and
 let go; or tap it, and click one. A choice is pointed at by direction, so the pointer
-need not reach it. Esc, Z again or a right-click puts the menu away.
+need not reach it. Esc, Z again or a right-click puts the menu away. While the model is
+cut open a tap of Z is the cut across Z instead, and the menu comes up when the key is
+held.
 
 - **Solid** draws the model as it is.
 - **Glass** makes the outside see-through (the groups a manifest marks as `shell`, or
-  everything if it marks none).
+  everything if it marks none). A small part of the outside, a button or a foot, stays
+  solid unless the model says otherwise of it (`glass=True`).
 - **Pattern** is wireframe with every face ruled into squares, in three of the colours
   parts are drawn in: one for the lines across each of the part's axes. Each face is
   ruled into about as many squares as any other, so a small face is ruled finely and a
@@ -92,8 +96,9 @@ draws them.
 ### Glass
 
 A part that is made of something clear, a window or the glass over a dial, is drawn
-see-through whatever the shading, with no colour unless it is given one: the model says
-so of the part (`finish="glass"`). A click on it picks what is behind it, and a
+see-through in solid and in glass alike, with no colour unless it is given one: the
+model says so of the part (`finish="glass"`). In pattern, wireframe and outline it is
+drawn by its lines, as any other part is. A click on it picks what is behind it, and a
 blueprint draws what it covers.
 
 ### Curves

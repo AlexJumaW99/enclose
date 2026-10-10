@@ -32,7 +32,8 @@ still lit: Esc again lets go of the model, which is back as it is built.
 ## How a tool is written
 
 A tool is one file of JavaScript in `tools/` at the top of the project
-(`tools/clock.js`), a tab for each file, loaded again whenever it is written. It says
+(`tools/clock.js`, its name in lower case), a tab for each file, up to twelve, loaded
+again whenever it is written. It says
 what its controls are and, each time the view is drawn, where the parts are from how the
 controls stand: turned about a line, carried somewhere, put out of sight, drawn in
 another colour. It changes nothing in the project's files; the parts are only drawn
@@ -40,8 +41,10 @@ where it has them. [`kit/tools.md`](../kit/tools.md) says how one is written, an
 what Claude reads before it writes one.
 
 A tool is run shut away from the rest of the app, in a worker of its own: it is told the
-parts' names and sizes, and has no way to the window, to files or to the network, so a
-project that came from someone else can be opened with its tools. One that goes wrong,
+parts' names and sizes, and has no way to the window or to files. The usual ways to the
+network are taken from it as well, but one is not stopped yet: a tool that imports a
+module from somewhere else. So read the tools of a project that came from someone else
+before you open it. One that goes wrong,
 or never comes back from a frame, is stopped and says why in its tab, with a button that
 takes that to Claude.
 

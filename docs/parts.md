@@ -22,7 +22,8 @@ sight.
   STEP file, with every part in its place; its tooltip says how big the file is.
 - The arrow that comes up beside a part's name, in the list, saves that part as STEP.
 - The arrow beside a group's name saves the STEP files of all its parts, in a folder
-  named after the group, inside one you choose.
+  named after the group, inside one you choose. A group of one part saves that part's
+  file, as the part's own arrow does.
 
 ## Changing the groups by hand
 
@@ -36,7 +37,7 @@ one. Or pick parts out in the view.
 |---|---|
 | Cmd+G | Makes a group of what is picked, which goes to the top of the list. Claude is asked what to call it: the card glimmers while the name is on its way |
 | Shift+Cmd+G | Takes them out of their groups, to be listed last as in none. With a whole group picked, by a click on its card, that is the end of the group |
-| Click a group's name | Write another over it. Enter keeps it, Esc does not, and nothing written gives back the name it had |
+| Click a group's name | Write another over it. Enter keeps it, Esc does not, and nothing written gives back the name it had before it was written over by hand |
 | Cmd+Z | Takes any of this back |
 
 It is kept by the app, not in the project's files: Claude is told how you have the parts
@@ -58,7 +59,8 @@ view, and as you type in it the whole model goes see-through but for what goes b
 name, which turns white the way a part does when it is picked out, wherever in the model
 it is.
 
-Each thing found has its name on a tag beside it: a part's by the part, and a group's,
+Each thing found, the sixty nearest to what you typed at the most, has its name on a tag
+beside it: a part's by the part, and a group's,
 with the sign of the parts list on it, by the group. Where they would lie over one
 another, the nearest to what you typed are the ones shown, and turning the view makes
 room for others. Click a tag and what it names is shown on its own, with the camera

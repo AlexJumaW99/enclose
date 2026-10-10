@@ -8,18 +8,18 @@ way.
 
 ## What is in the library
 
-Metric screws from M1.6 to M12, each to the sizes its standard gives, in the lengths
-screws are sold in, and with its thread cut.
+Metric screws, each to the sizes its standard gives, in the lengths screws are sold in,
+and with its thread cut.
 
-| | Standard |
-|---|---|
-| Socket head | ISO 4762 |
-| Button head | ISO 7380 |
-| Countersunk head | ISO 10642 |
-| Pan head | ISO 7045 |
-| Hexagon head | ISO 4017 |
-| Hex nut | ISO 4032 |
-| Plain washer | ISO 7089 |
+| | Standard | Sizes |
+|---|---|---|
+| Socket head | ISO 4762 | M1.6 to M12 |
+| Button head | ISO 7380 | M3 to M12 |
+| Countersunk head | ISO 10642 | M3 to M12 |
+| Pan head | ISO 7045 | M1.6 to M8 |
+| Hexagon head | ISO 4017 | M1.6 to M12 |
+| Hex nut | ISO 4032 | M1.6 to M12 |
+| Plain washer | ISO 7089 | M1.6 to M12 |
 
 It gives what is cut for a screw as well: the hole it passes through, the hole it screws
 into, and the recess a head sinks into.
@@ -29,7 +29,7 @@ into, and the recess a head sinks into.
 Claude chooses the screw and says which it used, in its reply and in the part's name
 ("Lid screws, M3 × 8"), since few people can tell one size from another by looking.
 Asked for a bigger or a smaller one with no size named, it asks which, and says what
-each measures.
+each measures. (Codex and Grok do not ask: they go one size up or down, and say which.)
 
 ## How a thread is drawn
 

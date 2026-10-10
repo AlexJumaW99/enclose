@@ -1,13 +1,14 @@
 # Blueprints
 
-**Blueprint** (B) puts the model's drawings where the view was. B again, the button or
-Esc brings the view back, as it was left.
+**Blueprint** (B) puts the model's drawings where the view was. B again or the button
+brings the view back, as it was left but with nothing picked out. Esc does too, once it
+has stepped back out of whatever was gone into since, Exploded say.
 
 ## The sheets
 
 The model is drawn flat, from four of its corners and then from each of its six sides,
-each on a sheet of its own, upright and four wide to five high (210 by 262.5 mm, the
-width of A4). A corner shows three sides at once, all turned equally from the eye (an
+each on a sheet of its own, upright and four wide to five high, the shape of an
+Instagram feed post (210 by 262.5 mm: as wide as A4, and shorter). A corner shows three sides at once, all turned equally from the eye (an
 isometric drawing): the top or the bottom, with the front and the left side or the front
 and the right.
 
@@ -22,9 +23,9 @@ behind something left out. That is worked out from the model and not from a pict
 it, so a line stops exactly where it goes behind another part, however closely the
 drawing is looked at afterwards. The lines are a point and a half wide.
 
-A drawing is life size where the model fits the sheet; where it does not, the six sides
-are all to the one scale, the least reduction that fits (1:2, 1:5, 1:10 and so on), and
-the four corners, which take more room, to one of their own.
+A drawing is life size where the model fits the sheet with 15 mm clear all round; where
+it does not, the six sides are all to the one scale, the least reduction that fits (1:2,
+1:5, 1:10 and so on), and the four corners, which take more room, to one of their own.
 
 ## What is drawn
 

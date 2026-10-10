@@ -2,8 +2,9 @@
 
 Claude is the Claude Code already on your machine, run through the
 [Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview) in the project's folder.
-The app has no login of its own and stores no credentials; if you need to sign in again,
-do it in Claude Code. Cmd+B shows the conversation, and puts it away again.
+The app has no login of its own, and keeps no credentials but a key you give it yourself
+as a variable in the settings (Providers); if you need to sign in again, do it in Claude
+Code. Cmd+B shows the conversation, and puts it away again.
 
 ## What Claude works on
 
@@ -71,7 +72,8 @@ Mostly Claude shows its guess and lets you correct it. Where a wrong guess would
 the build (the thing has to fit something of yours whose size it cannot know, or what
 you asked for could be quite different things) it asks first, in the conversation, one
 question at a time: a few likely answers to click, and a line to write your own. A click
-goes on to the next question, and the last one sends them all; **Skip** leaves a
+goes on to the next question, and the last one sends them all (a question that takes
+several answers waits for Next); **Skip** leaves a
 question to Claude, which goes by its best guess and says what it was. Whatever access
 Claude has, what it asks is put to you: a question is no leave to do something.
 
@@ -95,8 +97,8 @@ Claude starts out with full access and never asks leave.
 ## Taking a change back
 
 Cmd+Z takes back the last thing done to the model, and Cmd+Shift+Z puts it back. That is
-a colour you gave a part, or what Claude did in a turn, whichever was done later; press
-it again for the one before.
+a colour you gave a part, a group you made, broke up or renamed, or what Claude did in a
+turn, whichever was done later; press it again for the one before.
 
 What Claude did is taken back whole and at once, without asking it for anything and
 without building anything: before each turn the app puts the project's files aside, and
@@ -105,11 +107,12 @@ the rest. A turn you stopped part of the way is taken back like any other. The
 conversation says that it was done, and Claude is told with your next message, so that
 it does not go on as though its change were still there.
 
-Nothing is taken back while Claude is at work, or over a file that has been changed
-since the turn, by you in an editor say: the app names the file that is in the way and
+Nothing of Claude's is taken back while Claude is at work, or over a file that has been
+changed since the turn, by you in an editor say: the app names the file that is in the way and
 leaves all of it as it is. The last twelve turns that changed anything are kept for each
 project. What is not the project's own is left out, and left alone: `.git`,
-`node_modules`, a Python environment.
+`node_modules`, a Python environment. A folder with more than 20,000 files in it, or
+4 GB, is not put aside at all, and nothing Claude does in it can be taken back.
 
 In a box you are writing in, Cmd+Z is the writing's for as long as there is any; in an
 empty one, as the message box is after a message is sent, it is the model's.
@@ -118,6 +121,7 @@ empty one, as the message box is after a message is sent, it is the model's.
 
 Claude is the one the app is made round, but not the only one it can put a message to.
 Codex and Grok answer as well, each its maker's command-line agent, installed on your
-machine and signed in there. The [settings](settings.md) show which of them the app
-found (Providers) and hold what each is started with. Grok cannot see
+machine and signed in there, once it is switched on: only Claude is on to begin with.
+The [settings](settings.md) show which of them the app found (Providers), switch each on
+or off, and hold what each is started with. Grok cannot see
 [pictures](messages.md#pictures).

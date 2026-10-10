@@ -35,8 +35,8 @@ is told which parts those are, and where on them you clicked), and there is no f
 it to download.
 
 A click with Shift held picks out the one part, and while Shift is held the pointer
-lights up just that part. So does a second click on the same spot, or a click with Cmd
-held (Ctrl, off a Mac). With Shift held it is the second click that goes the other way:
+lights up just that part. So does a double click, or a click with Cmd held (Ctrl, off a
+Mac). With Shift held it is the second click that goes the other way:
 straight after the first, on the same spot, it takes in the whole of the object the part
 belongs to.
 
@@ -53,7 +53,8 @@ with its part and the point clicked, in the model's coordinates.
 With a part picked out, **I** shows it on its own and brings the camera to it, from the
 side the camera is on: the part in the middle of the view, filling it. The flat views
 and the opening view frame the part while it is alone. I again, or Esc, brings the rest
-back and puts the camera where it was.
+back, and takes the camera back to what it was looking at, as near as it was, from
+whichever side it is on by then.
 
 **Space** brings the camera to what is picked out in the same way, one part or several,
 and changes nothing else: the rest stays on show, and Cmd+1 is all of the model again.
@@ -85,9 +86,9 @@ their own, as it does one part.
 
 ## Add to chat
 
-A button at the foot of the view, Add to chat, puts what is picked out on the message
-box, in a row of chips that scrolls sideways, and opens the conversation to go on from
-there. It goes by the object, as picking does. A whole object among what is picked out
+With parts picked out together, by a box or with Shift, a button at the foot of the
+view, Add to chat, puts them on the message box, in a row of chips that scrolls
+sideways, and opens the conversation to go on from there. It goes by the object, as picking does. A whole object among what is picked out
 is one chip, however many parts it is made of, and the button counts those as groups:
 Add 2 groups to chat. It goes to Claude as one thing, with what it is called and which
 parts it is, and what you write is taken as said of it; where you mean only some part of

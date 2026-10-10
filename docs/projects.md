@@ -1,6 +1,6 @@
 # Projects
 
-A project is a folder. Drop one on the window, or use the + beside the project cards to
+A project is a folder. Drop one on the window, or use the + under the project cards to
 open one or to start a new project. STEP files can be dropped and opened the same way:
 see [Starting from CAD files](#starting-from-cad-files).
 
@@ -9,8 +9,8 @@ see [Starting from CAD files](#starting-from-cad-files).
 A new project is given a stand-in name to begin with ("Quiet heron") and a folder to
 match, in `~/Documents/Enclose` unless the settings say elsewhere:
 `2026-10-05-2336-quiet-heron`, which is when it was made and then the name in lower case
-with dashes. Once something has been made in it, the project takes the name of its
-model, and when Claude has finished the folder is renamed to match:
+with dashes. Once something has been made in it and Claude has finished, the project
+takes the name of its model and its folder is renamed to match:
 `2026-10-05-2336-pill-box`. A folder you opened yourself is never renamed.
 
 ## Removing a project
@@ -45,7 +45,7 @@ change.
 | [Clip lamp](../examples/lamp) | A clip lamp on a wall shelf, with its wire |
 | [Counter stool](../examples/stool) | A counter stool, drawn to the sizes it is sold by, [to see beside a person](reference-scenes.md#an-example) |
 
-The examples are not in the app, which would be six times the size for them. Each is
+The examples are not in the app, to keep it small. Each is
 fetched when it is asked for, taken for the example only if it has the size and the
 SHA-256 the app was made to expect, and unpacked. Run from a checkout, the app has the
 examples in [`examples/`](../examples), at the top of the repository, and copies one
@@ -78,7 +78,7 @@ environment in the folder, as it does for a project started from nothing.
 ### Claude looks the model over
 
 While the files are read and the model is made, the middle of the view says how far
-along it is, under the mark turning over. Then Claude looks the model over, while a
+along it is, under the mark, with a bar that fills as it goes. Then Claude looks the model over, while a
 light goes across all of its parts and the camera goes slowly round it, from a little
 further back than a model opens at; when Claude is through, the view comes in to the
 model again.
@@ -89,10 +89,10 @@ the parts, keeping the names the files gave where they are good ones. That is a
 conversation of the project's, begun by the app, and it ends with what Claude made of
 the model and what it was unsure of.
 
-For this one turn Claude has none of Claude Code's own tools: it can name and group,
-which the app writes into `model.py` as a table and builds, and nothing else. It can be
-stopped, and the settings can turn it off (General, Opened files); without Claude Code
-on the machine it does not happen.
+For this one turn Claude has none of Claude Code's own tools: it can look at the view,
+and name and group the parts, which the app writes into `model.py` as a table and
+builds. It can change nothing else. It can be stopped, and the settings can turn it off
+(General, Opened files); with no agent on the machine it waits until there is one.
 
 ## The model manifest
 

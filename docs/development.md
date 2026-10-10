@@ -84,7 +84,7 @@ again after a change, with a Python that has build123d.
 
 ### The examples
 
-The examples are not in the app, which would be six times the size for them. Each is one
+The examples are not in the app, to keep it small. Each is one
 archive (`clock.tar.br`: its folder as a tar archive, squeezed with Brotli, which makes
 20 MB of the four where the folders are 137), kept with a release of the app's
 repository. It is fetched when it is asked for, taken for the example only if it has the
