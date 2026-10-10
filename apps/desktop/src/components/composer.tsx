@@ -378,84 +378,116 @@ function Manner({
 const OFF =
   "shrink-0 cursor-pointer rounded-full p-0.5 text-muted-foreground outline-none hover:text-foreground"
 
+/** A chip on the message box: a part called on from the view, or what was said of one. */
+type Chip = { called: Called } | { note: Note }
+const of = (chip: Chip) => ("called" in chip ? chip.called : chip.note)
+
 /**
  * What is waiting to go with the next message: the parts called on from the view, and
  * what has been said of parts. A chip for each, in one row that scrolls sideways when
  * there are more than fit, so that however many there are the box is no taller for
- * them. A part called on is a chip of its name, and so is a whole object, which is one
- * chip however many parts it is made of. The reference scene the model is set in is a
- * chip too, and with it on the box the message is about the scene. What was said of a
- * part is a chip that says which part and how it begins; pressed, it opens that again
- * beside the part.
+ * them. The last put there comes first, whichever it is, where it is in sight. A part
+ * called on is a chip of its name, and so is a whole object, which is one chip however
+ * many parts it is made of. The reference scene the model is set in is a chip too, and
+ * with it on the box the message is about the scene. What was said of a part is a chip
+ * that says which part and how it begins; pressed, it opens that again beside the part.
  */
 function Waiting({ called, notes }: { called: Called[]; notes: Note[] }) {
   const write = useStore((state) => state.write)
   const dropNote = useStore((state) => state.dropNote)
   const dropCalled = useStore((state) => state.dropCalled)
   const writing = useStore((state) => state.writing)
+  const noted = useStore((state) => state.noted)
+  // (those called on together stay as they were given, and any kept from before chips
+  // had a time come after the rest, as they were)
+  const chips = React.useMemo(
+    () =>
+      [
+        ...called.map((part): Chip => ({ called: part })),
+        ...notes.map((note): Chip => ({ note })),
+      ].sort((a, b) => (of(b).at ?? 0) - (of(a).at ?? 0)),
+    [called, notes]
+  )
+  // the row goes back to its start for a new one, should it have been moved along
+  const row = React.useRef<HTMLDivElement>(null)
+  const first = chips.length > 0 ? of(chips[0]).id : null
+  React.useEffect(() => {
+    row.current?.scrollTo({ left: 0 })
+  }, [first])
   return (
     <InputGroupAddon align="block-start" className="pb-0">
-      <div className="flex min-w-0 [scrollbar-width:none] gap-1.5 overflow-x-auto">
-        {called.map((part) => (
-          <Badge
-            key={part.id}
-            data-called={part.id}
-            variant="secondary"
-            title={
-              part.scene
-                ? "This message is about the reference scene, not the model"
-                : part.parts
-                  ? `The whole of it: ${part.parts.length} parts`
-                  : `@${part.id}`
-            }
-            className="h-6 max-w-44 shrink-0 gap-1 pr-1"
-          >
-            {/* a whole object has the sign the list of parts has, and the scene the
-                sign of its own button */}
-            {part.parts && <BoxesIcon className="shrink-0" />}
-            {part.scene && <ReferenceIcon className="shrink-0" />}
-            <span className="truncate">{part.label}</span>
-            <button
-              type="button"
-              onClick={() => dropCalled(part.id)}
-              aria-label={`Leave ${part.label} out of the message`}
-              className={OFF}
+      <div
+        ref={row}
+        className="flex min-w-0 [scrollbar-width:none] gap-1.5 overflow-x-auto"
+      >
+        {chips.map((chip) => {
+          if ("called" in chip) {
+            const part = chip.called
+            return (
+              <Badge
+                key={part.id}
+                data-called={part.id}
+                variant="secondary"
+                title={
+                  part.scene
+                    ? "This message is about the reference scene, not the model"
+                    : part.parts
+                      ? `The whole of it: ${part.parts.length} parts`
+                      : `@${part.id}`
+                }
+                className="h-6 max-w-44 shrink-0 gap-1 pr-1"
+              >
+                {/* a whole object has the sign the list of parts has, and the scene
+                    the sign of its own button */}
+                {part.parts && <BoxesIcon className="shrink-0" />}
+                {part.scene && <ReferenceIcon className="shrink-0" />}
+                <span className="truncate">{part.label}</span>
+                <button
+                  type="button"
+                  onClick={() => dropCalled(part.id)}
+                  aria-label={`Leave ${part.label} out of the message`}
+                  className={OFF}
+                >
+                  <XIcon className="size-3" />
+                </button>
+              </Badge>
+            )
+          }
+          const { note } = chip
+          return (
+            <Badge
+              key={note.id}
+              data-note={note.id}
+              variant="secondary"
+              className={cn(
+                "h-6 max-w-52 shrink-0 gap-1 pr-1",
+                writing === note.id && "ring-1 ring-foreground/30",
+                // one just made has a light go across it: it is new here
+                noted === note.id && "just-noted"
+              )}
             >
-              <XIcon className="size-3" />
-            </button>
-          </Badge>
-        ))}
-        {notes.map((note) => (
-          <Badge
-            key={note.id}
-            data-note={note.id}
-            variant="secondary"
-            className={cn(
-              "h-6 max-w-52 shrink-0 gap-1 pr-1",
-              writing === note.id && "ring-1 ring-foreground/30"
-            )}
-          >
-            <button
-              type="button"
-              title="Change what was said"
-              onClick={() => write(note.id)}
-              className="flex min-w-0 cursor-pointer items-center gap-1.5 outline-none"
-            >
-              <span className="shrink-0">{goesBy(note.part)}</span>
-              <span className="truncate font-normal text-muted-foreground">
-                {note.text}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => dropNote(note.id)}
-              aria-label={`Take back what was said of ${goesBy(note.part)}`}
-              className={OFF}
-            >
-              <XIcon className="size-3" />
-            </button>
-          </Badge>
-        ))}
+              <button
+                type="button"
+                title="Change what was said"
+                onClick={() => write(note.id)}
+                className="flex min-w-0 cursor-pointer items-center gap-1.5 outline-none"
+              >
+                <span className="shrink-0">{goesBy(note.part)}</span>
+                <span className="truncate font-normal text-muted-foreground">
+                  {note.text}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => dropNote(note.id)}
+                aria-label={`Take back what was said of ${goesBy(note.part)}`}
+                className={OFF}
+              >
+                <XIcon className="size-3" />
+              </button>
+            </Badge>
+          )
+        })}
       </div>
     </InputGroupAddon>
   )
@@ -749,6 +781,14 @@ export function Composer({
     return () => clearTimeout(timer)
   }, [pictureTrouble])
   const picker = React.useRef<HTMLInputElement>(null)
+  // a note just made shimmers on the box for as long as the light takes to go across
+  // it its three times (.just-noted), and is then a chip like the others
+  const noted = useStore((state) => state.noted)
+  React.useEffect(() => {
+    if (!noted) return
+    const timer = setTimeout(() => useStore.setState({ noted: null }), 2400)
+    return () => clearTimeout(timer)
+  }, [noted])
 
   // Parts called on from the view go on the box as chips, for the user to say what of
   // them: the box takes the typing. It may only now be on show, having been asked before.

@@ -216,6 +216,37 @@
   }
 }
 
+/* The chip of something just said of a part: a light goes across the ground of it,
+   quickly, three times, so that it is seen on the message box. The words on it stay as
+   they are. The light starts and ends clear of the chip, and clear of it is where it is
+   left. (How long the three take is how long the chip is this: composer.tsx.) */
+@keyframes glinting {
+  from {
+    background-position: 140% 0;
+  }
+  to {
+    background-position: -40% 0;
+  }
+}
+.just-noted {
+  background-image: linear-gradient(
+    100deg,
+    transparent 30%,
+    color-mix(in oklch, var(--foreground) 22%, transparent) 50%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  background-position: -40% 0;
+  animation: glinting 0.8s ease-in-out 3;
+}
+@media (prefers-reduced-motion: reduce) {
+  .just-noted {
+    animation: none;
+    background-image: none;
+  }
+}
+
 /* A surface that floats over the 3D view and frosts what is behind it. */
 .glass {
   -webkit-backdrop-filter: var(--glass);

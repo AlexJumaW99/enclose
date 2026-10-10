@@ -88,7 +88,7 @@ their own, as it does one part.
 
 With parts picked out together, by a box or with Shift, a button at the foot of the
 view, Add to chat, puts them on the message box, in a row of chips that scrolls
-sideways, and opens the conversation to go on from there. It goes by the object, as picking does. A whole object among what is picked out
+sideways, the last added first, and opens the conversation to go on from there. It goes by the object, as picking does. A whole object among what is picked out
 is one chip, however many parts it is made of, and the button counts those as groups:
 Add 2 groups to chat. It goes to Claude as one thing, with what it is called and which
 parts it is, and what you write is taken as said of it; where you mean only some part of

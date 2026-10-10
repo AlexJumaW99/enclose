@@ -303,6 +303,7 @@ function savedWaiting(): Pick<
               typeof note.text === "string" &&
               typeof note.part?.id === "string" &&
               typeof note.part.label === "string" &&
+              (note.at === undefined || typeof note.at === "number") &&
               (note.part.piece === undefined ||
                 (typeof note.part.piece?.label === "string" &&
                   Array.isArray(note.part.piece.parts)))
@@ -324,7 +325,8 @@ function savedWaiting(): Pick<
               typeof part?.id === "string" &&
               typeof part.label === "string" &&
               (part.parts === undefined || Array.isArray(part.parts)) &&
-              (part.scene === undefined || typeof part.scene === "string")
+              (part.scene === undefined || typeof part.scene === "string") &&
+              (part.at === undefined || typeof part.at === "number")
           ),
         ]
       )
@@ -511,6 +513,11 @@ type State = {
    * the next message, and until then shows on the message box and on the parts.
    */
   notes: Record<string, Note[]>
+  /**
+   * The note just made, by its id: its chip on the message box shimmers for a moment,
+   * so that where it has gone is seen. Null once it has, and when none was made.
+   */
+  noted: string | null
   /** what is written in each project's message box so far */
   drafts: Record<string, string>
   /**
@@ -739,8 +746,11 @@ async function turnBack(projectId: string, way: "undo" | "redo") {
   }
 }
 
-/** Something said of a part, waiting to be sent: the part and point, and the words. */
-export type Note = PartNote & { id: string }
+/**
+ * Something said of a part, waiting to be sent: the part and point, and the words. And
+ * when it was said, which is where its chip goes among the others: the last comes first.
+ */
+export type Note = PartNote & { id: string; at?: number }
 
 /**
  * Something called on from the view for the next message: what it goes by, and is shown
@@ -753,6 +763,8 @@ export type Called = {
   label: string
   parts?: string[]
   scene?: string
+  /** when it was called on, as a note has when it was said */
+  at?: number
 }
 
 /** A part called on by name, and not a whole object or the reference scene. */
@@ -814,6 +826,7 @@ export const useStore = create<State>()((set, get) => ({
   plain: false,
   writing: null,
   ...savedWaiting(),
+  noted: null,
   pictureTrouble: null,
   colours: savedColours(),
   ...savedArranged(),
@@ -1000,18 +1013,23 @@ export const useStore = create<State>()((set, get) => ({
     const said = text.trim()
     if (!activeId || !selection || writing === null) return null
     const before = notes[activeId] ?? []
-    const id =
-      writing === "new" ? `note-${Date.now()}-${before.length}` : writing
+    const at = Date.now()
+    const id = writing === "new" ? `note-${at}-${before.length}` : writing
     const next =
       writing === "new"
         ? said
-          ? [...before, { id, part: selection.part, text: said }]
+          ? [...before, { id, part: selection.part, text: said, at }]
           : before
         : // one left with nothing in it is taken back
           before.flatMap((note) =>
             note.id !== id ? [note] : said ? [{ ...note, text: said }] : []
           )
-    set({ notes: { ...notes, [activeId]: next }, writing: null })
+    set({
+      notes: { ...notes, [activeId]: next },
+      writing: null,
+      // a new one is pointed out on the message box; one changed was there already
+      ...(writing === "new" && said !== "" && { noted: id }),
+    })
     return said ? id : null
   },
 
@@ -1053,10 +1071,14 @@ export const useStore = create<State>()((set, get) => ({
     const kept = before.filter(
       (other) => !fresh.some((part) => part.id === other.id)
     )
+    const at = Date.now()
     set((state) => ({
       called:
         fresh.length > 0
-          ? { ...called, [activeId]: [...kept, ...fresh] }
+          ? {
+              ...called,
+              [activeId]: [...kept, ...fresh.map((part) => ({ ...part, at }))],
+            }
           : called,
       threadOpen: true,
       writeRequests: state.writeRequests + 1,

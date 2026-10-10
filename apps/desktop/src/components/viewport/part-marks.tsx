@@ -53,46 +53,6 @@ const between = (value: number, least: number, most: number) =>
 type Size = { width: number; height: number }
 
 /**
- * The box becoming a chip on the message box: it goes there as it shrinks, quickly, and
- * most of the way at once. `from` is where the box was; the chip is found by its note.
- */
-function fly(from: DOMRect, note: string) {
-  const ghost = document.createElement("div")
-  ghost.className =
-    "pointer-events-none fixed z-50 rounded-2xl border bg-popover shadow-xl"
-  Object.assign(ghost.style, {
-    left: `${from.left}px`,
-    top: `${from.top}px`,
-    width: `${from.width}px`,
-    height: `${from.height}px`,
-    transformOrigin: "top left",
-  })
-  document.body.append(ghost)
-  // the chip is on the message box a moment after the note is made
-  requestAnimationFrame(() =>
-    requestAnimationFrame(() => {
-      const to = document
-        .querySelector(`[data-note="${note}"]`)
-        ?.getBoundingClientRect()
-      if (!to) return ghost.remove()
-      void ghost
-        .animate(
-          [
-            { transform: "none", opacity: 1 },
-            {
-              transform: `translate(${to.left - from.left}px, ${to.top - from.top}px) scale(${to.width / from.width}, ${to.height / from.height})`,
-              opacity: 0.35,
-            },
-          ],
-          // out fast and settling: "expo out"
-          { duration: 420, easing: "cubic-bezier(0.16, 1, 0.3, 1)" }
-        )
-        .finished.finally(() => ghost.remove())
-    })
-  )
-}
-
-/**
  * Where something is said of the part: what should change at the place that was clicked.
  * Enter keeps it for the next message, as a chip on the message box, where more can be
  * gathered from other parts; with Cmd (or Ctrl) held, it and everything waiting are
@@ -101,17 +61,13 @@ function fly(from: DOMRect, note: string) {
 function Writing({ label, note }: { label: string; note: Note | null }) {
   const write = useStore((state) => state.write)
   const [text, setText] = React.useState(note?.text ?? "")
-  const box = React.useRef<HTMLDivElement>(null)
 
   const keep = (now: boolean) => {
-    const from = box.current?.getBoundingClientRect()
     const { keepNote, send, setThreadOpen } = useStore.getState()
-    const id = keepNote(text)
-    if (!id) return
+    if (!keepNote(text)) return
     // where it has gone is on show
     setThreadOpen(true)
     if (now) send()
-    else if (from) fly(from, id)
   }
 
   return (
@@ -120,10 +76,7 @@ function Writing({ label, note }: { label: string; note: Note | null }) {
       className="relative"
       style={{ width: WRITING_WIDTH }}
     >
-      <div
-        ref={box}
-        className="flex w-full flex-col gap-2 rounded-2xl border bg-popover/95 p-3 shadow-xl"
-      >
+      <div className="flex w-full flex-col gap-2 rounded-2xl border bg-popover/95 p-3 shadow-xl">
         {/* which part this is said of: a chip like those on the message box, a little
             lighter, so that it shows on this one */}
         <Badge className="max-w-full self-start bg-foreground/20 text-foreground">
