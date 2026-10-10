@@ -15,7 +15,7 @@ like (Shapr3D, for one), export it, and iterate from there in code with Claude.
   <img src="apps/desktop/src/assets/examples/stool.webp" width="24%" alt="A counter stool" />
 </p>
 
-Early days: it runs from source, on macOS. See [Not there yet](#not-there-yet).
+Early days, and for macOS only. See [Not there yet](#not-there-yet).
 
 ## What it does
 
@@ -36,33 +36,36 @@ Early days: it runs from source, on macOS. See [Not there yet](#not-there-yet).
 Claude is the Claude Code already on your machine. The app has no login of its own and
 stores no credentials.
 
-## Run it
+## Install it
 
-You need Node 22 or newer and, for the conversation,
+Download the latest version from
+[GitHub Releases](https://github.com/enclosedev/enclose/releases/latest): the disk image
+that ends in `arm64` for a Mac with Apple silicon, the one that ends in `x64` for a Mac
+with an Intel chip. Open it and drag Enclose into Applications. It needs macOS 13 or
+newer.
+
+For the conversation you need
 [Claude Code](https://code.claude.com/docs/en/overview) installed and signed in. Models
 are built with Python and [build123d](https://build123d.readthedocs.io); where build123d
 is missing, Claude makes a virtual environment for it in the project's folder.
 
-```
-cd apps/desktop
-npm install
-npm run dev                      # open the app
-npm run dev -- path/to/project   # ...with that folder, or STEP file, opened as a project
-```
-
-`npm run build && npm start` runs the production build instead of the dev loop.
+[Installing Enclose](docs/install.md) says what the first run asks of you, and
+[docs/development.md](docs/development.md) how to run it from source instead.
 
 ## Not there yet
 
-- No installer. It runs from a checkout.
+- It does not update itself. A new version is downloaded, and put where the old one
+  was.
 - Of CAD files it opens only STEP. Meshes (STL, OBJ, 3MF) are not brought in: they could
   be shown, but there is no solid in them for Claude to change.
-- Only tried on macOS.
+- Only for macOS. There is no installer for Windows or Linux, and it has not been
+  tried on either.
 
 ## Documentation
 
 The rest is in [docs/](docs), a page to a subject.
 
+- [Installing](docs/install.md): what it needs, and the first run
 - [Projects](docs/projects.md): starting from nothing, an example or CAD files
 - [The view](docs/view.md): moving around, set views and shading
 - [Picking parts out](docs/selecting.md)

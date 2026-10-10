@@ -132,8 +132,15 @@ let settings: SettingsStore
 let providers: Providers
 /** where the app's own tools answer, for an agent that cannot be handed them */
 const toolServer = new ToolServer()
-/** the top of the repository the app is in, which is two folders up from it (apps/desktop) */
-const TOP = path.join(app.getAppPath(), "../..")
+/**
+ * Where the app's kit is, and its examples if it has them. Run from a checkout, that is
+ * the top of the repository, two folders up from the app (apps/desktop). Made into a
+ * package, the app carries the kit among its resources, as files of their own for Python
+ * and an agent to read (scripts/dist.mjs puts it there), and has no examples beside it.
+ */
+const TOP = app.isPackaged
+  ? process.resourcesPath
+  : path.join(app.getAppPath(), "../..")
 /** where the app keeps the exporter a project copies to write its model */
 const KIT = path.join(TOP, "kit", "enclose.py")
 /** where the examples are when the app is run from its source: at the top, in examples/ */

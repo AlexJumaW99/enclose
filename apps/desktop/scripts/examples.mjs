@@ -6,7 +6,8 @@
 // as a release under a new name (the list says which), since an app already made goes
 // on fetching the ones it was made with:
 //   npm run examples
-//   gh release create <release> release/examples/*.tar.br --title "Examples"
+//   gh release create <release> release/examples/*.tar.br --title "Examples" --latest=false
+// (the repository's latest release is the app's own: the README sends people there)
 // The same files make the same archive, so packing what has not changed changes nothing.
 import { createHash } from "node:crypto"
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"

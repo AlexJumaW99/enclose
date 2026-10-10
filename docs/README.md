@@ -2,6 +2,7 @@
 
 ## Using Enclose
 
+- [Installing](install.md): what it needs, which download is yours, and the first run
 - [Projects](projects.md): what a project is, and starting one from nothing, from an
   example or from CAD files
 - [The view](view.md): moving around, the set views, shading, and how a model is drawn
@@ -21,5 +22,5 @@
 
 ## Working on Enclose
 
-- [Running it, and where things are](development.md)
+- [Running it, where things are, and making a release](development.md)
 - [Contributing](../CONTRIBUTING.md)

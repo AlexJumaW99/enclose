@@ -35,8 +35,8 @@ apps/
     src/       the window: project cards, 3D view and its tools, conversation
     shared/    types and the manifest format, used by both sides, and the list of
                examples
-    scripts/   dev loop, production build, the icon's sizes, the reference scenes,
-               and the examples' archives
+    scripts/   dev loop, production build, the installer, the icon's sizes, the
+               reference scenes, and the examples' archives
     icons/     the app's icon, in the sizes each system asks for
 docs/          how the app works, a page to a subject
 examples/      projects to open and try things on: a table clock, with a tool, a
@@ -51,7 +51,8 @@ spikes/        experiments kept for their measurements
 ```
 
 Run from a checkout, the app finds `kit/` and `examples/` at the top of the repository,
-two folders up from itself.
+two folders up from itself. Installed, it has the kit among its own resources and no
+examples: those it fetches.
 
 ## What is built from what
 
@@ -60,6 +61,7 @@ two folders up from itself.
 | `npm run icons` | The icon's other sizes, from `icons/icon.png` |
 | `npm run scenes` | The app's reference scenes, from [`kit/scenes`](../kit/scenes) |
 | `npm run examples` | The examples' archives, from [`examples/`](../examples) |
+| `npm run dist` | The app to install, a disk image for each kind of Mac, in `release/` |
 
 ### The icon
 
@@ -90,6 +92,50 @@ sizes and sums into the list; the archives then go up as a release under a new n
 list says which), since an app already made goes on fetching the ones it was made with.
 `ENCLOSE_EXAMPLES_URL` has them fetched from somewhere else, a folder of them served on
 your own machine say.
+
+### The installer
+
+`npm run dist` builds the app, makes `Enclose.app` of it with
+[electron-builder](https://www.electron.build), and of that a disk image for Apple
+silicon and one for Intel: `release/Enclose-<version>-arm64.dmg` and `-x64.dmg`. It needs
+a Mac. [`scripts/dist.mjs`](../apps/desktop/scripts/dist.mjs) says what goes in, and two
+things follow from it:
+
+- What the Electron side loads as it runs is a `dependency` in `package.json`, and goes
+  into the app as it is. What the window is made of is bundled by Vite, and is a
+  `devDependency`, React among them. A package the Electron side imports has to be a
+  dependency, or the installed app does not start.
+- The kit goes in as files, beside the app's own archive
+  (`Enclose.app/Contents/Resources/kit`), where Python and an agent can read it.
+
+A Mac opens an app that was downloaded only if it is signed by a developer Apple knows
+and has been notarized, which is Apple looking it over. The script signs with the
+"Developer ID Application" certificate it finds in the keychain, and has the app
+notarized when it is told with what:
+
+```
+APPLE_KEYCHAIN_PROFILE=<profile> npm run dist
+```
+
+The profile is one that `xcrun notarytool store-credentials <profile>` has kept. With
+none, the app is made all the same and runs on the Mac that made it, which is enough to
+try the installed app out.
+
+### A release
+
+1. Give `package.json` the new version, and commit.
+2. `APPLE_KEYCHAIN_PROFILE=<profile> npm run dist`
+3. See that a Mac will take it. `spctl -a -t exec -vv release/mac-arm64/Enclose.app`
+   answers `accepted`, from `Notarized Developer ID`.
+4. Tag the commit and publish the two disk images with it:
+
+   ```
+   git tag v<version> && git push origin v<version>
+   gh release create v<version> release/Enclose-<version>-*.dmg --title "Enclose <version>" --generate-notes
+   ```
+
+The README sends people to the repository's latest release, which has to be the app's:
+the examples' release is made with `--latest=false`.
 
 ## Formats a project is read by
 
