@@ -54,6 +54,8 @@ export default typography({
     small: 14,
     prose: 18,
     text: { min: 16, max: 18 },
+    // what the first page says first, on a phone: the one thing there that is bigger
+    lead: 22,
     title: { min: 28, max: 40 },
     // The app's window, rebuilt on the page: the sizes the app itself is set in.
     'ui-xs': 12,
@@ -70,6 +72,28 @@ export default typography({
       tracking: -0.012,
       weight: 500,
       wrap: 'balance',
+    },
+    // What the first page says first, and under it, quieter, what it goes on to say
+    // (`lede`). On a wide screen they are the size of everything else; on a phone,
+    // where they are the first thing read and there is little else in sight, they
+    // are bigger.
+    hero: {
+      font: 'sans',
+      size: 'text',
+      leading: 1.2,
+      tracking: -0.012,
+      weight: 500,
+      wrap: 'balance',
+      phone: { size: 'lead', leading: 1.2, tracking: -0.02 },
+    },
+    lede: {
+      font: 'sans',
+      size: 'text',
+      leading: 1.3,
+      tracking: -0.012,
+      weight: 400,
+      wrap: 'balance',
+      phone: { size: 'lead', leading: 1.2, tracking: -0.02 },
     },
     body: {
       font: 'sans',

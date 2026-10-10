@@ -38,6 +38,14 @@
   @include style('headline');
 }
 
+@mixin hero {
+  @include style('hero');
+}
+
+@mixin lede {
+  @include style('lede');
+}
+
 @mixin body {
   @include style('body');
 }

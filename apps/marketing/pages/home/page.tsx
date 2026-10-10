@@ -1,7 +1,7 @@
 import { useMotion } from '@modulato/gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import gsapCore from 'gsap'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type CSSProperties } from 'react'
 import { WINDOW } from '../../components/app/data'
 import { Window } from '../../components/app/Window'
 import type { Look } from '../../components/app/look'
@@ -94,7 +94,12 @@ export default function Home({ headline, description }: { headline: string; desc
       <div className="home__tour">
         <div className="home__stage">
           <div className="home__hero">
-            <h1 className="home__headline">{headline}</h1>
+            {/* (a word with a hyphen in it is kept on one line: "open-source") */}
+            <h1 className="home__headline">
+              {headline.split(/(\S+-\S+)/).map((part, index) =>
+                index % 2 ? <span key={index}>{part}</span> : part,
+              )}
+            </h1>
             <p className="home__lede">{description}</p>
             <Download />
           </div>
@@ -109,12 +114,19 @@ export default function Home({ headline, description }: { headline: string; desc
               __html: `(function(w){w&&w.style.setProperty('--fit',w.offsetWidth/${WINDOW.width})})(document.querySelector('.home__window'))`,
             }}
           />
-          {STOPS.map((stop) => (
-            <div key={stop.title} className={`home__caption home__caption--${stop.side}`}>
-              <h2>{stop.title}</h2>
-              <p>{stop.says}</p>
+          {/* On a wide screen each is beside the window, on its own. On a phone they are
+              in one band at the foot of the screen, side by side, and the band is gone
+              along from one to the next. */}
+          <div className="home__captions">
+            <div className="home__trail" style={{ '--count': STOPS.length } as CSSProperties}>
+              {STOPS.map((stop) => (
+                <div key={stop.title} className={`home__caption home__caption--${stop.side}`}>
+                  <h2>{stop.title}</h2>
+                  <p>{stop.says}</p>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
       </div>
       <Footer />

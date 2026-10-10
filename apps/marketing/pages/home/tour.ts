@@ -178,8 +178,28 @@ export function runTour({
       tl.to(cam, { x, y, s, duration }, from)
       tl.to(look, { x: mx, y: my, distance: far, ...more, duration }, from)
     }
+    // On a phone the captions are in one band that stays, and the band is gone along
+    // sideways from each to the next on the way to its stop: see styles.scss.
+    const band = wide < 768 ? one('.home__captions') : null
+    const trail = one('.home__trail')
     const caption = (index: number, name: Stop) => {
       const [arrive, leave] = AT[name]
+      if (band) {
+        if (index === 0)
+          tl.fromTo(
+            band,
+            { autoAlpha: 0, y: 24 },
+            { autoAlpha: 1, y: 0, duration: 3, ease: 'power2.out' },
+            arrive - 3,
+          )
+        else
+          tl.to(
+            trail,
+            { xPercent: (-index * 100) / captions.length, duration: 4, ease: 'power2.inOut' },
+            arrive - 4.6,
+          )
+        return
+      }
       tl.fromTo(
         captions[index],
         { autoAlpha: 0, y: 18 },
@@ -425,6 +445,7 @@ export function runTour({
     )
 
     // ── and the whole window again ────────────────────────────────────────
+    if (band) tl.to(band, { autoAlpha: 0, y: 24, duration: 2.4, ease: 'power2.in' }, drawingsEnd - 0.4)
     tl.to(sheets, { autoAlpha: 0, duration: 1.4 }, drawingsEnd)
     tl.to(button('blueprint'), { '--on': 0, duration: 0.5 }, drawingsEnd + 0.4)
     tuck(others, true, drawingsEnd + 1, 2.4)
