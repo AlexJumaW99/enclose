@@ -1,5 +1,6 @@
-// The app's icon in the sizes each system asks for, made from icons/icon.png. Run it
-// again when the drawing changes. It needs a Mac: sips and iconutil come with one.
+// The app's icon in the sizes each system asks for, made from icons/icon.png, and the
+// picture behind the installer's window, made from installer/background.svg. Run it
+// again when a drawing changes. It needs a Mac: sips and iconutil come with one.
 //   npm run icons
 import { execFileSync } from "node:child_process"
 import {
@@ -68,5 +69,29 @@ sizes.forEach((size, i) => {
   at += pictures[i].length
 })
 writeFileSync(join(icons, "icon.ico"), Buffer.concat([list, ...pictures]))
+
+// The installer: what the disk image's window shows behind the app and the folder it is
+// dragged to, at one pixel to the point and at two (scripts/dist.mjs says what stands
+// where on it). It is a drawing in lines, so each size is drawn afresh and not scaled.
+const installer = resolve(import.meta.dirname, "../installer")
+const behind = join(installer, "background.svg")
+const [, wide, high] = /width="(\d+)" height="(\d+)"/.exec(
+  readFileSync(behind, "utf8")
+)
+for (const [times, name] of [
+  [1, "background.png"],
+  [2, "background@2x.png"],
+])
+  sips(
+    "--setProperty",
+    "format",
+    "png",
+    "--resampleHeightWidth",
+    String(high * times),
+    String(wide * times),
+    behind,
+    "--out",
+    join(installer, name)
+  )
 
 rmSync(work, { recursive: true })

@@ -38,6 +38,7 @@ apps/
     scripts/   dev loop, production build, the installer, the icon's sizes, the
                reference scenes, and the examples' archives
     icons/     the app's icon, in the sizes each system asks for
+    installer/ the picture behind the window the installer opens
 docs/          how the app works, a page to a subject
 examples/      projects to open and try things on: a table clock, with a tool, a
                counter stool, to see beside a person, a clip lamp on a wall shelf,
@@ -58,7 +59,7 @@ examples: those it fetches.
 
 | Command | What it makes |
 |---|---|
-| `npm run icons` | The icon's other sizes, from `icons/icon.png` |
+| `npm run icons` | The icon's other sizes, from `icons/icon.png`, and the picture behind the installer's window |
 | `npm run scenes` | The app's reference scenes, from [`kit/scenes`](../kit/scenes) |
 | `npm run examples` | The examples' archives, from [`examples/`](../examples) |
 | `npm run dist` | The app to install, a disk image for each kind of Mac, in `release/` |
@@ -69,6 +70,11 @@ The icon is drawn once, as [`icons/icon.png`](../apps/desktop/icons/icon.png): 1
 Apple's grid, with the margin a Mac wants round the tile. `npm run icons` makes the rest
 from it: `icon.icns` for macOS, and for Windows and Linux, where an icon fills its
 square, `icon.ico` and `icon-512.png` with the margin cut away.
+
+The same command makes the picture behind the window the
+[installer](#the-installer) opens, from the drawing of it,
+[`installer/background.svg`](../apps/desktop/installer/background.svg): once at a pixel
+to the point and once at two.
 
 ### The reference scenes
 

@@ -77,6 +77,21 @@ const made = await build({
           "Enclose opens the projects and CAD files you have in Downloads.",
       },
     },
+    // The window the disk image opens: the app, and the Applications folder it is
+    // dragged to, with an arrow between them. The arrow is in the picture behind
+    // (installer/background.svg, which `npm run icons` makes pictures of), and the
+    // window is the size of that picture. It is a light one: Finder writes the names
+    // under the icons in black whatever is behind them.
+    dmg: {
+      title: "${productName}",
+      background: "installer/background.png",
+      iconSize: 128,
+      iconTextSize: 13,
+      contents: [
+        { x: 180, y: 166, type: "file" },
+        { x: 480, y: 166, type: "link", path: "/Applications" },
+      ],
+    },
     // (the app does not update itself: there is nowhere to tell it of)
     publish: null,
   },
