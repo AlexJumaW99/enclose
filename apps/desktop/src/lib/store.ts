@@ -913,6 +913,7 @@ export const useStore = create<State>()((set, get) => ({
     const kept =
       patch.section && activeId ? { ...cuts, [activeId]: patch.section } : cuts
     if (kept !== cuts) localStorage.setItem(CUTS_KEY, JSON.stringify(kept))
+    const before = get().entered
     set((state) => {
       const view = { ...state.view, ...patch }
       return {
@@ -933,6 +934,9 @@ export const useStore = create<State>()((set, get) => ({
           }),
       }
     })
+    // what the view has just been put into is counted, where the app counts its use
+    for (const name of get().entered)
+      if (!before.includes(name)) window.cad.analytics.used(name)
   },
 
   cutOpen(fresh) {

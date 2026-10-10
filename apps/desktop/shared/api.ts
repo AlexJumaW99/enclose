@@ -449,7 +449,27 @@ export type Settings = {
   projectsFolder: string
   /** whether Claude looks over the model of CAD files as they are opened */
   lookOver: boolean
+  /**
+   * whether the app sends a count of how it is used: which of its features, and nothing
+   * of a project or a message (electron/analytics.ts)
+   */
+  analytics: boolean
 }
+
+/**
+ * What the window tells the app was put to use, for that count: the things the view can
+ * be put into. The rest of what is counted happens in the app's own process.
+ */
+export const FEATURES = [
+  "section",
+  "explode",
+  "only",
+  "hidden",
+  "blueprint",
+  "reference",
+  "tools",
+] as const
+export type Feature = (typeof FEATURES)[number]
 
 /**
  * Where the app is with a newer version of itself. There is none that it knows of; or
@@ -656,6 +676,12 @@ export type CadApi = {
     projectsFolderSize(): Promise<number>
     /** whether Claude is to look over files as they are opened; resolves likewise */
     setLookOver(on: boolean): Promise<Settings>
+    /** whether the app is to send a count of how it is used; resolves likewise */
+    setAnalytics(on: boolean): Promise<Settings>
+  }
+  analytics: {
+    /** say that the view was put into one of these, for the app's count of its use */
+    used(feature: Feature): void
   }
   update: {
     get(): Promise<Update>
@@ -716,6 +742,8 @@ export const CHANNEL = {
   settingsRevealProjectsFolder: "settings:reveal-projects-folder",
   settingsProjectsFolderSize: "settings:projects-folder-size",
   settingsSetLookOver: "settings:set-look-over",
+  settingsSetAnalytics: "settings:set-analytics",
+  analyticsUsed: "analytics:used",
   updateGet: "update:get",
   updateDownload: "update:download",
   updateRestart: "update:restart",

@@ -75,6 +75,7 @@ describe("Providers", () => {
     const settings = new SettingsStore(path.join(dir, "settings.json"), {
       projectsFolder: dir,
       lookOver: true,
+      analytics: true,
     })
     settings.setProvider("grok", {
       enabled: true,

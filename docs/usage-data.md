@@ -1,0 +1,45 @@
+# Usage data
+
+Enclose counts how it is used, so that what is worked on next is what people use. The
+installed app sends that count to [PostHog](https://posthog.com). Run from a checkout,
+it sends nothing.
+
+The app needs no account, and what it sends is tied to none. It goes under a name made
+up for your installation, a random one, the first time the app is run.
+
+## What is sent
+
+Each thing counted is an event: its name, and a few words and numbers that say which.
+
+| Event | What goes with it |
+|---|---|
+| `app opened` | |
+| `project added` | Whether it was new, an example, CAD files or a folder; which example; how many CAD files |
+| `project removed` | |
+| `message sent` | The agent, its model, the effort and the permissions; whether it began a conversation; how many notes on parts, parts called on by name and pictures went with it; whether it was about a reference scene |
+| `model looked over` | The agent, its model, the effort and the permissions |
+| `change turned back` | Whether it was undone or redone |
+| `model saved` | Whether as CAD files or as drawings, and how many |
+| `feature used` | Which of these the view was put into: a section, the exploded view, parts shown alone, parts hidden, the blueprint, a reference scene, or a project's own tools. Each is counted once for a run of the app |
+| `provider switched` | Which agent, and whether on or off |
+| `update fetched` | The version |
+
+With every event go the app's version, your system (macOS, its version, and the kind of
+processor), and the name made up for your installation. PostHog sees the address an
+event comes from, as any server does, and works out roughly where that is: a country and
+a city.
+
+## What is not
+
+Nothing of a project: not its name, its files, or where it is kept. Nothing said in a
+message or in an answer to one. Nothing of what a part, a group or a conversation is
+called. A model you wrote in yourself is counted as `custom`, and not by its name.
+
+## Switching it off
+
+Settings, General, Usage data. Switched off, nothing more is counted, and what was
+waiting to be sent is not sent.
+
+The name made up for your installation is in `analytics-id`, in
+`~/Library/Application Support/Enclose`. Delete it, and the app makes up another the
+next time it has something to send.

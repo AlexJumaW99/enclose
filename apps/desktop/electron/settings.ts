@@ -104,7 +104,7 @@ export class SettingsStore {
 
   get(): Settings {
     const folder = this.saved.projectsFolder
-    const lookOver = this.saved.lookOver
+    const { lookOver, analytics } = this.saved
     return {
       projectsFolder:
         typeof folder === "string" && folder
@@ -112,6 +112,8 @@ export class SettingsStore {
           : this.defaults.projectsFolder,
       lookOver:
         typeof lookOver === "boolean" ? lookOver : this.defaults.lookOver,
+      analytics:
+        typeof analytics === "boolean" ? analytics : this.defaults.analytics,
     }
   }
 

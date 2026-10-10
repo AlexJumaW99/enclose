@@ -15,7 +15,11 @@ beforeEach(() => {
 afterEach(() => {
   fs.rmSync(dir, { recursive: true, force: true })
 })
-const DEFAULTS = { projectsFolder: "/projects", lookOver: true }
+const DEFAULTS = {
+  projectsFolder: "/projects",
+  lookOver: true,
+  analytics: true,
+}
 
 describe("providerSettings", () => {
   it("starts with Claude Code on and the others off", () => {
@@ -62,6 +66,7 @@ describe("SettingsStore", () => {
     expect(again.get()).toEqual({
       projectsFolder: "/projects",
       lookOver: false,
+      analytics: true,
     })
     expect(again.provider("grok")).toEqual({
       ...providerDefaults("grok"),
@@ -70,6 +75,11 @@ describe("SettingsStore", () => {
       hidden: ["grok-4.5"],
     })
     expect(again.provider("claude")).toEqual(providerDefaults("claude"))
+  })
+
+  it("keeps the count of how the app is used switched off", () => {
+    new SettingsStore(file, DEFAULTS).set({ analytics: false })
+    expect(new SettingsStore(file, DEFAULTS).get().analytics).toBe(false)
   })
 
   it("reads a file from before there were agents to choose about", () => {

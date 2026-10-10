@@ -19,6 +19,8 @@
 - [Screws](screws.md)
 - [Keyboard shortcuts](shortcuts.md)
 - [Settings](settings.md)
+- [Usage data](usage-data.md): what the app counts of how it is used, and switching
+  that off
 
 ## Working on Enclose
 

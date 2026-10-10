@@ -180,6 +180,23 @@ ENCLOSE_UPDATES_URL=http://127.0.0.1:8123/ "/Applications/Enclose (Alpha).app/Co
 [`electron/update.ts`](../apps/desktop/electron/update.ts) keeps where an update is, for
 the window to show.
 
+## Usage data
+
+An installed app counts how it is used and sends that to PostHog:
+[usage-data.md](usage-data.md) tells the people who use it what is sent. Run from a
+checkout it counts nothing, unless it is told which PostHog project to send to, which is
+how a change to this is tried out:
+
+```
+ENCLOSE_ANALYTICS_KEY=<project key> npm run dev
+```
+
+[`electron/analytics.ts`](../apps/desktop/electron/analytics.ts) has the project an
+installed app sends to, and does the sending. What is counted is recorded in
+[`electron/main.ts`](../apps/desktop/electron/main.ts), each thing where it happens. An
+event says nothing of a project or a message, and one that is added is added to
+usage-data.md with it.
+
 ## Formats a project is read by
 
 - The model manifest:

@@ -119,6 +119,10 @@ const api: CadApi = {
     projectsFolderSize: () =>
       ipcRenderer.invoke(CHANNEL.settingsProjectsFolderSize),
     setLookOver: (on) => ipcRenderer.invoke(CHANNEL.settingsSetLookOver, on),
+    setAnalytics: (on) => ipcRenderer.invoke(CHANNEL.settingsSetAnalytics, on),
+  },
+  analytics: {
+    used: (feature) => ipcRenderer.send(CHANNEL.analyticsUsed, feature),
   },
   update: {
     get: () => ipcRenderer.invoke(CHANNEL.updateGet),

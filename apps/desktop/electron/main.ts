@@ -18,6 +18,7 @@ import {
   ACCESSES,
   CHANNEL,
   EFFORTS,
+  FEATURES,
   MODEL_SCHEME,
   PICTURE_HOST,
   OWN_SCENE,
@@ -44,6 +45,7 @@ import {
 } from "../shared/api"
 import { archiveOf, EXAMPLES, EXAMPLES_URL } from "../shared/examples"
 import { PICTURE_TYPES } from "../shared/pictures"
+import { Analytics, POSTHOG } from "./analytics"
 import { unpack, type Filed } from "./archive"
 import { Changes } from "./changes"
 import { followRename, listCommands, lookAtClaude } from "./claude"
@@ -94,6 +96,8 @@ const ICONS = path.join(HERE, "../icons")
 //   ENCLOSE_UPDATES_URL=<url>  look there for the app's newer versions, where what `npm
 //                            run dist` wrote to release/ is served, and not among its
 //                            releases (the packaged app only: no other looks for any)
+//   ENCLOSE_ANALYTICS_KEY=<key>  send the count of how the app is used to that PostHog
+//                            project: run from a checkout it is sent nowhere otherwise
 const flag = (name: string) =>
   process.argv
     .find((a) => a.startsWith(`--${name}=`))
@@ -101,6 +105,13 @@ const flag = (name: string) =>
 const CAPTURE = flag("capture")
 const EXAMPLES_FROM = process.env.ENCLOSE_EXAMPLES_URL || null
 const UPDATES_FROM = process.env.ENCLOSE_UPDATES_URL || null
+const ANALYTICS_KEY = process.env.ENCLOSE_ANALYTICS_KEY || null
+/** what the systems the app runs on are called, where the count of its use says which */
+const SYSTEMS: Partial<Record<NodeJS.Platform, string>> = {
+  darwin: "macOS",
+  win32: "Windows",
+  linux: "Linux",
+}
 
 // The package's name for the app says how far along it is ("Enclose (Alpha)"), and that
 // is what a Mac shows the app as. What the app keeps is filed under its name alone, as it
@@ -149,6 +160,8 @@ let providers: Providers
 const toolServer = new ToolServer()
 /** the app's newer versions: none are looked for when it is run from a checkout */
 let updates: Updates | null = null
+/** the count of how the app is used: none is kept when it is run from a checkout */
+let analytics: Analytics | null = null
 /**
  * Where the app's kit is, and its examples if it has them. Run from a checkout, that is
  * the top of the repository, two folders up from the app (apps/desktop). Made into a
@@ -245,6 +258,7 @@ async function turnBack(id: string, way: "undo" | "redo"): Promise<Undone> {
   projects.refresh(id)
   if (!change.files.some((file) => file.path === manifest)) projects.changed(id)
   broadcast()
+  analytics?.record("change turned back", { way })
   return { ok: true, what: change.what }
 }
 const send = (channel: string, ...args: unknown[]) => {
@@ -423,10 +437,18 @@ function open(paths: string[]): { id: string | null; refused: string[] } {
     (dir) => projects.knows(dir)
   )
   let id: string | null = null
-  for (const dir of opened.folders) id = projects.add(dir)
+  for (const dir of opened.folders) {
+    if (!projects.knows(dir))
+      analytics?.record("project added", { from: "folder" })
+    id = projects.add(dir)
+  }
   for (const bundle of opened.bundles) {
     const { projectsFolder, lookOver } = settings.get()
     const { dir, written } = bringIn(bundle, projectsFolder, KIT)
+    analytics?.record("project added", {
+      from: "files",
+      files: bundle.files.length,
+    })
     id = projects.add(dir, {
       name: bundle.name,
       reading: true,
@@ -571,7 +593,9 @@ function lookOver(id: string, seen: Seen, manner: Manner): string | null {
       broadcast()
       return `Done: ${arranged.parts.length} parts in ${arranged.groups.length} groups (${arranged.groups.map((group) => group.label).join(", ")}). The view shows the model so.`
     }
-    return threads.lookOver(id, seen, written.files, manner, arranging)
+    const into = threads.lookOver(id, seen, written.files, manner, arranging)
+    if (into) analytics?.record("model looked over", mannerSaid(manner))
+    return into
   } catch (error) {
     // a manifest that cannot be read: there is nothing to go by
     console.error("[look over]", error)
@@ -605,6 +629,23 @@ const mannerFrom = (manner: Partial<Manner> | null): Manner => ({
   effort: EFFORTS.find((effort) => effort === manner?.effort) ?? null,
   // what cannot be made out is not taken for leave to do anything
   access: ACCESSES.find((access) => access === manner?.access) ?? "edits",
+})
+
+/**
+ * How a message is to be answered, as the app's count of its use has it. A model the
+ * user wrote in themselves is called whatever they called it, which is theirs: it is
+ * counted as one of those, and not by name.
+ */
+const mannerSaid = ({ provider, model, effort, access }: Manner) => ({
+  provider,
+  model:
+    model === null
+      ? "default"
+      : settings.provider(provider).custom.includes(model)
+        ? "custom"
+        : model,
+  effort: effort ?? "default",
+  access,
 })
 
 /** The same, for the window: it is told when nothing came of what it gave. */
@@ -701,6 +742,7 @@ function wire() {
   ipcMain.handle(CHANNEL.projectsCreate, () => {
     const made = newFolder()
     const id = projects.add(made.dir, { name: made.name, standIn: true })
+    analytics?.record("project added", { from: "new" })
     return list().find((p) => p.id === id) ?? null
   })
   ipcMain.handle(CHANNEL.projectsExample, async (_, wanted: unknown) => {
@@ -727,6 +769,10 @@ function wire() {
       const { projectsFolder } = settings.get()
       const dir = startFrom(from, example.name, projectsFolder, KIT)
       id = projects.add(dir, { name: example.name })
+      analytics?.record("project added", {
+        from: "example",
+        example: example.id,
+      })
       // an example that comes without its model built has it made now
       if (!projects.get(id)?.manifest) makeModel(id)
     } catch (error) {
@@ -773,6 +819,7 @@ function wire() {
     builds.get(project.id)?.()
     builds.delete(project.id)
     projects.remove(project.id)
+    analytics?.record("project removed")
   })
   ipcMain.handle(CHANNEL.projectsReveal, (_, id: string) => {
     const project = projects.get(id)
@@ -802,6 +849,7 @@ function wire() {
       })
       if (picked.canceled || !picked.filePath) return false
       await fs.promises.copyFile(source, picked.filePath)
+      analytics?.record("model saved", { as: "files", files: 1 })
       return true
     }
   )
@@ -877,6 +925,7 @@ function wire() {
       const into = makeFolder(picked.filePaths[0], called)
       for (const { source, name } of wanted)
         await fs.promises.copyFile(source, path.join(into, name))
+      analytics?.record("model saved", { as: "files", files: wanted.length })
       return true
     }
   )
@@ -893,6 +942,7 @@ function wire() {
       })
       if (picked.canceled || !picked.filePath) return false
       await fs.promises.writeFile(picked.filePath, svg, "utf8")
+      analytics?.record("model saved", { as: "drawings", files: 1 })
       return true
     }
   )
@@ -924,6 +974,10 @@ function wire() {
       const into = makeFolder(picked.filePaths[0], called)
       for (const { name, svg } of wanted)
         await fs.promises.writeFile(path.join(into, name), svg, "utf8")
+      analytics?.record("model saved", {
+        as: "drawings",
+        files: wanted.length,
+      })
       return true
     }
   )
@@ -949,25 +1003,42 @@ function wire() {
       text: string,
       notes: PartNote[] | null,
       objects: ObjectRef[] | null,
-      manner: Partial<Manner> | null,
+      given: Partial<Manner> | null,
       reference: unknown,
       attached: unknown
     ) => {
+      const manner = mannerFrom(given)
+      const noted = Array.isArray(notes)
+        ? notes.filter((note) => note?.part?.id)
+        : []
+      const called = objectsFrom(objects)
+      const about = referencedBy(String(id), reference)
+      const shown = pictures.read(String(id), attached)
       // answers at once, with the conversation it went into: the turn runs for as long
       // as it runs, and reports through thread items
       const into = threads.send(
         String(id),
         conversationId === null ? null : String(conversationId),
         String(text),
-        Array.isArray(notes) ? notes.filter((note) => note?.part?.id) : [],
-        objectsFrom(objects),
-        mannerFrom(manner),
-        referencedBy(String(id), reference),
-        pictures.read(String(id), attached)
+        noted,
+        called,
+        manner,
+        about,
+        shown
       )
       // the user has started on the project themselves: its model is theirs to have
       // put in order, by asking
       if (into) projects.lookedOver(String(id))
+      // (how it was put, and how much went with it: nothing of what it says)
+      if (into)
+        analytics?.record("message sent", {
+          ...mannerSaid(manner),
+          fresh: conversationId === null,
+          notes: noted.length,
+          objects: called.length,
+          pictures: shown.length,
+          reference: about !== null,
+        })
       return into
     }
   )
@@ -1019,6 +1090,9 @@ function wire() {
     // answers at once, with what was chosen: what comes of looking at the agent again,
     // where that is called for, the window hears of as it is found out
     if (which) void providers.change(which, patch)
+    const on = (patch as { enabled?: unknown } | null)?.enabled
+    if (which && typeof on === "boolean")
+      analytics?.record("provider switched", { provider: which, on })
     return providers.list()
   })
   ipcMain.handle(CHANNEL.providersCheck, async () => {
@@ -1067,12 +1141,28 @@ function wire() {
   ipcMain.handle(CHANNEL.settingsSetLookOver, (_, on: unknown): Settings =>
     settings.set({ lookOver: on === true })
   )
+  ipcMain.handle(CHANNEL.settingsSetAnalytics, (_, on: unknown): Settings => {
+    const next = settings.set({ analytics: on === true })
+    // switched off, what was waiting to be sent is not
+    if (!next.analytics) analytics?.forget()
+    return next
+  })
+  // (only what is on the list is counted: the window cannot have anything else sent)
+  ipcMain.on(CHANNEL.analyticsUsed, (_, feature: unknown) => {
+    const which = FEATURES.find((one) => one === feature)
+    if (which) analytics?.used(which)
+  })
 
   ipcMain.handle(
     CHANNEL.updateGet,
     (): Update => updates?.get() ?? { state: "none" }
   )
-  ipcMain.handle(CHANNEL.updateDownload, () => updates?.download())
+  ipcMain.handle(CHANNEL.updateDownload, () => {
+    const found = updates?.get()
+    if (found?.state === "available")
+      analytics?.record("update fetched", { to: found.version })
+    updates?.download()
+  })
   ipcMain.handle(CHANNEL.updateRestart, async () => {
     // Starting again stops whatever is under way, an agent in the middle of a turn
     // with it: that is asked about first.
@@ -1146,6 +1236,7 @@ if (!app.requestSingleInstanceLock()) {
           ? path.join(ELSEWHERE, "Projects")
           : path.join(app.getPath("documents"), "Enclose"),
         lookOver: true,
+        analytics: true,
       },
       vault
     )
@@ -1182,6 +1273,33 @@ if (!app.requestSingleInstanceLock()) {
       },
     })
     wire()
+
+    // Run from a checkout, the app is being worked on and not used, and nothing of that
+    // is counted: unless it is told where to send it, which is how this is tried out.
+    const key = ANALYTICS_KEY ?? (app.isPackaged ? POSTHOG.key : "")
+    if (key && !CAPTURE) {
+      analytics = new Analytics({
+        key,
+        host: POSTHOG.host,
+        file: path.join(data, "analytics-id"),
+        allowed: () => settings.get().analytics,
+        about: {
+          app_version: app.getVersion(),
+          os: SYSTEMS[process.platform] ?? process.platform,
+          os_version: process.getSystemVersion(),
+          arch: process.arch,
+          packaged: app.isPackaged,
+        },
+        post: async (url, body, signal) =>
+          net.fetch(url, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body,
+            signal,
+          }),
+      })
+      analytics.record("app opened")
+    }
 
     // Run from a checkout, the app is whatever was last built there. It is the app made
     // into a package that has newer versions of itself to look for.
@@ -1236,5 +1354,6 @@ if (!app.requestSingleInstanceLock()) {
     toolServer.close()
     projects?.close()
     updates?.close()
+    analytics?.close()
   })
 }

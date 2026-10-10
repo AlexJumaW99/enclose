@@ -269,6 +269,33 @@ function General() {
           />
         </Row>
       </Group>
+      <Group title="Privacy">
+        <Row
+          title="Usage data"
+          detail={
+            <>
+              Sends which features you use, and nothing from your projects or
+              messages.{" "}
+              <a
+                href="https://github.com/enclosedev/enclose/blob/main/docs/usage-data.md"
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-4"
+              >
+                What is sent
+              </a>
+            </>
+          }
+        >
+          <Switch
+            aria-label="Send usage data"
+            checked={settings?.analytics !== false}
+            onCheckedChange={(on) =>
+              void window.cad.settings.setAnalytics(on).then(setSettings)
+            }
+          />
+        </Row>
+      </Group>
     </>
   )
 }
