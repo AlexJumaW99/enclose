@@ -76,6 +76,7 @@ describe("Providers", () => {
       projectsFolder: dir,
       lookOver: true,
       analytics: true,
+      versions: true,
     })
     settings.setProvider("grok", {
       enabled: true,

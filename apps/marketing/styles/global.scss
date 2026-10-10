@@ -23,6 +23,158 @@ body {
   min-height: 100dvh;
 }
 
+a { color: inherit; }
+
 // Lenis (per-page smooth scroll) base styles.
 html.lenis, html.lenis body { height: auto; }
 .lenis.lenis-smooth { scroll-behavior: auto !important; }
+
+// The header: the mark and the way to the source. It is drawn in the
+// difference from whatever is under it, so it is dark on the page and light
+// over the app's window as that goes by beneath.
+.header {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 10;
+  height: 0;
+  color: #fff;
+  mix-blend-mode: difference;
+  pointer-events: none;
+
+  a { pointer-events: auto; }
+
+  &__mark {
+    // Where the mark rests, and how far from there it starts on the first
+    // page: in the middle, over the heading, and bigger. `--fly` is 1 there
+    // and 0 at rest, and the page's scroll takes it from one to the other.
+    --rest: 44px;
+    --fly: 0;
+    --lift: var(--mark-lift, 96px);
+    position: absolute;
+    top: 14px;
+    left: 20px;
+    display: block;
+    width: var(--rest);
+    height: var(--rest);
+    transform:
+      translate(
+        calc(var(--fly) * (50vw - 20px - var(--rest) / 2)),
+        calc(var(--fly) * (var(--lift) - 14px - var(--rest) / 2))
+      )
+      scale(calc(1 + var(--fly) * 0.45));
+
+    svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+  }
+
+  // Before the page's script has run, the first page already has the mark
+  // where it starts.
+  body:has(.home) &__mark { --fly: 1; }
+
+  &__source {
+    @include type.small;
+    position: absolute;
+    top: 24px;
+    right: 24px;
+    font-weight: 500;
+    text-decoration: none;
+
+    &:hover { text-decoration: underline; }
+  }
+
+  @media (max-width: 767px) {
+    &__mark { top: 10px; left: 12px; --rest: 40px; }
+    &__source { top: 20px; right: 16px; }
+  }
+}
+
+// The foot of every page.
+.footer {
+  @include type.small;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  justify-content: space-between;
+  padding: 24px;
+  color: var(--muted);
+  background: var(--bg);
+
+  p { margin: 0; }
+
+  a {
+    text-decoration: none;
+    &:hover { color: var(--fg); }
+  }
+
+  &__links {
+    display: flex;
+    gap: 20px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  @media (max-width: 767px) {
+    padding: 20px 16px;
+  }
+}
+
+// A page of terms: long text in one column, set to be read.
+.legal {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+
+  &__text {
+    @include type.prose;
+    flex: 1;
+    width: 100%;
+    max-width: 696px;
+    margin: 0 auto;
+    padding: 144px 24px 96px;
+
+    h1 {
+      @include type.title;
+      margin: 0;
+    }
+
+    h2 {
+      @include type.prose;
+      margin: 40px 0 0;
+      font-weight: 600;
+    }
+
+    p,
+    ul {
+      margin: 12px 0 0;
+    }
+
+    ul { padding-left: 20px; }
+    li + li { margin-top: 4px; }
+
+    a {
+      text-decoration: underline;
+      text-decoration-color: var(--rule);
+      text-underline-offset: 3px;
+      &:hover { text-decoration-color: currentColor; }
+    }
+
+    code {
+      padding: 1px 5px;
+      border-radius: 5px;
+      background: color-mix(in oklab, var(--fg) 6%, transparent);
+      font-size: 0.9em;
+    }
+  }
+
+  &__updated { color: var(--muted); }
+
+  @media (max-width: 767px) {
+    &__text { padding: 112px 20px 72px; }
+  }
+}

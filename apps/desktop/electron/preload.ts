@@ -60,6 +60,11 @@ const api: CadApi = {
     undo: (projectId) => ipcRenderer.invoke(CHANNEL.changesUndo, projectId),
     redo: (projectId) => ipcRenderer.invoke(CHANNEL.changesRedo, projectId),
   },
+  versions: {
+    show: (projectId, conversationId) =>
+      ipcRenderer.send(CHANNEL.versionsShow, projectId, conversationId),
+    onTurned: (listener) => on(CHANNEL.versionsTurned, listener),
+  },
   thread: {
     items: (projectId, conversationId) =>
       ipcRenderer.invoke(CHANNEL.threadItems, projectId, conversationId),
@@ -120,6 +125,7 @@ const api: CadApi = {
       ipcRenderer.invoke(CHANNEL.settingsProjectsFolderSize),
     setLookOver: (on) => ipcRenderer.invoke(CHANNEL.settingsSetLookOver, on),
     setAnalytics: (on) => ipcRenderer.invoke(CHANNEL.settingsSetAnalytics, on),
+    setVersions: (on) => ipcRenderer.invoke(CHANNEL.settingsSetVersions, on),
   },
   analytics: {
     used: (feature) => ipcRenderer.send(CHANNEL.analyticsUsed, feature),

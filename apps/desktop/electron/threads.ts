@@ -128,6 +128,11 @@ export type ThreadsDeps = {
   projects: Projects
   /** what each turn does to a project's files is kept there, to be taken back */
   changes: Changes
+  /**
+   * Have a project's folder be a conversation's, before a turn of it is begun there
+   * (see versions.ts). Resolves to whether the folder is that conversation's alone.
+   */
+  turnTo: (projectId: string, conversationId: string) => Promise<boolean>
   /** what to start an agent with: null if it is switched off, or is not installed */
   launch: (provider: ProviderId) => Launch | null
   /** serves the app's own tools to an agent that cannot be handed them in-process */
@@ -1295,6 +1300,13 @@ export class Threads {
   ) {
     const { conversation, abort, finish } = run
     const { provider } = conversation
+    // The turn is had in the folder as this conversation has it: where it was left for
+    // another, it is put as this one left it first. (Its model may be somewhere else
+    // then, which the agent is to be told.)
+    const own = await this.deps
+      .turnTo(projectId, conversation.id)
+      .catch(() => false)
+    project = this.deps.projects.get(projectId) ?? project
     const told = guide(
       provider,
       project.path,
@@ -1435,10 +1447,12 @@ export class Threads {
       // (Not of a project that was taken off the list meanwhile: nothing of it is kept.)
       if (pending && this.books.get(projectId) === book)
         await this.deps.changes
-          .after(pending, project.path, {
-            conversationId: conversation.id,
-            what: run.what,
-          })
+          .after(
+            pending,
+            project.path,
+            { conversationId: conversation.id, what: run.what },
+            own ? conversation.id : undefined
+          )
           .catch(() => this.deps.changes.discard(pending))
       else if (pending) this.deps.changes.discard(pending)
       // the agent may have created, moved or rebuilt the model

@@ -63,6 +63,12 @@ export type Undone =
   | { ok: true; what: string }
   | { ok: false; why: "nothing" | "busy" | "changed"; files: string[] }
 
+/**
+ * A project's folder became another of its conversations': whose it was, whose it is,
+ * and whether its files were put as that one had left them (see electron/versions.ts).
+ */
+export type Turned = { from: string | null; to: string; restored: boolean }
+
 /** A folder on disk, and the conversations about it. */
 export type Project = {
   id: string
@@ -454,6 +460,12 @@ export type Settings = {
    * of a project or a message (electron/analytics.ts)
    */
   analytics: boolean
+  /**
+   * whether each conversation has the project its own way: the folder put as a
+   * conversation left it when that one is turned to (electron/versions.ts). Without,
+   * a project is the one version of it, whichever conversation is had about it.
+   */
+  versions: boolean
 }
 
 /**
@@ -495,6 +507,15 @@ export type CadApi = {
     undo(projectId: string): Promise<Undone>
     /** Put back what was last taken back. */
     redo(projectId: string): Promise<Undone>
+  }
+  versions: {
+    /**
+     * Say which of a project's conversations is shown: its folder is put as that one
+     * has it, once nothing is at work there.
+     */
+    show(projectId: string, conversationId: string): void
+    /** A project's folder became another conversation's. */
+    onTurned(listener: (projectId: string, turned: Turned) => void): () => void
   }
   projects: {
     list(): Promise<Project[]>
@@ -678,6 +699,8 @@ export type CadApi = {
     setLookOver(on: boolean): Promise<Settings>
     /** whether the app is to send a count of how it is used; resolves likewise */
     setAnalytics(on: boolean): Promise<Settings>
+    /** whether each conversation is to have the project its own way; resolves likewise */
+    setVersions(on: boolean): Promise<Settings>
   }
   analytics: {
     /** say that the view was put into one of these, for the app's count of its use */
@@ -732,6 +755,8 @@ export const CHANNEL = {
   threadItem: "thread:item",
   changesUndo: "changes:undo",
   changesRedo: "changes:redo",
+  versionsShow: "versions:show",
+  versionsTurned: "versions:turned",
   providersList: "providers:list",
   providersChange: "providers:change",
   providersCheck: "providers:check",
@@ -743,6 +768,7 @@ export const CHANNEL = {
   settingsProjectsFolderSize: "settings:projects-folder-size",
   settingsSetLookOver: "settings:set-look-over",
   settingsSetAnalytics: "settings:set-analytics",
+  settingsSetVersions: "settings:set-versions",
   analyticsUsed: "analytics:used",
   updateGet: "update:get",
   updateDownload: "update:download",

@@ -25,6 +25,7 @@
     "app.tsx",
     "intro.ts",
     "tokens",
+    "components",
     "shell",
     "pages",
     "content",

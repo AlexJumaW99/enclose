@@ -26,4 +26,19 @@ export default colors({
   bg: '#ffffff',
   fg: '#0a0a0a',
   muted: '#737373',
+  rule: '#e5e5e5',
+  // The app's window, rebuilt on the page, in the app's dark theme.
+  'app-view': '#171717',
+  'app-thread': '#0a0a0a',
+  'app-raised': '#262626',
+  'app-fg': '#fafafa',
+  'app-muted': '#a1a1a1',
+  'app-primary': '#e5e5e5',
+  'app-attention': '#f0b64a',
+  'app-paper': '#f5f6ec',
+  // The model's three axes. What a project's own tools are drawn in is the
+  // blue of Z.
+  'axis-x': '#ff0033',
+  'axis-y': '#74d908',
+  'axis-z': '#0f73ff',
 })

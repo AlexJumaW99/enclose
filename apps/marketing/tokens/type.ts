@@ -50,58 +50,67 @@ export default typography({
   // 390 and 90px at 1440. Two numbers rather than a `clamp()` string because
   // numbers are what Tweak can put a slider on.
   scale: {
-    xs: 13,
-    sm: 15,
-    base: 18,
-    lg: 24,
-    xl: 34,
-    '2xl': 48,
-    '3xl': { min: 48, max: 72 },
+    // The page: one size for what is said, and a smaller one beside it.
+    small: 13,
+    prose: 16,
+    text: { min: 17, max: 20 },
+    title: { min: 28, max: 40 },
+    // The app's window, rebuilt on the page: the sizes the app itself is set in.
+    'ui-xs': 12,
+    'ui-sm': 14,
+    'ui-base': 16,
   },
 
   styles: {
-    // A style names a font and a size from the catalogs above. A one-off can
-    // be written inline instead — `size: { min: 32, max: 56 }`, or raw CSS if
-    // it is genuinely something else — without inventing a scale step for it.
+    // Everything the page says is one size: the heading is heavier, not bigger.
     headline: {
       font: 'sans',
-      size: '3xl',
-      leading: 1,
-      tracking: -0.03,
-      weight: 600,
+      size: 'text',
+      leading: 1.2,
+      tracking: -0.012,
+      weight: 500,
       wrap: 'balance',
-      // Breakpoint overrides, named exactly as in modulato.config.ts — the
-      // same spelling a motion.ts uses. Emitted as a media query, because CSS
-      // is where type is read and so CSS is where the width has to be answered.
-      phone: { size: 'xl' },
     },
     body: {
       font: 'sans',
-      size: 'base',
-      leading: 1.7,
-      tracking: 0,
+      size: 'text',
+      leading: 1.2,
+      tracking: -0.012,
       weight: 400,
       wrap: 'pretty',
     },
     small: {
       font: 'sans',
-      size: 'sm',
+      size: 'small',
       leading: 1.4,
       tracking: 0,
       weight: 400,
     },
-    // Small uppercase copy — section headings, running heads, metadata. A
-    // style rather than a `text-transform` somebody adds next to `small`,
-    // because it is a decision about the type system and belongs where the
-    // rest of them are.
-    label: {
+    // The terms and the privacy page: long text, set to be read.
+    title: {
       font: 'sans',
-      size: 'xs',
-      leading: 1.4,
-      tracking: 0.08,
+      size: 'title',
+      leading: 1.1,
+      tracking: -0.025,
       weight: 500,
-      case: 'uppercase',
+      wrap: 'balance',
     },
+    prose: {
+      font: 'sans',
+      size: 'prose',
+      leading: 1.6,
+      tracking: -0.005,
+      weight: 400,
+      wrap: 'pretty',
+    },
+    // The app's window. `ui` is a card or a control, `ui-tight` the tools panel,
+    // `ui-text` what is said in the conversation, `ui-title` a name over
+    // something and `ui-head` the name over a blueprint sheet.
+    ui: { font: 'sans', size: 'ui-xs', leading: 1.4, tracking: 0, weight: 400 },
+    'ui-tight': { font: 'sans', size: 'ui-xs', leading: 1.333, tracking: 0, weight: 400 },
+    'ui-text': { font: 'sans', size: 'ui-sm', leading: 1.625, tracking: 0, weight: 400 },
+    'ui-title': { font: 'sans', size: 'ui-sm', leading: 1.43, tracking: 0, weight: 500 },
+    'ui-head': { font: 'sans', size: 'ui-base', leading: 1.5, tracking: 0, weight: 500 },
   },
 
   // Type Mode's "save to this class" adds an `overrides` block here — one

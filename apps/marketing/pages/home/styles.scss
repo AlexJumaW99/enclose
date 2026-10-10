@@ -1,18 +1,172 @@
 @use '../../styles/typography' as type;
 
+// The first page is one long scroll over a screen that stays put: `tour` is how
+// long the scroll is, and `stage` the screen, which holds the app's window and
+// what is said beside it. Where the window is from one moment to the next is
+// tour.ts's; what is here is where everything is before the page is scrolled,
+// which is also all there is without the script.
+
 .home {
-  min-height: 100dvh;
-  padding: 96px 6vw;
+  // the room left either side of the window, as the page opens
+  --edge: clamp(12px, 3.3vw, 64px);
   background: var(--bg);
+
+  // ten screens: nine of scroll, and the one that is looked at
+  &__tour {
+    height: 1000svh;
+  }
+
+  &__stage {
+    position: sticky;
+    top: 0;
+    height: 100svh;
+    overflow: hidden;
+    container-type: inline-size;
+  }
+
+  // ── what the page says first ────────────────────────────────────────────
+  &__hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 138px 24px 44px;
+    text-align: center;
+  }
 
   &__headline {
     @include type.headline;
-    margin: 0 0 24px;
+    max-width: 64ch;
+    margin: 0;
   }
 
-  &__tagline {
-    max-width: 544px;
-    margin: 0;
+  &__lede {
+    max-width: 72ch;
+    margin: 4px 0 0;
     color: var(--muted);
+  }
+
+  .download {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-top: 20px;
+
+    &__button {
+      @include type.small;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      height: 44px;
+      padding: 0 20px 0 16px;
+      border-radius: 12px;
+      background: var(--fg);
+      color: var(--bg);
+      font-weight: 500;
+      text-decoration: none;
+      transition: opacity 0.2s;
+
+      &:hover { opacity: 0.82; }
+
+      svg {
+        width: 18px;
+        height: 18px;
+        margin-top: -2px;
+      }
+    }
+
+    &__note {
+      @include type.small;
+      margin: 0;
+      color: var(--muted);
+    }
+  }
+
+  // ── the app's window ────────────────────────────────────────────────────
+  // It is laid out as wide as the page leaves it, and the window inside, which
+  // is drawn at the app's own size, is scaled to fit: the tangent of the angle
+  // two lengths make is how many of one go into the other.
+  &__window {
+    position: relative;
+    width: calc(100cqw - 2 * var(--edge));
+    margin: 0 auto;
+    aspect-ratio: 1720 / 1000;
+    transform-origin: 0 0;
+    will-change: transform;
+
+    .app {
+      position: absolute;
+      top: 0;
+      left: 0;
+      transform-origin: 0 0;
+      transform: scale(tan(atan2(100cqw - 2 * var(--edge), 1720px)));
+    }
+  }
+
+  // The view is there once its model is.
+  [data-app='canvas'] {
+    opacity: 0;
+    transition: opacity 0.8s;
+    &[data-ready] { opacity: 1; }
+  }
+
+  // ── what is said beside the window ──────────────────────────────────────
+  &__caption {
+    position: absolute;
+    top: 50%;
+    width: min(15.5cqw, 320px);
+    min-width: 232px;
+    margin-top: -4lh;
+    opacity: 0;
+    visibility: hidden;
+
+    &--left { left: clamp(24px, 13cqw, 260px); }
+    &--right { left: 77cqw; }
+
+    h2 {
+      @include type.headline;
+      margin: 0;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+    }
+  }
+
+  @media (max-width: 1100px) {
+    &__caption {
+      min-width: 200px;
+      &--left { left: 24px; }
+      &--right { left: auto; right: 24px; }
+    }
+  }
+
+  // On a phone the window has the top of the screen and the words its foot.
+  @media (max-width: 767px) {
+    &__hero {
+      padding: 112px 20px 40px;
+    }
+
+    // (the words are on the page's own ground, which the window goes behind)
+    &__caption#{&}__caption {
+      inset: auto 0 0;
+      width: auto;
+      min-width: 0;
+      min-height: 9.5lh;
+      margin: 0;
+      padding: 18px 20px 28px;
+      background: var(--bg);
+      box-shadow: 0 -1px 0 var(--rule);
+    }
+  }
+}
+
+// Where the mark starts on this page: over the heading, in the middle.
+body:has(.home) {
+  --mark-lift: 96px;
+
+  @media (max-width: 767px) {
+    --mark-lift: 72px;
   }
 }

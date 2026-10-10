@@ -48,6 +48,7 @@ import { PICTURE_TYPES } from "../shared/pictures"
 import { Analytics, POSTHOG } from "./analytics"
 import { unpack, type Filed } from "./archive"
 import { Changes } from "./changes"
+import { Versions } from "./versions"
 import { followRename, listCommands, lookAtClaude } from "./claude"
 import { lookAtCodex } from "./codex"
 import { readTools } from "./custom-tools"
@@ -153,6 +154,9 @@ let projects: Projects
 let pictures: Pictures
 let threads: Threads
 let changes: Changes
+let versions: Versions
+/** the conversation the window shows of each project, by project */
+const showing = new Map<string, string>()
 let settings: SettingsStore
 /** the agents on this machine: Claude Code, Codex, Grok */
 let providers: Providers
@@ -221,7 +225,7 @@ const list = (): Project[] =>
     )
     .map((project): Project => {
       // what Claude last did to its files, and what of that was last taken back
-      const { undo, redo } = changes.last(project.id)
+      const { undo, redo } = changes.last(project.id, whose(project.id))
       return {
         ...project,
         undo: undo && { what: undo.what, at: undo.at },
@@ -238,12 +242,12 @@ const list = (): Project[] =>
 async function turnBack(id: string, way: "undo" | "redo"): Promise<Undone> {
   const project = projects.get(id)
   if (!project) return { ok: false, why: "nothing", files: [] }
-  if (threads.working(id) || builds.has(id))
+  if (threads.working(id) || builds.has(id) || versions.busy(id))
     return { ok: false, why: "busy", files: [] }
   // the manifest goes last: its being written is what the view loads the rest again for
   const manifest =
     project.manifest && path.relative(project.path, project.manifest)
-  const outcome = await changes[way](id, project.path, manifest)
+  const outcome = await changes[way](id, project.path, manifest, whose(id))
   if (!outcome.ok) return outcome
   const { change } = outcome
   threads.noted(
@@ -265,6 +269,58 @@ const send = (channel: string, ...args: unknown[]) => {
   if (win && !win.isDestroyed()) win.webContents.send(channel, ...args)
 }
 const broadcast = () => send(CHANNEL.projectsChanged, list())
+
+// --- a project as each of its conversations has it ------------------------------------
+
+/**
+ * The conversation a project's folder is as only it has it, where each has the project
+ * its own way: what can be taken back there is what that conversation's turns did.
+ */
+const whose = (id: string): string | undefined =>
+  settings.get().versions ? (versions.on(id) ?? undefined) : undefined
+
+/**
+ * Have a project's folder be one of its conversations': put as that one left it, where
+ * each has the project its own way, and the view told to show the model as it then is.
+ * Resolves to whether the folder is that conversation's alone.
+ */
+async function turnTo(id: string, conversationId: string): Promise<boolean> {
+  const project = projects.get(id)
+  if (!project) return false
+  const kept = settings.get().versions
+  const turned = await versions.turnTo(id, conversationId, project.path, {
+    kept,
+    // the manifest goes last: its being written is what the view loads the rest again for
+    last: project.manifest && path.relative(project.path, project.manifest),
+  })
+  if (!turned || !kept || !projects.get(id)) return kept
+  // what was done to the model by hand goes the way its files went
+  send(CHANNEL.versionsTurned, id, turned)
+  if (turned.restored) {
+    // the model may be somewhere else now, or nowhere; and nothing has said that its
+    // files changed, if its manifest is the same in both
+    projects.refresh(id)
+    projects.changed(id)
+  } else broadcast()
+  return kept
+}
+
+/**
+ * Have each project's folder be the conversation's that the window shows of it, where
+ * it is not already: but not while Claude is at work there, or files are being made a
+ * model of. It is seen to when that is over.
+ */
+function follow() {
+  for (const [id, conversationId] of showing) {
+    if (versions.on(id) === conversationId) continue
+    if (threads.working(id) || builds.has(id)) continue
+    if (!threads.summaries(id).some((one) => one.id === conversationId)) {
+      showing.delete(id)
+      continue
+    }
+    void turnTo(id, conversationId).catch(() => {})
+  }
+}
 
 // --- questions to the window about its viewport ---------------------------------------
 
@@ -422,6 +478,7 @@ function makeModel(id: string) {
       if (builds.get(id) !== build.stop) return
       builds.delete(id)
       projects.report(id, failed)
+      follow()
     })
   })
 }
@@ -814,6 +871,8 @@ function wire() {
     }
     threads.forget(project.id)
     changes.forget(project.id)
+    showing.delete(project.id)
+    versions.forget(project.id)
     pictures.forget(project.id)
     // a model still being made of its files is given up on
     builds.get(project.id)?.()
@@ -991,6 +1050,16 @@ function wire() {
     pictures.drop(String(id), picture)
   )
 
+  ipcMain.on(
+    CHANNEL.versionsShow,
+    (_, id: unknown, conversationId: unknown) => {
+      if (typeof id !== "string" || typeof conversationId !== "string") return
+      if (!projects.get(id)) return
+      showing.set(id, conversationId)
+      follow()
+    }
+  )
+
   ipcMain.handle(CHANNEL.threadItems, (_, id: string, conversationId: string) =>
     threads.items(String(id), String(conversationId))
   )
@@ -1141,6 +1210,12 @@ function wire() {
   ipcMain.handle(CHANNEL.settingsSetLookOver, (_, on: unknown): Settings =>
     settings.set({ lookOver: on === true })
   )
+  ipcMain.handle(CHANNEL.settingsSetVersions, (_, on: unknown): Settings => {
+    const next = settings.set({ versions: on === true })
+    // what can be taken back in a project is not the same either way
+    broadcast()
+    return next
+  })
   ipcMain.handle(CHANNEL.settingsSetAnalytics, (_, on: unknown): Settings => {
     const next = settings.set({ analytics: on === true })
     // switched off, what was waiting to be sent is not
@@ -1237,16 +1312,19 @@ if (!app.requestSingleInstanceLock()) {
           : path.join(app.getPath("documents"), "Enclose"),
         lookOver: true,
         analytics: true,
+        versions: true,
       },
       vault
     )
     projects = new Projects(path.join(data, "projects.json"), broadcast)
     changes = new Changes(path.join(data, "changes"))
+    versions = new Versions(path.join(data, "versions"))
     pictures = new Pictures(path.join(data, "pictures"))
     threads = new Threads({
       dir: path.join(data, "threads"),
       projects,
       changes,
+      turnTo,
       launch: (id) => providers.launch(id),
       tools: toolServer,
       kit: KIT,
@@ -1261,7 +1339,11 @@ if (!app.requestSingleInstanceLock()) {
       viewport: askViewport,
       onItem: (projectId, conversationId, item) =>
         send(CHANNEL.threadItem, projectId, conversationId, item),
-      onSummary: broadcast,
+      onSummary: () => {
+        broadcast()
+        // a turn may be over: the folder it was had in is free to be another's
+        follow()
+      },
     })
     providers = new Providers({
       settings,

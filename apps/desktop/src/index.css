@@ -172,14 +172,14 @@
   -webkit-app-region: no-drag;
 }
 
-/* The bar of something waited for that cannot yet say how far along it is: a length of
-   it goes across, over and over. */
+/* The ring of something waited for that cannot yet say how far along it is: a length of
+   it goes round, over and over, from the top. */
 @keyframes passing {
   from {
-    transform: translateX(-100%);
+    transform: rotate(-90deg);
   }
   to {
-    transform: translateX(300%);
+    transform: rotate(270deg);
   }
 }
 

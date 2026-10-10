@@ -285,6 +285,50 @@ describe("Changes", () => {
     expect(read("model.py")).toBe("box(10)")
   })
 
+  it("takes back only a conversation's own turns, where the folder is that conversation's alone", async () => {
+    const changes = new Changes(kept)
+    const turnOf = async (id: string, what: string, work: () => void) => {
+      const pending = await changes.before("p1", folder)
+      work()
+      return changes.after(pending!, folder, about(what, id), id)
+    }
+    await turnOf("c1", "Taller", () => write("model.py", "box(20)"))
+    await turnOf("c2", "A note", () => write("notes.txt", "other"))
+    expect(changes.last("p1").undo?.what).toBe("A note")
+    expect(changes.last("p1", "c1").undo?.what).toBe("Taller")
+
+    expect((await changes.undo("p1", folder, null, "c1")).ok).toBe(true)
+    expect(read("model.py")).toBe("box(10)")
+    expect(read("notes.txt")).toBe("other")
+    expect(changes.last("p1", "c1").undo).toBeNull()
+    expect(changes.last("p1", "c1").redo?.what).toBe("Taller")
+    expect(changes.last("p1", "c2").undo?.what).toBe("A note")
+    expect(changes.last("p1", "c2").redo).toBeNull()
+
+    // what another does since is not something it cannot be put back over
+    await turnOf("c2", "More", () => write("notes.txt", "more"))
+    expect(changes.last("p1", "c1").redo?.what).toBe("Taller")
+    expect((await changes.redo("p1", folder, null, "c1")).ok).toBe(true)
+    expect(read("model.py")).toBe("box(20)")
+    expect(read("notes.txt")).toBe("more")
+  })
+
+  it("keeps as many turns for each conversation, where the folder is each one's alone", async () => {
+    const changes = new Changes(kept)
+    const turnOf = async (id: string, n: number) => {
+      const pending = await changes.before("p1", folder)
+      write("model.py", `box(${id}, ${n})`)
+      return changes.after(pending!, folder, about(`${id} ${n}`, id), id)
+    }
+    await turnOf("c1", 0)
+    for (let n = 0; n < 14; n++) await turnOf("c2", n)
+    // the one of the first is still there, and of the second the last twelve
+    expect(changes.last("p1", "c1").undo?.what).toBe("c1 0")
+    let taken = 0
+    while ((await changes.undo("p1", folder, null, "c2")).ok) taken++
+    expect(taken).toBe(12)
+  })
+
   it("forgets a project that is taken off the list", async () => {
     const changes = new Changes(kept)
     await turn(changes, "Taller", () => write("model.py", "box(20)"))

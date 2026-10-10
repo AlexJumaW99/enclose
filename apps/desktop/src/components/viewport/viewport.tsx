@@ -15,7 +15,6 @@ import type { PartFact } from "@/lib/custom-tools/types"
 import { Blueprint } from "@/components/blueprint/blueprint"
 import { Options } from "@/components/blueprint/options"
 import { Logo } from "@/components/mark"
-import { RESTING_WIDTH } from "@/lib/mark"
 import { atWork } from "@/lib/steps"
 import { duration, useNow } from "@/lib/time"
 import { PartsPanel } from "@/components/parts-panel"
@@ -324,14 +323,18 @@ function Saying() {
 
 /** How big the square the mark stands in is while something is waited for, px. */
 const MARK_SIZE = 40
+/** How far across the ring round the mark is, px. */
+const RING_SIZE = 80
+/** How thick the line of the ring is, px: much what the lines of the mark in it are. */
+const RING_WEIGHT = 1.25
 
 /**
  * What is waited for, in the middle of the view while it has nothing else to show: the
- * mark; what is being done, and under that how far along it is; and a bar of the same,
- * as wide as the mark. `progress` runs from 0 to 1, or is null while there is no
- * telling. The mark stands still: what is waited for keeps the window too busy to turn
- * it evenly, and a mark that turns in fits and starts looks stuck. The bar says that
- * things are moving.
+ * mark, in a ring that fills from the top round as far as things have got; and under
+ * them what is being done, and how far along it is. `progress` runs from 0 to 1, or is
+ * null while there is no telling. The mark stands still: what is waited for keeps the
+ * window too busy to turn it evenly, and a mark that turns in fits and starts looks
+ * stuck. The ring says that things are moving.
  */
 function Waiting({
   title,
@@ -352,15 +355,6 @@ function Waiting({
         late ? "delay-300 duration-300" : "duration-200"
       )}
     >
-      <Logo size={MARK_SIZE} />
-      {/* The mark, the words and the bar each have room to themselves, and as much of
-          it one way as the other by what is seen of them: the mark stops short of the
-          edge of its square, and a line of words has a little over and under its
-          letters. */}
-      <div className="mt-6.75 flex max-w-md flex-col items-center text-center text-xl/[1.3]">
-        <div className="max-w-full truncate font-bold">{title}</div>
-        <div className="text-foreground/45">{detail}</div>
-      </div>
       <div
         role="progressbar"
         aria-label={title}
@@ -369,17 +363,48 @@ function Waiting({
         aria-valuenow={
           progress === null ? undefined : Math.round(progress * 100)
         }
-        className="mt-8 h-0.5 overflow-hidden rounded-full bg-foreground/20"
-        style={{ width: Math.round(MARK_SIZE * RESTING_WIDTH) }}
+        className="relative flex items-center justify-center"
+        style={{ width: RING_SIZE, height: RING_SIZE }}
       >
-        {progress === null ? (
-          <div className="h-full w-1/3 animate-[passing_1.3s_ease-in-out_infinite] rounded-full bg-foreground" />
-        ) : (
-          <div
-            className="h-full rounded-full bg-foreground transition-[width] duration-200 ease-out"
-            style={{ width: `${Math.max(2, progress * 100)}%` }}
+        {/* a circle is drawn from its right hand side round by the bottom: turned a
+            quarter back, it fills from the top. While there is no telling how far
+            things have got, a quarter of it goes round and round. */}
+        <svg
+          className={cn(
+            "absolute inset-0 fill-none",
+            progress === null
+              ? "animate-[passing_1.3s_linear_infinite]"
+              : "-rotate-90"
+          )}
+          width={RING_SIZE}
+          height={RING_SIZE}
+          viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}
+          strokeWidth={RING_WEIGHT}
+          aria-hidden
+        >
+          <circle
+            className="stroke-foreground/10"
+            cx={RING_SIZE / 2}
+            cy={RING_SIZE / 2}
+            r={(RING_SIZE - RING_WEIGHT) / 2}
           />
-        )}
+          <circle
+            className="stroke-foreground transition-[stroke-dashoffset] duration-200 ease-out"
+            cx={RING_SIZE / 2}
+            cy={RING_SIZE / 2}
+            r={(RING_SIZE - RING_WEIGHT) / 2}
+            pathLength={1}
+            strokeDasharray={1}
+            strokeDashoffset={
+              progress === null ? 0.75 : 1 - Math.max(0.02, progress)
+            }
+          />
+        </svg>
+        <Logo size={MARK_SIZE} />
+      </div>
+      <div className="mt-6 flex max-w-md flex-col items-center text-center text-xl/[1.3]">
+        <div className="max-w-full truncate font-bold">{title}</div>
+        <div className="text-foreground/45">{detail}</div>
       </div>
     </div>
   )

@@ -1,0 +1,916 @@
+@use '../../styles/typography' as type;
+
+// The app's window, rebuilt on the page (Window.tsx). It is drawn at one size, the
+// app's own, in px, and the page scales the whole of it: so every length here is
+// what the app has for it, and can be checked against the app.
+//
+// What changes in it is changed by the page's scroll, which has to be able to stop
+// anywhere and go back. So a thing that is on or off here is on by an amount: a
+// custom property from 0 to 1 that the scroll sets, and the colours mixed by it.
+
+$thread: 460px;
+$line: rgb(255 255 255 / 0.1);
+$tool-panel: oklch(from var(--axis-z) calc(l - 0.135) c calc(h + 6));
+$tool-line: oklch(from var(--axis-z) calc(l + 0.066) calc(c - 0.056) calc(h + 2));
+
+// Words that say something is being worked on: a light goes across them, over and
+// over, as it does in the app (shadcn's shimmer, as its dark theme has it). The light
+// is the words' own colour made lighter, unless `$light` says what it is.
+@mixin shimmer($light: oklch(from currentColor max(0.8, calc(l + 0.4)) c h / calc(alpha + 0.4))) {
+  --spread: calc(3ch + 40px);
+  background-image: linear-gradient(
+    110deg,
+    currentColor calc(50% - var(--spread)),
+    color-mix(in oklch, #{$light}, currentColor 50%) calc(50% - var(--spread) * 0.5),
+    #{$light} 50%,
+    color-mix(in oklch, #{$light}, currentColor 50%) calc(50% + var(--spread) * 0.5),
+    currentColor calc(50% + var(--spread))
+  );
+  background-repeat: no-repeat;
+  background-size: calc(200% + var(--spread) * 2) 100%;
+  background-position: 0 0;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: app-shimmer 2s linear infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    background-image: none;
+    -webkit-text-fill-color: currentColor;
+    animation: none;
+  }
+}
+
+@keyframes app-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: 0 0; }
+}
+
+.app {
+  // how far the conversation is put away, 0 to 1
+  --shut: 0;
+  position: relative;
+  width: 1720px;
+  height: 1000px;
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--app-view);
+  color: var(--app-fg);
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.6),
+    0 30px 80px -20px rgb(0 0 0 / 0.35),
+    0 12px 30px -12px rgb(0 0 0 / 0.25);
+  // the app is set in Inter as it comes, not in its display cut
+  font-variation-settings: 'opsz' 14;
+  @include type.style('ui');
+  user-select: none;
+
+  // the window's own edge, a light line just inside it
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12);
+    pointer-events: none;
+  }
+
+  svg {
+    flex: none;
+    width: 16px;
+    height: 16px;
+  }
+
+  &__inside,
+  &__main {
+    position: absolute;
+    inset: 0;
+  }
+
+  &__canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  // ── the window's buttons ────────────────────────────────────────────────
+  &__lights {
+    position: absolute;
+    top: 18px;
+    left: 18px;
+    display: flex;
+    gap: 8px;
+
+    i {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #ff5f57;
+      &:nth-child(2) { background: #febc2e; }
+      &:nth-child(3) { background: #28c840; }
+    }
+  }
+
+  // ── the projects ────────────────────────────────────────────────────────
+  &__sidebar {
+    position: absolute;
+    top: 48px;
+    left: 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  // Something in the list that can be put away: it closes up to nothing, and what
+  // is under it comes up to where it was.
+  &__tuck {
+    display: grid;
+    grid-template-rows: 1fr;
+
+    &[data-app='later'],
+    &--spread {
+      grid-template-rows: 0fr;
+    }
+    &[data-app='later'] { margin-bottom: -6px; }
+  }
+
+  // (what closes up cuts off whatever is outside it, and a card's edge is drawn
+  // just outside the card: there is that much room round it)
+  &__tucked {
+    min-height: 0;
+    margin: -4px;
+    padding: 4px;
+    overflow: hidden;
+  }
+
+  [data-app='later'] &__card,
+  &__row { opacity: 0; }
+
+  &__project {
+    display: flex;
+    flex-direction: column;
+  }
+
+  &__card {
+    --lit: 0;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 196px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: color-mix(
+      in oklab,
+      rgb(38 38 38 / 0.9) calc(var(--lit) * 100%),
+      rgb(38 38 38 / 0.45)
+    );
+    box-shadow: 0 0 0 1px
+      color-mix(in oklab, rgb(250 250 250 / 0.15) calc(var(--lit) * 100%), rgb(250 250 250 / 0.05));
+    backdrop-filter: blur(20px) saturate(1.3) brightness(0.55);
+
+    &--lit { --lit: 1; }
+    // the room under a card that has earlier conversations under it
+    &[data-under] { margin-bottom: 11px; }
+  }
+
+  // as much as shows of the card beneath
+  &__sliver {
+    position: absolute;
+    inset: 100% 10px auto;
+    height: 10px;
+    margin-top: 1px;
+    border: 1px solid rgb(250 250 250 / 0.05);
+    border-top: 0;
+    border-radius: 0 0 8px 8px;
+    background: rgb(38 38 38 / 0.45);
+  }
+
+  &__written {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    // it gives way at its far end to the card's news
+    &--news {
+      mask-image: linear-gradient(
+        to right,
+        black calc(100% - 108px),
+        rgb(0 0 0 / 0.04) calc(100% - 70px)
+      );
+    }
+  }
+
+  &__named {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  &__name {
+    overflow: hidden;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__when {
+    flex: none;
+    color: rgb(161 161 161 / 0.6);
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__said {
+    display: -webkit-box;
+    min-height: 2lh;
+    overflow: hidden;
+    color: var(--app-muted);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  &__branch {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 6px;
+    color: rgb(161 161 161 / 0.7);
+
+    svg {
+      width: 11px;
+      height: 11px;
+    }
+
+    span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  &__news {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    transform: translateY(-50%);
+    color: var(--app-attention);
+    font-weight: 500;
+
+    span {
+      font-weight: 400;
+      font-variant-numeric: tabular-nums;
+    }
+
+    &--working { @include shimmer; }
+  }
+
+  // the conversations had before, spread out under their card
+  &__earlier {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 6px;
+  }
+
+  // (the room a card leaves under itself for its sliver goes when they are spread)
+  &__row {
+    display: flex;
+    align-items: center;
+  }
+
+  &__back {
+    display: flex;
+    flex: none;
+    justify-content: center;
+    width: 32px;
+    color: var(--app-muted);
+
+    svg {
+      width: 12px;
+      height: 12px;
+    }
+  }
+
+  // ── the round buttons ───────────────────────────────────────────────────
+  &__round {
+    // how far it is pressed, 0 to 1
+    --on: 0;
+    // how far its tip is up
+    --tip: 0;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: color-mix(in oklab, var(--app-primary) calc(var(--on) * 100%), rgb(10 10 10 / 0.6));
+    color: color-mix(in oklab, #171717 calc(var(--on) * 100%), var(--app-fg));
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 0.2),
+      0 0 0 1px rgb(250 250 250 / 0.1);
+    backdrop-filter: blur(20px) saturate(1.3) brightness(0.55);
+
+    &--on { --on: 1; }
+
+    // the settings, and the + under the cards: smaller, and not glass
+    &--plain {
+      width: 32px;
+      height: 32px;
+      background: var(--app-thread);
+      backdrop-filter: none;
+    }
+
+    // What is the project's own is blue, off as on: on, it has a white line round it.
+    &--tool {
+      background: var(--axis-z);
+      color: #fff;
+      box-shadow: 0 0 0 calc(1px + var(--on) * 1px)
+        color-mix(in oklab, #fff calc(var(--on) * 100%), var(--axis-z));
+    }
+  }
+
+  &__settings {
+    position: absolute;
+    bottom: 16px;
+    left: 18px;
+  }
+
+  // What moves with the conversation's edge: its right side is that edge.
+  &__edge {
+    position: absolute;
+    inset: 0 calc(#{$thread} * (1 - var(--shut))) 0 0;
+    pointer-events: none;
+  }
+
+  &__talk {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+  }
+
+  &__column {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transform: translateY(-50%);
+  }
+
+  // what a button is called and its key, beside it
+  &__tip {
+    position: absolute;
+    top: 50%;
+    right: calc(100% + 10px);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px 6px 12px;
+    border-radius: 8px;
+    background: var(--app-fg);
+    color: #171717;
+    font-weight: 400;
+    white-space: nowrap;
+    opacity: var(--tip);
+    transform: translate(calc((1 - var(--tip)) * 6px), -50%);
+
+    kbd {
+      min-width: 20px;
+      padding: 0 4px;
+      border-radius: 4px;
+      background: rgb(23 23 23 / 0.1);
+      font: inherit;
+      font-weight: 500;
+      line-height: 20px;
+      text-align: center;
+    }
+  }
+
+  & &__gizmo {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    width: 88px;
+    height: 88px;
+  }
+
+  // ── a project's own tools ───────────────────────────────────────────────
+  &__panel {
+    position: absolute;
+    top: 50%;
+    right: 60px;
+    display: flex;
+    flex-direction: column;
+    width: 420px;
+    overflow: hidden;
+    border-radius: 16px;
+    background: $tool-panel;
+    color: #fff;
+    box-shadow:
+      0 10px 15px -3px rgb(0 0 0 / 0.1),
+      0 4px 6px -4px rgb(0 0 0 / 0.1),
+      0 0 0 1px $tool-line;
+    opacity: 0;
+    transform: translateY(-50%);
+  }
+
+  &__tabs {
+    display: flex;
+    height: 48px;
+    border-bottom: 1px solid rgb(255 255 255 / 0.17);
+    @include type.style('ui-title');
+    font-weight: 400;
+
+    span {
+      position: relative;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      color: rgb(255 255 255 / 0.6);
+      &:first-child { padding-left: 20px; }
+    }
+  }
+
+  // the one that is shown: the line under it lies over the one under them all
+  &__tab#{&}__tab {
+    color: #fff;
+    font-weight: 500;
+
+    &::after {
+      content: '';
+      position: absolute;
+      inset: auto 0 -1px;
+      height: 1.5px;
+      background: #fff;
+    }
+  }
+
+  &__control {
+    display: flex;
+    gap: 16px;
+    padding: 20px;
+    border-bottom: 1px solid rgb(255 255 255 / 0.17);
+    @include type.style('ui-tight');
+
+    &:last-child { border-bottom: 0; }
+  }
+
+  &__about {
+    flex: none;
+    width: 128px;
+
+    div:first-child { font-weight: 500; }
+    div:last-child {
+      color: rgb(255 255 255 / 0.6);
+      text-wrap: balance;
+    }
+  }
+
+  &__control--small &__about {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+  }
+
+  &__set {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+  }
+
+  &__control--small &__set {
+    flex: none;
+    max-width: 55%;
+  }
+
+  &__slider {
+    // how far along its trail the handle is, 0 to 1
+    --along: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+  }
+
+  // what it is set to, over the handle, and going along with it
+  &__says {
+    padding: 0 7px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+
+    span {
+      position: relative;
+      left: calc(var(--along) * 100%);
+      display: block;
+      width: fit-content;
+      translate: calc(var(--along) * -100%);
+      white-space: nowrap;
+    }
+  }
+
+  &__trail {
+    position: relative;
+    height: 24px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 0.25);
+
+    i {
+      position: absolute;
+      top: 50%;
+      left: calc(12px + var(--along) * (100% - 24px));
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #fff;
+      transform: translate(-50%, -50%);
+    }
+  }
+
+  &__readout {
+    height: 24px;
+    padding: 0 10px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 0.12);
+    color: rgb(255 255 255 / 0.85);
+    font-weight: 500;
+    line-height: 24px;
+    white-space: nowrap;
+  }
+
+  &__switch {
+    position: relative;
+    display: block;
+    flex: none;
+    width: 32px;
+    height: 18px;
+    border-radius: 999px;
+    background: rgb(250 250 250 / 0.18);
+
+    &::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--app-fg);
+    }
+
+    &--on {
+      background: var(--app-primary);
+      &::after {
+        left: 16px;
+        background: #171717;
+      }
+    }
+
+    &--tool#{&}--on {
+      background: #fff;
+      &::after { background: $tool-panel; }
+    }
+  }
+
+  // ── the model's drawings ────────────────────────────────────────────────
+  &__sheets {
+    position: absolute;
+    inset: 0 calc(#{$thread} * (1 - var(--shut))) 0 0;
+    overflow: hidden;
+    opacity: 0;
+  }
+
+  &__row-of-sheets {
+    position: absolute;
+    inset: 0 auto 0 0;
+    display: flex;
+    align-items: center;
+    gap: 40px;
+    padding: 0 100px 0 272px;
+  }
+
+  &__sheet {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 10px;
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 36px;
+    }
+
+    h3 {
+      margin: 0;
+      @include type.style('ui-head');
+    }
+  }
+
+  &__save {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgb(250 250 250 / 0.08);
+  }
+
+  // four wide to five high
+  &__paper {
+    width: 595px;
+    height: 744px;
+    overflow: hidden;
+    border-radius: 18px;
+    background: var(--app-paper);
+
+    img {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  }
+
+  // (in the app they are in the middle of the view: here they are under the first
+  // sheet, which is the side of the window the page shows)
+  &__options {
+    position: absolute;
+    bottom: 20px;
+    left: 272px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 40px;
+    padding: 0 14px 0 20px;
+    border-radius: 999px;
+    background: rgb(10 10 10 / 0.6);
+    box-shadow:
+      0 4px 6px -1px rgb(0 0 0 / 0.1),
+      0 0 0 1px rgb(250 250 250 / 0.1);
+    @include type.style('ui-title');
+    backdrop-filter: blur(20px) saturate(1.3) brightness(0.55);
+    white-space: nowrap;
+
+    &--units {
+      gap: 0;
+      margin-right: 12px;
+      padding: 4px;
+
+      b {
+        display: flex;
+        align-items: center;
+        height: 32px;
+        padding: 0 12px;
+        border-radius: 999px;
+        font-weight: 500;
+        &:first-child {
+          background: var(--app-primary);
+          color: #171717;
+        }
+      }
+    }
+
+    svg { margin-left: -4px; }
+  }
+
+  // ── the conversation ────────────────────────────────────────────────────
+  &__thread {
+    position: absolute;
+    inset: 0 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    width: $thread;
+    border-left: 1px solid $line;
+    background: var(--app-thread);
+    transform: translateX(calc(var(--shut) * 100%));
+    @include type.style('ui-text');
+
+    > header {
+      display: flex;
+      flex: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      height: 48px;
+      padding: 0 12px 0 32px;
+
+      h3 {
+        margin: 0;
+        overflow: hidden;
+        @include type.style('ui-title');
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      span {
+        display: flex;
+        gap: 12px;
+        padding: 0 6px;
+        color: var(--app-muted);
+      }
+    }
+  }
+
+  // The conversation is kept to its end: what was said last is at the foot, over
+  // the message box, and the rest runs up out of sight.
+  &__scroll {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  &__messages {
+    position: absolute;
+    inset: auto 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 8px 32px 24px;
+  }
+
+  &__turn {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+  }
+
+  &__bubble {
+    max-width: 85%;
+    padding: 8px 14px;
+    border-radius: 16px;
+    background: var(--app-raised);
+    text-wrap: balance;
+  }
+
+  // a part of the model that goes with what is said
+  &__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 24px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: var(--app-raised);
+    @include type.style('ui');
+    font-weight: 500;
+
+    svg {
+      width: 12px;
+      height: 12px;
+    }
+  }
+
+  &__worked,
+  &__details,
+  &__working {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--app-muted);
+    @include type.style('ui');
+
+    svg {
+      width: 14px;
+      height: 14px;
+      opacity: 0.6;
+    }
+  }
+
+  &__reply {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+
+    p {
+      margin: 0;
+      text-wrap: pretty;
+    }
+  }
+
+  // what is not said yet: it takes no room until the scroll has it sent
+  [data-app='sent'],
+  &__working {
+    height: 0;
+    margin-top: -16px;
+    overflow: hidden;
+    opacity: 0;
+  }
+
+  // (a light of the text's own colour goes across the words, as on a card)
+  &__working {
+    font-variant-numeric: tabular-nums;
+
+    > span { @include shimmer(var(--app-fg)); }
+  }
+
+  &__composer {
+    flex: none;
+    padding: 0 14px 14px;
+  }
+
+  &__box {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid rgb(255 255 255 / 0.15);
+    border-radius: 18px;
+    background: rgb(255 255 255 / 0.045);
+  }
+
+  // the parts that go with what is being written, over it
+  &__chips {
+    display: grid;
+    grid-template-rows: 0fr;
+    padding: 0 12px;
+    opacity: 0;
+
+    > * {
+      min-height: 0;
+      width: fit-content;
+      overflow: hidden;
+    }
+  }
+
+  &__write {
+    position: relative;
+    min-height: 56px;
+    padding: 12px 12px 0;
+  }
+
+  &__placeholder {
+    position: absolute;
+    inset: 12px 12px auto;
+    overflow: hidden;
+    color: var(--app-muted);
+    white-space: nowrap;
+  }
+
+  // where the next letter goes
+  &__typed:not(:empty)::after {
+    content: '';
+    display: inline-block;
+    width: 1.5px;
+    height: 1.15em;
+    margin-left: 1px;
+    background: var(--app-fg);
+    vertical-align: text-bottom;
+  }
+
+  &__under {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 12px 10px 14px;
+    color: var(--app-muted);
+  }
+
+  &__using {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    @include type.style('ui');
+
+    svg {
+      width: 12px;
+      height: 12px;
+    }
+  }
+
+  &__send {
+    --on: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--app-primary);
+    color: #171717;
+    opacity: calc(0.5 + var(--on) * 0.5);
+
+    svg {
+      width: 14px;
+      height: 14px;
+    }
+  }
+}

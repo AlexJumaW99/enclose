@@ -19,6 +19,7 @@ const DEFAULTS = {
   projectsFolder: "/projects",
   lookOver: true,
   analytics: true,
+  versions: true,
 }
 
 describe("providerSettings", () => {
@@ -67,6 +68,7 @@ describe("SettingsStore", () => {
       projectsFolder: "/projects",
       lookOver: false,
       analytics: true,
+      versions: true,
     })
     expect(again.provider("grok")).toEqual({
       ...providerDefaults("grok"),
@@ -80,6 +82,12 @@ describe("SettingsStore", () => {
   it("keeps the count of how the app is used switched off", () => {
     new SettingsStore(file, DEFAULTS).set({ analytics: false })
     expect(new SettingsStore(file, DEFAULTS).get().analytics).toBe(false)
+  })
+
+  it("has each conversation have a project its own way until that is switched off", () => {
+    expect(new SettingsStore(file, DEFAULTS).get().versions).toBe(true)
+    new SettingsStore(file, DEFAULTS).set({ versions: false })
+    expect(new SettingsStore(file, DEFAULTS).get().versions).toBe(false)
   })
 
   it("reads a file from before there were agents to choose about", () => {

@@ -7,6 +7,7 @@ The gear at the bottom left, or Cmd+,. Esc, or Back, returns to the model.
 | General | Where new projects are saved, `~/Documents/Enclose` to begin with |
 | | Whether Claude [looks over](projects.md#claude-looks-the-model-over) the CAD files you open |
 | | How much Claude [may do without asking](working-with-claude.md#model-effort-and-access) |
+| | Whether each conversation has [a version of the project](working-with-claude.md#versions) of its own |
 | | After how many days a [conversation](working-with-claude.md#conversations) left alone goes under its project's card |
 | | What a [blueprint](blueprints.md#exploded-and-dimensions)'s dimensions are in, millimetres or inches |
 | | Whether the app sends [usage data](usage-data.md) |

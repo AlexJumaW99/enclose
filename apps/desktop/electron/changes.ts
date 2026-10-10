@@ -13,6 +13,10 @@
 // where taking it back left them. A file that has been written to since, by hand or by
 // anything else, is not written over: nothing is done, and the files in the way are
 // named.
+//
+// Where each conversation has the folder its own way (see versions.ts), the changes that
+// can be taken back in it are that conversation's: the turns of another were had in a
+// folder that was put aside when this one was turned to.
 import { createHash, randomBytes } from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
@@ -73,7 +77,7 @@ const LEFT_OUT = new Set([
 type Standing = { path: string; size: number; mtimeMs: number }
 
 /** Every file of a folder that is the project's own, as it stands. Null if there is too much. */
-async function filesOf(folder: string): Promise<Standing[] | null> {
+export async function filesOf(folder: string): Promise<Standing[] | null> {
   const found: Standing[] = []
   let bytes = 0
   const go = async (within: string): Promise<boolean> => {
@@ -107,7 +111,7 @@ async function filesOf(folder: string): Promise<Standing[] | null> {
   return (await go("")) ? found : null
 }
 
-async function hashOf(file: string): Promise<string | null> {
+export async function hashOf(file: string): Promise<string | null> {
   try {
     const hash = createHash("sha1")
     for await (const chunk of fs.createReadStream(file)) hash.update(chunk)
@@ -118,7 +122,7 @@ async function hashOf(file: string): Promise<string | null> {
 }
 
 /** A copy that takes no room where the disk can make one that way. */
-async function copy(from: string, to: string) {
+export async function copy(from: string, to: string) {
   await fs.promises.mkdir(path.dirname(to), { recursive: true })
   await fs.promises.copyFile(from, to, fs.constants.COPYFILE_FICLONE)
 }
@@ -129,6 +133,13 @@ const within = (file: unknown): file is string =>
   file !== "" &&
   !path.isAbsolute(file) &&
   !file.split(/[\\/]/).includes("..")
+
+/**
+ * Whether a change is one of those looked among: a conversation's, where the folder is
+ * as that conversation alone has it (`of`), and otherwise any.
+ */
+const among = (of: string | undefined) => (change: Change) =>
+  of === undefined || change.conversationId === of
 
 export class Changes {
   private readonly dir: string
@@ -254,7 +265,9 @@ export class Changes {
   after(
     pending: Pending,
     folder: string,
-    about: { conversationId: string; what: string }
+    about: { conversationId: string; what: string },
+    /** the conversation the folder is as only it has it, where it is so */
+    of?: string
   ): Promise<Change | null> {
     const { projectId, id } = pending
     return this.queued(projectId, async () => {
@@ -310,13 +323,15 @@ export class Changes {
       }
       const index = this.index(projectId)
       // what was taken back is not put back over something done since
-      for (const gone of index.undone) this.drop(projectId, gone.id)
-      index.undone = []
+      for (const gone of index.undone.filter(among(of)))
+        this.drop(projectId, gone.id)
+      index.undone = index.undone.filter((gone) => !among(of)(gone))
       index.done.push(change)
       // it is one of the project's changes from here on, and no longer a copy put aside
       this.pending.delete(id)
-      for (const old of index.done.splice(0, index.done.length - KEPT))
-        this.drop(projectId, old.id)
+      const old = index.done.filter(among(of)).slice(0, -KEPT)
+      for (const one of old) this.drop(projectId, one.id)
+      index.done = index.done.filter((one) => !old.includes(one))
       this.save(projectId)
       return change
     })
@@ -329,9 +344,15 @@ export class Changes {
   }
 
   /** The latest change that can be taken back, and the latest that can be put back. */
-  last(projectId: string): { undo: Change | null; redo: Change | null } {
+  last(
+    projectId: string,
+    of?: string
+  ): { undo: Change | null; redo: Change | null } {
     const { done, undone } = this.index(projectId)
-    return { undo: done.at(-1) ?? null, redo: undone.at(-1) ?? null }
+    return {
+      undo: done.findLast(among(of)) ?? null,
+      redo: undone.findLast(among(of)) ?? null,
+    }
   }
 
   /**
@@ -391,17 +412,18 @@ export class Changes {
   undo(
     projectId: string,
     folder: string,
-    last: string | null = null
+    last: string | null = null,
+    of?: string
   ): Promise<Outcome> {
     return this.queued(projectId, async (): Promise<Outcome> => {
       const index = this.index(projectId)
-      const change = index.done.at(-1)
+      const change = index.done.findLast(among(of))
       if (!change) return { ok: false, why: "nothing", files: [] }
       const strayed = await this.strayed(folder, change, "after")
       if (strayed.length > 0)
         return { ok: false, why: "changed", files: strayed }
       await this.put(projectId, folder, change, "before", last)
-      index.done.pop()
+      index.done.splice(index.done.indexOf(change), 1)
       change.undoneAt = Date.now()
       index.undone.push(change)
       this.save(projectId)
@@ -413,17 +435,18 @@ export class Changes {
   redo(
     projectId: string,
     folder: string,
-    last: string | null = null
+    last: string | null = null,
+    of?: string
   ): Promise<Outcome> {
     return this.queued(projectId, async (): Promise<Outcome> => {
       const index = this.index(projectId)
-      const change = index.undone.at(-1)
+      const change = index.undone.findLast(among(of))
       if (!change) return { ok: false, why: "nothing", files: [] }
       const strayed = await this.strayed(folder, change, "before")
       if (strayed.length > 0)
         return { ok: false, why: "changed", files: strayed }
       await this.put(projectId, folder, change, "after", last)
-      index.undone.pop()
+      index.undone.splice(index.undone.indexOf(change), 1)
       change.undoneAt = null
       index.done.push(change)
       this.save(projectId)

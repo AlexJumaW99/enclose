@@ -503,6 +503,7 @@ on("turn/interrupt", () => {
         before: async () => null,
         toTell: () => ({ undone: [], redone: [] }),
       } as unknown as ThreadsDeps["changes"],
+      turnTo: async () => false,
       launch: () => ({ path: file, args: [], env: process.env }),
       tools: {
         serve: async () => ({ urls: {}, stop: () => {} }),

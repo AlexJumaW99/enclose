@@ -9,6 +9,7 @@ import {
   type Named,
 } from "@/lib/arrange"
 import { finishedNow, stackOf, type Stack } from "@/lib/conversations"
+import { asideFor, carried } from "@/lib/versions"
 import { cutsOf, readCuts } from "@/lib/cuts"
 import { mannerOf, savedAccess } from "@/lib/manner"
 import { answering, offeredModels, usable } from "@/lib/providers"
@@ -47,6 +48,7 @@ import {
   type ProviderSettings,
   type Seen,
   type ThreadItem,
+  type Turned,
   type Update,
   type Vec3,
 } from "@shared/api"
@@ -1543,6 +1545,54 @@ function inView(): string | null {
   )
 }
 
+/** The conversation the app was last told is shown of each project, by project. */
+const shown = new Map<string, string>()
+
+/**
+ * Tell the app which conversation is shown of the open project, where it has not been
+ * told so already: the project's folder is that conversation's to be (see
+ * electron/versions.ts). A new one, with nothing said in it yet, goes on from the
+ * model as it is, and nothing is said of it.
+ */
+function show() {
+  const { activeId, projects, picked } = useStore.getState()
+  const project = projects.find((p) => p.id === activeId)
+  if (!project) return
+  const { open } = stackOf(
+    project.conversations,
+    picked[project.id],
+    usePreferences.getState().settleDays,
+    Date.now()
+  )
+  if (!open || shown.get(project.id) === open.id) return
+  shown.set(project.id, open.id)
+  window.cad.versions.show(project.id, open.id)
+}
+
+/**
+ * A project's folder became another conversation's: what was done to its model by hand
+ * goes the same way (see lib/versions.ts). What was taken back or could be, of what was
+ * done by hand, was of a model that is no longer the one on screen.
+ */
+function turned(projectId: string, how: Turned) {
+  const state = useStore.getState()
+  // colours are put aside even where there are none, which says that something was
+  const left = asideFor(projectId, how.to) in state.colours
+  const colours = carried(state.colours, projectId, how, left, {})
+  const arranged = carried(state.arranged, projectId, how, left)
+  const named = carried(state.named, projectId, how, left)
+  localStorage.setItem(COLOURS_KEY, JSON.stringify(colours))
+  keepArranged(arranged, named)
+  useStore.setState({
+    colours,
+    arranged,
+    named,
+    ...(how.restored
+      ? { history: { ...state.history, [projectId]: NO_HISTORY } }
+      : {}),
+  })
+}
+
 /**
  * Bring the list of conversations finished and not yet seen up to date: with what has
  * just come to an end, given the projects as they were a moment ago, and without what
@@ -1594,6 +1644,16 @@ export function connect() {
     )
       tally()
   })
+  // and it is the one the project's folder is to be
+  useStore.subscribe((state, was) => {
+    if (
+      state.activeId !== was.activeId ||
+      state.picked !== was.picked ||
+      state.projects !== was.projects
+    )
+      show()
+  })
+  cad.versions.onTurned(turned)
   cad.thread.onItem((_projectId, conversationId, item) => {
     useStore.setState((state) => ({
       items: {

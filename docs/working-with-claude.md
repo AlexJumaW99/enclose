@@ -43,6 +43,31 @@ short part. A message too long for that is summed up in a few words by the quick
 your Claude Code's models, which is given the message and nothing else. If Claude is at
 work in a conversation under the card, the edge of the card says so.
 
+## Versions
+
+Each conversation has the project its own way. A new one begins from the model as it is
+on screen, and what is done from there, by Claude or by you, is done to its version
+alone: the conversation it began from keeps the model as it was left. Turn to a
+conversation, on a project's card or under it, and the view shows the model as that
+conversation left it, with the colours and groups you gave its parts there.
+
+It is the project's folder that changes. There is one, and it holds the version of the
+conversation you turned to last: when you turn to another, the app copies the folder
+aside for the one you leave, and puts it as it was copied for the other. (On a Mac's own
+disk a copy takes no room until one of the two is written to.) So what you open in
+Finder or in an editor is the version on screen, and what you change there is that
+conversation's. What is not the project's own is the same for all of them, and left
+alone: `.git`, `node_modules`, a Python environment. Two versions are not brought
+together: to have in one what another has, ask for it there.
+
+The folder is not put another way while Claude is at work in it: turn to another
+conversation meanwhile, and its model is shown when the turn is over. A folder with more
+than 20,000 files in it, or 4 GB, is not copied aside, and has the one version.
+
+The [settings](settings.md) switch this off (Versions). The conversations then all
+change the one model, and turning to one changes nothing. The versions kept until then
+stay as they were, for when it is switched on again.
+
 ## Replies
 
 What Claude says at the end of a turn is short: a sentence or two, since what it did is
@@ -110,7 +135,9 @@ it does not go on as though its change were still there.
 Nothing of Claude's is taken back while Claude is at work, or over a file that has been
 changed since the turn, by you in an editor say: the app names the file that is in the way and
 leaves all of it as it is. The last twelve turns that changed anything are kept for each
-project. What is not the project's own is left out, and left alone: `.git`,
+conversation, which are the ones Cmd+Z takes back in [its version](#versions) of the
+project; with versions switched off, for each project. What is not the project's own is
+left out, and left alone: `.git`,
 `node_modules`, a Python environment. A folder with more than 20,000 files in it, or
 4 GB, is not put aside at all, and nothing Claude does in it can be taken back.
 

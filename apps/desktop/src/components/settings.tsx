@@ -246,6 +246,18 @@ function General() {
           />
         </Row>
         <Row
+          title="Versions"
+          detail="Each conversation keeps its own version of the project. Off, they all change the same one."
+        >
+          <Switch
+            aria-label="Keep a version of the project for each conversation"
+            checked={settings?.versions !== false}
+            onCheckedChange={(on) =>
+              void window.cad.settings.setVersions(on).then(setSettings)
+            }
+          />
+        </Row>
+        <Row
           title="Earlier conversations"
           detail="Conversations idle this long are tucked under their project's card."
         >

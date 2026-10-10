@@ -32,9 +32,8 @@
   --modulato-type: #{$name};
 }
 
-// Shorthands for the styles this project ships with. Add a style to type.ts
-// and add its one-liner here — or skip this file entirely and use the
-// generated `class="type-<name>"` in JSX.
+// Shorthands for the page's own styles. The app window's are worn by name:
+// `@include type.style('ui')`.
 @mixin headline {
   @include style('headline');
 }
@@ -47,6 +46,10 @@
   @include style('small');
 }
 
-@mixin label {
-  @include style('label');
+@mixin title {
+  @include style('title');
+}
+
+@mixin prose {
+  @include style('prose');
 }
