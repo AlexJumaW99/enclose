@@ -447,12 +447,12 @@ function About() {
       </Row>
       <Row title="Fork it and collaborate">
         <a
-          href="https://github.com/glauberxyz/enclose"
+          href="https://github.com/enclosedev/enclose"
           target="_blank"
           rel="noreferrer"
           className="text-sm underline underline-offset-4"
         >
-          github.com/glauberxyz/enclose
+          github.com/enclosedev/enclose
         </a>
       </Row>
     </Group>

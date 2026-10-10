@@ -634,9 +634,44 @@ npm test
 ## Not there yet
 
 - No installer. It runs from a checkout.
-- The examples' archives are not up yet, so an example opens only from a checkout.
 - Of CAD files it opens only STEP. Meshes (STL, OBJ, 3MF) are not brought in: they could
   be shown, but there is no solid in them for Claude to change.
 - Only tried on macOS.
 - No way to answer Claude's multiple-choice questions (it asks in plain text instead).
 - A section shows the cut as hollow shells; cut faces are not filled in.
+
+## Contributing
+
+Fixes and ideas are welcome: [CONTRIBUTING.md](CONTRIBUTING.md) says how.
+
+## License
+
+Copyright (C) 2026 Gláuber Sampaio
+
+Enclose is free software: you can redistribute it and/or modify it under the terms of
+the GNU Affero General Public License, version 3, as published by the Free Software
+Foundation. It is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. The whole of it is in [LICENSE](LICENSE).
+
+In short: use it, change it and pass it on, for anything. Whatever you pass on, or run
+as a service for others, goes with its full source and under this same license, your
+changes included.
+
+Additional permission under GNU AGPL version 3 section 7: if you modify this Program,
+or any covered work, by linking or combining it with the Claude Agent SDK
+(`@anthropic-ai/claude-agent-sdk`), or a modified version of that library, containing
+parts covered by the terms of that library's own license, the licensors of this Program
+grant you additional permission to convey the resulting work.
+
+The name Enclose and its mark are not licensed with the code. A fork goes by a name and
+a mark of its own.
+
+Some of what is here came from others, and stays under their terms:
+
+- [`src/components/ui`](src/components/ui) began as [shadcn/ui](https://ui.shadcn.com)'s
+  components (MIT).
+- [`examples/arm/source`](examples/arm/source) is the SO-101 arm's own CAD file, by
+  TheRobotStudio (Apache 2.0): its [README](examples/arm/source/README.md) says more.
+- The figure of a person that stands in the reference scenes is made from Blender
+  Studio's Human Base Meshes (CC0): [`kit/figure`](kit/figure) says how.

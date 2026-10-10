@@ -4,6 +4,7 @@
   "private": true,
   "version": "0.0.1",
   "description": "CAD workbench with a Claude handoff",
+  "license": "AGPL-3.0-only",
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {

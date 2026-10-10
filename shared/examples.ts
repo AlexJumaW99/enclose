@@ -23,7 +23,7 @@ export const EXAMPLES: Example[] = packed.examples
  * them and never changed. Examples that change are another release, and an app made
  * before it goes on fetching the ones it was made with.
  */
-export const EXAMPLES_URL = `https://github.com/glauberxyz/enclose/releases/download/${packed.release}/`
+export const EXAMPLES_URL = `https://github.com/enclosedev/enclose/releases/download/${packed.release}/`
 
 /** What an example's archive is called, where they are kept. */
 export const archiveOf = (example: Example) => `${example.id}.tar.br`
