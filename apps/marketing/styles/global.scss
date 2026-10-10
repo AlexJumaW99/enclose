@@ -33,6 +33,20 @@ body {
 
 a { color: inherit; }
 
+// What is picked out with the pointer is the page turned about: its ground the colour
+// of its words, and its words the colour of its ground.
+::selection {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+// (The header is drawn in the difference from what is under it, so there it is asked
+// for the other way round to come out the same.)
+.header ::selection {
+  background: #fff;
+  color: #000;
+}
+
 // Lenis (per-page smooth scroll) base styles.
 html.lenis, html.lenis body { height: auto; }
 .lenis.lenis-smooth { scroll-behavior: auto !important; }
