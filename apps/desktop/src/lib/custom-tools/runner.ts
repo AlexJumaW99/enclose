@@ -4,6 +4,11 @@
 // and can say where they go, and that is all. It has no way to the app, the files or
 // the network from here, and one that never comes back from a frame holds up nothing
 // but itself.
+//
+// Two things keep it from the network. What a worker is given to reach it with is taken
+// away below. And the window's policy (shared/content-policy.ts), which a worker made
+// by the window has too, lets no script in from anywhere else: so a tool cannot `import`
+// from an address, nor make code up to run, which no list of names could stop.
 import { declared } from "./declare"
 import { Running } from "./running"
 import type { FromRunner, ToRunner } from "./types"
@@ -18,6 +23,7 @@ const WAYS_OUT = [
   "fetch",
   "XMLHttpRequest",
   "WebSocket",
+  "WebSocketStream",
   "WebTransport",
   "EventSource",
   "importScripts",
