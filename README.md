@@ -85,7 +85,7 @@ Fixes and ideas are welcome: [CONTRIBUTING.md](CONTRIBUTING.md) says how.
 
 ## License
 
-Copyright (C) 2026 Gláuber Sampaio
+Copyright (C) 2026 Glauber
 
 Enclose is free software: you can redistribute it and/or modify it under the terms of
 the GNU Affero General Public License, version 3, as published by the Free Software
