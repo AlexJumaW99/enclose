@@ -4,8 +4,9 @@ import { motion } from 'modulato'
 // is in it. A stop says how wide the window is drawn (`wide`, in widths of the
 // screen), and which point of the window (`ax`, `ay`, in the window's own px, of
 // 1720 by 1000) is put at which point of the screen (`vx`, `vy`, as shares of it).
-// `mx` and `my` are where on the screen the model's middle is, and `far` how far
-// off it is seen from, in its own radius.
+// `mx` and `my` are where on the screen the model's middle is (left out, it is in the
+// middle of the window's view), and `far` how far off it is seen from, in its own
+// radius.
 export default motion({
   stops: {
     projects: {
@@ -36,9 +37,10 @@ export default motion({
       phone: { wide: 2.5, ax: 250, vx: 0, vy: 0.38 },
     },
     outro: {
-      // as much of the window as the screen has room for, in its middle
+      // as much of the window as the screen has room for, in its middle: and the
+      // model in the middle of its view, as when the page opened (so no `mx`, `my`)
       wide: 0.9, tall: 0.8, ax: 860, ay: 500, vx: 0.5, vy: 0.53,
-      mx: 0.34, my: 0.5, far: 3.6,
+      far: 3.6,
       phone: { wide: 0.94, vy: 0.4 },
     },
   },

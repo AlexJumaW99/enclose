@@ -75,6 +75,28 @@ export function runTour({
   /** where the window is laid out, before it is moved: what `cam` is measured from */
   let home = { x: 0, y: 0, s: 1 }
 
+  // How long the agent has been at work on what the scroll had sent: by the clock, as
+  // in the app, from the moment the scroll sends it. Scrolled back to before that, it
+  // was never sent, and the next time it is sent the count starts again.
+  // The open project's card says the same, with the same time, for as long as it is so.
+  const workingFor = [one('[data-app="working-for"]'), one('[data-app="at-work-for"]')]
+  const atWork = one('[data-app="at-work"]').parentElement!
+  let sentAt: number | null = null
+  let counting = 0
+  const said = () => {
+    const seconds = sentAt === null ? 0 : Math.floor((Date.now() - sentAt) / 1000)
+    const minutes = Math.floor(seconds / 60)
+    for (const one of workingFor) one.textContent = seconds < 60 ? `${seconds} s` : `${minutes} min`
+  }
+  const working = (now: boolean) => {
+    if (now === (sentAt !== null)) return
+    window.clearInterval(counting)
+    sentAt = now ? Date.now() : null
+    if (now) counting = window.setInterval(said, 1000)
+    atWork.toggleAttribute('data-working', now)
+    said()
+  }
+
   const render = () => {
     frame.style.transform = `translate3d(${cam.x - home.x}px, ${cam.y - home.y}px, 0) scale(${cam.s / home.s})`
     draw(look)
@@ -103,9 +125,10 @@ export function runTour({
         x,
         y,
         s,
-        // the model's middle, in the window's px
-        mx: (at.mx * wide - x) / s,
-        my: (at.my * tall - y) / s,
+        // the model's middle, in the window's px: where the stop says on the screen,
+        // or in the middle of the view
+        mx: 'mx' in at ? (at.mx * wide - x) / s : REST.x,
+        my: 'my' in at ? (at.my * tall - y) / s : REST.y,
         far: at.far,
       }
     }
@@ -123,7 +146,6 @@ export function runTour({
     const tl = gsap.timeline({
       defaults: { ease: 'power2.inOut' },
       scrollTrigger: { trigger: tour, start: 'top top', end: 'bottom bottom', scrub: true },
-      onUpdate: render,
     })
 
     /** The way from one stop to the next: the window, and the model in it. */
@@ -143,15 +165,33 @@ export function runTour({
       )
       tl.to(captions[index], { autoAlpha: 0, y: -14, duration: 2, ease: 'power2.in' }, leave - 1)
     }
+    // How far open each thing that can be put away is, 0 to 1, and how much each
+    // thing that gives way is there. They are numbers of the timeline's own, and the
+    // page is set from them: a style the timeline changed would be put back, on the
+    // way up the page, to whatever the browser had worked it out to be on the way
+    // down, and a row's height in px is right only for what was in it then.
+    const open = new Map<HTMLElement, { by: number }>()
+    for (const one of all('.app__tuck, .app__chips')) one.style.gridTemplateRows = ''
     /** Something put away or brought back: it closes up to nothing, or opens from it. */
-    const tuck = (targets: HTMLElement | HTMLElement[], open: boolean, at: number, duration = 2) => {
-      const [from, into] = open ? ['0fr', '1fr'] : ['1fr', '0fr']
-      tl.fromTo(
-        targets,
-        { gridTemplateRows: from },
-        { gridTemplateRows: into, duration, ease: 'power2.inOut', immediateRender: false },
-        at,
-      )
+    const tuck = (targets: HTMLElement | HTMLElement[], opened: boolean, at: number, duration = 2) => {
+      for (const target of [targets].flat()) {
+        let how = open.get(target)
+        if (!how) {
+          how = { by: getComputedStyle(target).gridTemplateRows === '0px' ? 0 : 1 }
+          open.set(target, how)
+        }
+        const set = how
+        tl.to(
+          set,
+          {
+            by: opened ? 1 : 0,
+            duration,
+            ease: 'power2.inOut',
+            onUpdate: () => (target.style.gridTemplateRows = `${set.by}fr`),
+          },
+          at,
+        )
+      }
     }
     /** A button's tip comes up, the button is pressed (or let go), and the tip goes. */
     const press = (button: HTMLElement, on: number | null, at: number, held = 2.4) => {
@@ -255,19 +295,15 @@ export function runTour({
       { height: 'auto', marginTop: 0, opacity: 1, duration: 1.2, ease: 'power2.out' },
       sent,
     )
-    const working = one('[data-app="working"]')
-    const worked = { seconds: 1 }
-    tl.to(working, { height: 20, marginTop: 0, opacity: 1, duration: 0.8 }, sent + 1)
     tl.to(
-      worked,
-      {
-        seconds: 14,
-        duration: chatEnds + 3 - sent,
-        ease: 'none',
-        onUpdate: says(one('[data-app="working-for"]'), () => `${Math.round(worked.seconds)} s`),
-      },
+      one('[data-app="working"]'),
+      { height: 20, marginTop: 0, opacity: 1, duration: 0.8 },
       sent + 1,
     )
+    tl.eventCallback('onUpdate', () => {
+      render()
+      working(tl.time() >= sent + 1)
+    })
     tl.to(look, { azimuth: -52, duration: 18, ease: 'none' }, chat)
 
     // ── the project's own tools ───────────────────────────────────────────
@@ -327,20 +363,19 @@ export function runTour({
     // the cards of the other projects close up out of the sheets' way
     tuck(others, false, toolsEnds + 2.4, 2.4)
     tl.to(others, { marginBottom: -6, duration: 2.4, immediateRender: false }, toolsEnds + 2.4)
-    // (from all there, whatever they are when the scroll gets here: the view is not
-    // there at all until its model has come)
     const giveWay = [
       canvas,
       gizmo,
       one('[data-app="add"]'),
-      ...others.map((card) => card.querySelector('.app__project')),
+      ...others.map((card) => card.querySelector<HTMLElement>('.app__project')),
     ]
-    tl.fromTo(
-      giveWay,
-      { opacity: 1 },
-      { opacity: 0, duration: 1.6, immediateRender: false },
-      toolsEnds + 2.4,
-    )
+    const there = { by: 1 }
+    const shown = () => {
+      // all there, each is as the page has it: the view comes in when its model does
+      for (const one of giveWay) if (one) one.style.opacity = there.by === 1 ? '' : String(there.by)
+    }
+    shown()
+    tl.to(there, { by: 0, duration: 1.6, onUpdate: shown }, toolsEnds + 2.4)
     tl.to(sheets, { autoAlpha: 1, duration: 0.6 }, toolsEnds + 3)
     tl.fromTo(
       all('[data-app="sheet"]'),
@@ -368,7 +403,7 @@ export function runTour({
     tl.to(button('blueprint'), { '--on': 0, duration: 0.5 }, drawingsEnd + 0.4)
     tuck(others, true, drawingsEnd + 1, 2.4)
     tl.to(others, { marginBottom: 0, duration: 2.4 }, drawingsEnd + 1)
-    tl.to(giveWay, { opacity: 1, duration: 1.8 }, drawingsEnd + 1.2)
+    tl.to(there, { by: 1, duration: 1.8, onUpdate: shown }, drawingsEnd + 1.2)
     tl.to(talk, { '--on': 1, duration: 0.5 }, drawingsEnd + 1)
     tl.to(app, { '--shut': 0, duration: 4 }, drawingsEnd + 1)
     go('outro', drawingsEnd, { azimuth: -51.1 + 360, elevation: 37 })
@@ -404,6 +439,8 @@ export function runTour({
       return Math.max(...STOPS.map((name) => (stops[name].wide * stage.clientWidth) / WINDOW.width))
     },
     stop() {
+      window.clearInterval(counting)
+      atWork.removeAttribute('data-working')
       window.removeEventListener('resize', resized)
       window.clearTimeout(waiting)
       context.revert()

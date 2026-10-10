@@ -87,12 +87,15 @@ function Written({
   said,
   news,
   branch,
+  sends,
 }: {
   name: string
   when?: string
   said: string
   news?: Project['news']
   branch?: string
+  /** its conversation is the one the page's scroll sends a message in: see below */
+  sends?: boolean
 }) {
   return (
     <>
@@ -116,6 +119,15 @@ function Written({
           {news === 'working' && <Going />}
         </span>
       )}
+      {/* What the open project's card says once the scroll has sent its message: that
+          the agent is at work, and for how long, which is the time the conversation
+          says too. The scroll puts `data-working` on the card, and takes it off. */}
+      {sends && (
+        <span className="app__news app__news--working" data-app="at-work">
+          {NEWS.working}
+          <span data-app="at-work-for">0 s</span>
+        </span>
+      )}
     </>
   )
 }
@@ -134,7 +146,7 @@ function ProjectCard({ project }: { project: Project }) {
             className={`app__card${project.id === OPEN ? ' app__card--lit' : ''}`}
             data-under={under.length > 0 || undefined}
           >
-            <Written {...project} />
+            <Written {...project} sends={project.id === OPEN} />
             {under.length > 0 && <span className="app__sliver" data-app="sliver" />}
           </div>
           {under.length > 0 && (
@@ -364,7 +376,7 @@ export function Window() {
               </div>
               <div className="app__working" data-app="working">
                 <span>
-                  Working <span data-app="working-for">1 s</span>
+                  Working <span data-app="working-for">0 s</span>
                 </span>
               </div>
             </div>

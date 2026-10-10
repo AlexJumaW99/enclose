@@ -52,13 +52,9 @@ $tool-line: oklch(from var(--axis-z) calc(l + 0.066) calc(c - 0.056) calc(h + 2)
   width: 1720px;
   height: 1000px;
   overflow: hidden;
-  border-radius: 14px;
+  border-radius: 18px;
   background: var(--app-view);
   color: var(--app-fg);
-  box-shadow:
-    0 0 0 1px rgb(0 0 0 / 0.6),
-    0 30px 80px -20px rgb(0 0 0 / 0.35),
-    0 12px 30px -12px rgb(0 0 0 / 0.25);
   // the app is set in Inter as it comes, not in its display cut
   font-variation-settings: 'opsz' 14;
   @include type.style('ui');
@@ -192,7 +188,8 @@ $tool-line: oklch(from var(--axis-z) calc(l + 0.066) calc(c - 0.056) calc(h + 2)
     gap: 2px;
 
     // it gives way at its far end to the card's news
-    &--news {
+    &--news,
+    [data-working] > & {
       mask-image: linear-gradient(
         to right,
         black calc(100% - 108px),
@@ -200,6 +197,15 @@ $tool-line: oklch(from var(--axis-z) calc(l + 0.066) calc(c - 0.056) calc(h + 2)
       );
     }
   }
+
+  // the news of a card whose conversation the scroll has only now set going
+  [data-app='at-work'] {
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  [data-working] > [data-app='at-work'] { opacity: 1; }
+  // (when it was last carried on is not said while it is being carried on)
+  [data-working] &__when { opacity: 0; }
 
   &__named {
     display: flex;

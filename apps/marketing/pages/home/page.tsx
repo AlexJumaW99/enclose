@@ -17,7 +17,7 @@ const STOPS = [
   {
     side: 'left',
     title: 'Every project where you can see it',
-    says: 'A card for each project floats over the model and says what its conversation is up to. Earlier conversations wait under it, and agents can be at work on several at once.',
+    says: 'A card for each project floats over the model and says what its conversation is up to. Earlier conversations wait under it, each keeping its own version of the model: click one and the model is as that conversation left it. Agents can be at work on several projects at once.',
   },
   {
     side: 'right',

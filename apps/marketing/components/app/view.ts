@@ -5,6 +5,7 @@ import { LineSegments2 } from 'three/addons/lines/LineSegments2.js'
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { WINDOW } from './data'
+import { makeGround } from './ground'
 import { BUILT, type Look } from './look'
 
 // The 3D view in the app's window on the page: the robot arm of the app's examples
@@ -192,13 +193,9 @@ export async function openView(canvas: HTMLCanvasElement, ratio: number): Promis
   const radius = box.getSize(new THREE.Vector3()).length() / 2
 
   // ── the ground ──────────────────────────────────────────────────────────
-  const ground = new THREE.GridHelper(radius * 6, 36, '#ffffff', '#ffffff')
-  ground.rotation.x = Math.PI / 2
-  ground.position.set(middle.x, middle.y, box.min.z)
-  const groundInk = ground.material as THREE.LineBasicMaterial
-  groundInk.transparent = true
-  groundInk.depthWrite = false
-  scene.add(ground)
+  // (and the world's axes: the model is built on the ground, about where they meet)
+  const ground = makeGround(ratio, { x: '#ff0033', y: '#74d908', z: '#0f73ff' })
+  scene.add(...ground.objects)
 
   // ── a frame ─────────────────────────────────────────────────────────────
   const turned = new Map<string, THREE.Matrix4>()
@@ -240,8 +237,7 @@ export async function openView(canvas: HTMLCanvasElement, ratio: number): Promis
     for (const material of colours.values())
       if (material.transparent) material.opacity = look.cables
     cableInk.opacity = 0.85 * look.cables
-    ground.visible = look.grid > 0.01
-    groundInk.opacity = 0.13 * look.grid
+    ground.show(look.grid)
 
     const around = look.azimuth * RADIANS
     const above = look.elevation * RADIANS
@@ -273,6 +269,7 @@ export async function openView(canvas: HTMLCanvasElement, ratio: number): Promis
   return {
     draw,
     sharpen(next) {
+      ground.sharpen(next)
       renderer.setPixelRatio(next)
       renderer.setSize(WINDOW.width, WINDOW.height, false)
     },
@@ -282,8 +279,7 @@ export async function openView(canvas: HTMLCanvasElement, ratio: number): Promis
       for (const material of colours.values()) material.dispose()
       edgeInk.dispose()
       cableInk.dispose()
-      ground.geometry.dispose()
-      groundInk.dispose()
+      ground.dispose()
       renderer.dispose()
     },
   }

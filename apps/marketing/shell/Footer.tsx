@@ -5,7 +5,11 @@ export function Footer() {
   return (
     <footer className="footer">
       <p>
-        ©2026 Enclose is an open-source project maintained by Glauber.{' '}
+        ©2026 Enclose is an open-source project maintained by{' '}
+        <a href="https://glauber.org" data-native>
+          Glauber
+        </a>
+        .{' '}
         <a href={`${REPOSITORY}/blob/main/LICENSE`} data-native>
           AGPL-3.0
         </a>

@@ -10,6 +10,8 @@ html, body { margin: 0; padding: 0; }
 // under 32px would be set in the text cut.
 html {
   font-variation-settings: 'opsz' 32;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 // The document's default text is the `body` style from type.ts — declared
@@ -19,7 +21,6 @@ body {
   @include type.body;
   background: var(--bg);
   color: var(--fg);
-  -webkit-font-smoothing: antialiased;
   min-height: 100dvh;
 }
 
