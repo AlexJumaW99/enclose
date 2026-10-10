@@ -451,6 +451,23 @@ export type Settings = {
   lookOver: boolean
 }
 
+/**
+ * Where the app is with a newer version of itself. There is none that it knows of; or
+ * there is one to be had, which is fetched when it is asked for; or it is on its way,
+ * with this much of it here (0 to 1); or it is here, and is what the app is once it has
+ * been started again, which it is about to be when that has been asked for.
+ */
+export type Update =
+  | { state: "none" }
+  | {
+      state: "available"
+      version: string
+      /** it was asked for and did not come: it can be asked for again */
+      failed: boolean
+    }
+  | { state: "downloading"; version: string; fraction: number }
+  | { state: "ready" | "restarting"; version: string }
+
 export type CadApi = {
   platform: string
   changes: {
@@ -640,6 +657,17 @@ export type CadApi = {
     /** whether Claude is to look over files as they are opened; resolves likewise */
     setLookOver(on: boolean): Promise<Settings>
   }
+  update: {
+    get(): Promise<Update>
+    /** fetch the newer version there is: how far along it is, is heard of as it comes */
+    download(): Promise<void>
+    /**
+     * Start the app again as the version that was fetched. Asks first, where an agent
+     * is in the middle of something that this would stop.
+     */
+    restart(): Promise<void>
+    onChange(listener: (update: Update) => void): () => void
+  }
   viewport: {
     onRequest(listener: (request: ViewportRequest) => void): () => void
     respond(response: ViewportResponse): void
@@ -688,6 +716,10 @@ export const CHANNEL = {
   settingsRevealProjectsFolder: "settings:reveal-projects-folder",
   settingsProjectsFolderSize: "settings:projects-folder-size",
   settingsSetLookOver: "settings:set-look-over",
+  updateGet: "update:get",
+  updateDownload: "update:download",
+  updateRestart: "update:restart",
+  updateChanged: "update:changed",
   viewportRequest: "viewport:request",
   viewportResponse: "viewport:response",
 } as const

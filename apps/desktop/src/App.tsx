@@ -12,6 +12,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { UpdateButton } from "@/components/update"
 import { bridge } from "@/components/viewport/bridge"
 import { Viewport } from "@/components/viewport/viewport"
 import { toolsAsked, toolUsed } from "@/lib/custom-tools/asked"
@@ -191,25 +192,32 @@ export function App() {
           {/* the top edge of the view is also what the window is dragged by */}
           <div className="drag absolute inset-x-0 top-0 h-3" />
           <Sidebar />
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="outline"
-                  size="icon-sm"
-                  className="absolute bottom-4 left-4.5 bg-background shadow-sm"
-                  onClick={() => setSettingsOpen(true)}
-                />
-              }
-            >
-              <SettingsIcon />
-              <span className="sr-only">Settings</span>
-            </TooltipTrigger>
-            <TooltipContent side="right" className="has-data-[slot=kbd]:pr-2.5">
-              Settings
-              <Kbd>{MAC ? "⌘," : "Ctrl ,"}</Kbd>
-            </TooltipContent>
-          </Tooltip>
+          {/* the settings, and over them the app's newer version, where there is one */}
+          <div className="absolute bottom-4 left-4.5 flex flex-col gap-2">
+            <UpdateButton />
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    className="bg-background shadow-sm"
+                    onClick={() => setSettingsOpen(true)}
+                  />
+                }
+              >
+                <SettingsIcon />
+                <span className="sr-only">Settings</span>
+              </TooltipTrigger>
+              <TooltipContent
+                side="right"
+                className="has-data-[slot=kbd]:pr-2.5"
+              >
+                Settings
+                <Kbd>{MAC ? "⌘," : "Ctrl ,"}</Kbd>
+              </TooltipContent>
+            </Tooltip>
+          </div>
         </main>
         {threadOpen && project && <Thread project={project} />}
         {settingsOpen && <Settings />}

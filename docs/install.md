@@ -42,11 +42,16 @@ which agents the app found, and takes the path to one it did not find.
 
 ## A new version
 
-Enclose does not update itself yet. Download the new disk image and drag the app into
-Applications again, in place of the old one. (Version 0.0.1 is called Enclose there, with
-no Alpha, and is not replaced: drag it to the Trash.) Your projects and conversations are
-not in the app, and stay as they were. About, in the settings, says which version you
-have.
+Enclose looks for a newer version of itself when it is opened, and every few hours
+after. When there is one, a download button appears above the settings button, at the
+bottom left of the window. Press it and the new version is downloaded, with a ring round
+the button that shows how far along it is. The button then turns orange: press it and
+Enclose starts again as the new version. Your projects and conversations are not in the
+app, and stay as they were. About, in the settings, says which version you have.
+
+Version 0.0.1 does not update itself. Download the new disk image and drag the app into
+Applications. (0.0.1 is called Enclose there, with no Alpha, and is not replaced: drag it
+to the Trash.)
 
 ## Removing it
 

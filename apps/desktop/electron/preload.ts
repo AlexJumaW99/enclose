@@ -120,6 +120,12 @@ const api: CadApi = {
       ipcRenderer.invoke(CHANNEL.settingsProjectsFolderSize),
     setLookOver: (on) => ipcRenderer.invoke(CHANNEL.settingsSetLookOver, on),
   },
+  update: {
+    get: () => ipcRenderer.invoke(CHANNEL.updateGet),
+    download: () => ipcRenderer.invoke(CHANNEL.updateDownload),
+    restart: () => ipcRenderer.invoke(CHANNEL.updateRestart),
+    onChange: (listener) => on(CHANNEL.updateChanged, listener),
+  },
   viewport: {
     onRequest: (listener) => on(CHANNEL.viewportRequest, listener),
     respond: (response) => ipcRenderer.send(CHANNEL.viewportResponse, response),

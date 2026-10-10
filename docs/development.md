@@ -62,7 +62,7 @@ examples: those it fetches.
 | `npm run icons` | The icon's other sizes, from `icons/icon.png`, and the picture behind the installer's window |
 | `npm run scenes` | The app's reference scenes, from [`kit/scenes`](../kit/scenes) |
 | `npm run examples` | The examples' archives, from [`examples/`](../examples) |
-| `npm run dist` | The app to install, a disk image for each kind of Mac, in `release/` |
+| `npm run dist` | The app to install, a disk image for each kind of Mac, and what an installed app updates itself from, in `release/` |
 
 ### The icon
 
@@ -103,9 +103,11 @@ your own machine say.
 
 `npm run dist` builds the app, makes `Enclose (Alpha).app` of it with
 [electron-builder](https://www.electron.build), and of that a disk image for Apple
-silicon and one for Intel: `release/Enclose-<version>-arm64.dmg` and `-x64.dmg`. It needs
-a Mac. [`scripts/dist.mjs`](../apps/desktop/scripts/dist.mjs) says what goes in, and two
-things follow from it:
+silicon and one for Intel: `release/Enclose-<version>-arm64.dmg` and `-x64.dmg`. Beside
+them it writes what an installed app [updates itself](#updates) from: the app again as a
+zip archive for each kind of Mac, and `latest-mac.yml`. It needs a Mac.
+[`scripts/dist.mjs`](../apps/desktop/scripts/dist.mjs) says what goes in, and two things
+follow from it:
 
 - What the Electron side loads as it runs is a `dependency` in `package.json`, and goes
   into the app as it is. What the window is made of is bundled by Vite, and is a
@@ -145,16 +147,38 @@ Every command is run from `apps/desktop`.
 4. See that a Mac will take it.
    `spctl -a -t exec -vv "release/mac-arm64/Enclose (Alpha).app"` answers `accepted`,
    from `Notarized Developer ID`.
-5. Tag the commit, push it with its tag, and publish the two disk images:
+5. Tag the commit, push it with its tag, and publish the two disk images, with what an
+   installed app updates itself from:
 
    ```
    git tag v<version> && git push origin main v<version>
-   gh release create v<version> release/Enclose-<version>-*.dmg --title "Enclose <version>" --generate-notes --notes-start-tag v<the version before>
+   gh release create v<version> release/Enclose-<version>-*.dmg release/Enclose-<version>-*.zip release/Enclose-<version>-*.zip.blockmap release/latest-mac.yml --title "Enclose <version>" --generate-notes --notes-start-tag v<the version before>
    ```
 
 The README sends people to the repository's latest release, which has to be the app's:
-the examples' release is made with `--latest=false`. The app does not update itself, so
-whoever has the version before is told of the new one.
+the examples' release is made with `--latest=false`.
+
+### Updates
+
+An installed app looks at the same latest release for a newer version of itself, as it
+starts and every four hours after, with
+[electron-updater](https://www.electron.build/auto-update). It reads the release's
+`latest-mac.yml`, and fetches the zip archive that file names for its kind of Mac once
+the user asks for it. So a release without that file is one nobody is offered, and it
+has to be the one made by a `npm run dist` for both kinds of Mac: made for one, it names
+no archive for the other. The app has to be signed, or a Mac will not put the new
+version in. Run from a checkout, the app looks for nothing.
+
+To try an update before there is a release of it, serve what `npm run dist` wrote and
+start an installed app that has an earlier version, telling it to look there:
+
+```
+python3 -m http.server 8123 --bind 127.0.0.1 --directory release
+ENCLOSE_UPDATES_URL=http://127.0.0.1:8123/ "/Applications/Enclose (Alpha).app/Contents/MacOS/Enclose (Alpha)"
+```
+
+[`electron/update.ts`](../apps/desktop/electron/update.ts) keeps where an update is, for
+the window to show.
 
 ## Formats a project is read by
 

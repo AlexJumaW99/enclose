@@ -12,6 +12,7 @@ import {
   safeStorage,
   shell,
 } from "electron"
+import electronUpdater from "electron-updater"
 
 import {
   ACCESSES,
@@ -35,6 +36,7 @@ import {
   type Settings,
   type ToolSource,
   type Undone,
+  type Update,
   type Vec3,
   type ViewportAsked,
   type ViewportRequest,
@@ -74,6 +76,7 @@ import { cleanEnv, expandHome, Providers } from "./providers"
 import { SettingsStore, type Vault } from "./settings"
 import { Threads, type Arranging, type Referenced } from "./threads"
 import { ToolServer } from "./tools"
+import { Updates } from "./update"
 
 const HERE = import.meta.dirname
 const DEV_URL = process.env.VITE_DEV_SERVER_URL
@@ -88,12 +91,16 @@ const ICONS = path.join(HERE, "../icons")
 //   <folder or CAD file>     open it as a project, as if it were dropped on the window
 //   ENCLOSE_EXAMPLES_URL=<url>  fetch the examples from there (it ends in a slash), even
 //                            when the app has them beside it
+//   ENCLOSE_UPDATES_URL=<url>  look there for the app's newer versions, where what `npm
+//                            run dist` wrote to release/ is served, and not among its
+//                            releases (the packaged app only: no other looks for any)
 const flag = (name: string) =>
   process.argv
     .find((a) => a.startsWith(`--${name}=`))
     ?.slice(name.length + 3) ?? null
 const CAPTURE = flag("capture")
 const EXAMPLES_FROM = process.env.ENCLOSE_EXAMPLES_URL || null
+const UPDATES_FROM = process.env.ENCLOSE_UPDATES_URL || null
 
 // The package's name for the app says how far along it is ("Enclose (Alpha)"), and that
 // is what a Mac shows the app as. What the app keeps is filed under its name alone, as it
@@ -140,6 +147,8 @@ let settings: SettingsStore
 let providers: Providers
 /** where the app's own tools answer, for an agent that cannot be handed them */
 const toolServer = new ToolServer()
+/** the app's newer versions: none are looked for when it is run from a checkout */
+let updates: Updates | null = null
 /**
  * Where the app's kit is, and its examples if it has them. Run from a checkout, that is
  * the top of the repository, two folders up from the app (apps/desktop). Made into a
@@ -1059,6 +1068,33 @@ function wire() {
     settings.set({ lookOver: on === true })
   )
 
+  ipcMain.handle(
+    CHANNEL.updateGet,
+    (): Update => updates?.get() ?? { state: "none" }
+  )
+  ipcMain.handle(CHANNEL.updateDownload, () => updates?.download())
+  ipcMain.handle(CHANNEL.updateRestart, async () => {
+    // Starting again stops whatever is under way, an agent in the middle of a turn
+    // with it: that is asked about first.
+    const busy = projects
+      .list(() => [])
+      .filter(({ id }) => threads.working(id) || builds.has(id)).length
+    if (busy > 0 && win) {
+      const { response } = await dialog.showMessageBox(win, {
+        type: "warning",
+        message: "Restart Enclose now?",
+        detail: `${
+          busy === 1 ? "A project is" : `${busy} projects are`
+        } still being worked on, and that will be stopped.`,
+        buttons: ["Restart", "Cancel"],
+        defaultId: 0,
+        cancelId: 1,
+      })
+      if (response !== 0) return
+    }
+    updates?.restart()
+  })
+
   ipcMain.on(CHANNEL.viewportResponse, (_, response: ViewportResponse) => {
     const request = waiting.get(response.id)
     if (!request) return
@@ -1147,6 +1183,19 @@ if (!app.requestSingleInstanceLock()) {
     })
     wire()
 
+    // Run from a checkout, the app is whatever was last built there. It is the app made
+    // into a package that has newer versions of itself to look for.
+    if (app.isPackaged && !CAPTURE) {
+      const { autoUpdater } = electronUpdater
+      if (UPDATES_FROM)
+        autoUpdater.setFeedURL({ provider: "generic", url: UPDATES_FROM })
+      updates = new Updates({
+        updater: autoUpdater,
+        onChange: (update) => send(CHANNEL.updateChanged, update),
+      })
+      updates.start()
+    }
+
     // Files that were still being made a model of when the app was last quit, or that
     // could not be: tried again, now that whatever was wanting may be there. Only in
     // folders of the app's own making: nobody else's build is run unasked.
@@ -1186,5 +1235,6 @@ if (!app.requestSingleInstanceLock()) {
     threads?.close()
     toolServer.close()
     projects?.close()
+    updates?.close()
   })
 }

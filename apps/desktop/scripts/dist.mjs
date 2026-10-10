@@ -1,6 +1,8 @@
 // The app as something to install: the production build made into Enclose (Alpha).app,
 // and that into a disk image to download, one for each kind of Mac. They are written to
-// release/.
+// release/, and with them what an app already installed makes itself the next version
+// from: the app again as a zip archive, which is what a Mac's updater takes, and
+// latest-mac.yml, which says what the newest version is and names the archives.
 // It needs a Mac.
 //   npm run dist                build, then make both
 //   npm run dist -- --arm64     ...only the one for Apple silicon (--x64: for Intel)
@@ -33,7 +35,12 @@ const notarized = Boolean(
 
 const made = await build({
   projectDir: ROOT,
-  targets: Platform.MAC.createTarget("dmg", ...archs.map((arch) => Arch[arch])),
+  targets: Platform.MAC.createTarget(
+    ["dmg", "zip"],
+    ...archs.map((arch) => Arch[arch])
+  ),
+  // (made, and no more: a release is put up by hand, as docs/development.md says)
+  publish: "never",
   config: {
     // what a Mac knows the app by, and files what it lets the app do under: not to be
     // changed once people have the app
@@ -95,13 +102,23 @@ const made = await build({
         { x: 480, y: 166, type: "link", path: "/Applications" },
       ],
     },
-    // (the app does not update itself: there is nowhere to tell it of)
-    publish: null,
+    // Where an app that is installed looks for the versions after it: the releases of
+    // the app's repository, the latest of them. It is written into the app, and is why
+    // latest-mac.yml is made.
+    publish: { provider: "github", owner: "enclosedev", repo: "enclose" },
   },
 })
 
-for (const file of made.filter((one) => one.endsWith(".dmg")))
+// what goes up with a release
+for (const file of [
+  ...made.filter((one) => /\.(dmg|zip|zip\.blockmap)$/.test(one)),
+  resolve(ROOT, "release/latest-mac.yml"),
+])
   console.log(`[dist] ${file}`)
+if (archs.length < 2)
+  console.warn(
+    "[dist] made for one kind of Mac only: latest-mac.yml names no update for the other, and is not one to release"
+  )
 if (!notarized)
   console.warn(
     "[dist] not notarized: a Mac that downloads this will not open it. Set APPLE_KEYCHAIN_PROFILE, or the APPLE_API_KEY three (see the top of scripts/dist.mjs)"

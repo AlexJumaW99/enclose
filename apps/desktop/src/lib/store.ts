@@ -47,6 +47,7 @@ import {
   type ProviderSettings,
   type Seen,
   type ThreadItem,
+  type Update,
   type Vec3,
 } from "@shared/api"
 import type { Turn } from "@/lib/orient"
@@ -451,6 +452,8 @@ type State = {
   figure: boolean
   /** whether the settings are over the window */
   settingsOpen: boolean
+  /** where the app is with a newer version of itself, as the app last said */
+  update: Update
   access: Access
   /** the agents there are, once the app has said: Claude Code, Codex, Grok */
   providers: Provider[]
@@ -789,6 +792,7 @@ export const useStore = create<State>()((set, get) => ({
   sceneOf: savedScenes(),
   figure: saved(FIGURE_KEY) === "shown",
   settingsOpen: false,
+  update: { state: "none" },
   access: savedAccess(saved(ACCESS_KEY)),
   providers: [],
   provider: PROVIDERS.find((one) => one === saved(PROVIDER_KEY)) ?? "claude",
@@ -1585,6 +1589,8 @@ export function connect() {
   void cad.providers
     .list()
     .then((providers) => useStore.setState({ providers }))
+  cad.update.onChange((update) => useStore.setState({ update }))
+  void cad.update.get().then((update) => useStore.setState({ update }))
 }
 
 // lets a script drive the app when it is being checked without a person at it
