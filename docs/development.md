@@ -129,19 +129,31 @@ try the installed app out.
 
 ### A release
 
-1. Give `package.json` the new version, and commit.
-2. `APPLE_KEYCHAIN_PROFILE=<profile> npm run dist`
-3. See that a Mac will take it. `spctl -a -t exec -vv release/mac-arm64/Enclose.app`
-   answers `accepted`, from `Notarized Developer ID`.
-4. Tag the commit and publish the two disk images with it:
+Every command is run from `apps/desktop`.
+
+1. Commit what is to go out, and leave nothing uncommitted. The build takes the files as
+   they stand, committed or not, and a release is what its tag says it is.
+2. Give the app its new version, in `package.json` and the lock file both, and commit
+   that:
 
    ```
-   git tag v<version> && git push origin v<version>
-   gh release create v<version> release/Enclose-<version>-*.dmg --title "Enclose <version>" --generate-notes
+   npm version <version> --no-git-tag-version
+   git commit -am "chore: <version>"
+   ```
+
+3. `APPLE_KEYCHAIN_PROFILE=<profile> npm run dist`
+4. See that a Mac will take it. `spctl -a -t exec -vv release/mac-arm64/Enclose.app`
+   answers `accepted`, from `Notarized Developer ID`.
+5. Tag the commit, push it with its tag, and publish the two disk images:
+
+   ```
+   git tag v<version> && git push origin main v<version>
+   gh release create v<version> release/Enclose-<version>-*.dmg --title "Enclose <version>" --generate-notes --notes-start-tag v<the version before>
    ```
 
 The README sends people to the repository's latest release, which has to be the app's:
-the examples' release is made with `--latest=false`.
+the examples' release is made with `--latest=false`. The app does not update itself, so
+whoever has the version before is told of the new one.
 
 ## Formats a project is read by
 

@@ -41,10 +41,10 @@ where it has them. [`kit/tools.md`](../kit/tools.md) says how one is written, an
 what Claude reads before it writes one.
 
 A tool is run shut away from the rest of the app, in a worker of its own: it is told the
-parts' names and sizes, and has no way to the window or to files. The usual ways to the
-network are taken from it as well, but one is not stopped yet: a tool that imports a
-module from somewhere else. So read the tools of a project that came from someone else
-before you open it. One that goes wrong,
+parts' names and sizes, and has no way to the window, to files or to the network. It
+cannot bring code in from anywhere else, nor make any up to run. So a project that came
+from someone else can be opened with its tools. (Version 0.0.1 did not stop a tool that
+imports a module from somewhere else: with that version, read a stranger's tools first.) One that goes wrong,
 or never comes back from a frame, is stopped and says why in its tab, with a button that
 takes that to Claude.
 
