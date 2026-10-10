@@ -1,0 +1,21 @@
+// Shared values that are neither type nor color.
+//
+// TYPE lives in `tokens/type.ts` and COLOR in `tokens/color.ts`, both as data — that is what lets the Tweak overlay edit them live and write
+// them back. A stylesheet is not something it can safely author, so anything
+// declared here is yours alone and invisible to the overlay.
+//
+// Add a color? Put it in `tokens/color.ts` (or press + in the overlay's Colors tab).
+//
+// UNITS, since this is where a stylesheet starts: layout is px. Padding,
+// gaps, container widths, offsets — all px, all the way down. Type is the one
+// thing that ships in rem, and `tokens/type.ts` does that for you from the px numbers
+// you write there.
+//
+// The split is the whole point. A reader who raises their browser's font size
+// is asking for bigger TEXT, not a bigger layout; rem gaps around rem text
+// give them a page that is simply zoomed, which is what the zoom control they
+// did not press already does. Sizing layout in rem also means every spacing
+// value silently depends on the type scale, so one is not adjustable without
+// the other. Reach for a relative unit when the relationship is real — `em`
+// or `ch` for a measure that should track the type it holds — and for `clamp()`
+// or `vw` when a length should follow the viewport.

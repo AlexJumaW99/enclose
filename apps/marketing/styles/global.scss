@@ -1,0 +1,28 @@
+@use './tokens';
+@use './typography' as type;
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; padding: 0; }
+
+// Inter Display is Inter's variable font held at the top of its optical-size
+// axis. Left alone the browser moves that axis with the font size, and text
+// under 32px would be set in the text cut.
+html {
+  font-variation-settings: 'opsz' 32;
+}
+
+// The document's default text is the `body` style from type.ts — declared
+// once, here, so every element inherits it and page stylesheets only have to
+// name the styles that DEPART from it.
+body {
+  @include type.body;
+  background: var(--bg);
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100dvh;
+}
+
+// Lenis (per-page smooth scroll) base styles.
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }

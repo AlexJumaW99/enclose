@@ -39,6 +39,7 @@ apps/
                reference scenes, and the examples' archives
     icons/     the app's icon, in the sizes each system asks for
     installer/ the picture behind the window the installer opens
+  marketing/   the website, a Modulato site with its own README
 docs/          how the app works, a page to a subject
 examples/      projects to open and try things on: a table clock, with a tool, a
                counter stool, to see beside a person, a clip lamp on a wall shelf,

@@ -323,7 +323,7 @@ function Saying() {
 }
 
 /** How big the square the mark stands in is while something is waited for, px. */
-const MARK_SIZE = 96
+const MARK_SIZE = 40
 
 /**
  * What is waited for, in the middle of the view while it has nothing else to show: the
@@ -357,7 +357,7 @@ function Waiting({
           it one way as the other by what is seen of them: the mark stops short of the
           edge of its square, and a line of words has a little over and under its
           letters. */}
-      <div className="mt-5.5 flex max-w-md flex-col items-center text-center text-xl/[1.3]">
+      <div className="mt-6.75 flex max-w-md flex-col items-center text-center text-xl/[1.3]">
         <div className="max-w-full truncate font-bold">{title}</div>
         <div className="text-foreground/45">{detail}</div>
       </div>
