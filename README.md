@@ -65,6 +65,23 @@ exporter writes the meshes, the edges, a STEP file of each part and the manifest
 model takes the cube's place as soon as it has. A machine that has Python but not build123d gets a
 virtual environment in the folder first.
 
+**Starting from an example.** With no projects yet, the window says how one is started
+and, beside that, shows the app's examples in a row that scrolls along: a table clock, a
+robot arm, a clip lamp and a counter stool, each with its picture and how much there is
+to download. Click one and a project is made of it where new projects go, yours to
+change. The examples are not in the app, which would be six times the size for them.
+Each is one archive (`clock.tar.br`: its folder as a tar archive, squeezed with Brotli,
+which makes 20 MB of the four where the folders are 137), kept with a release of the
+app's repository. It is fetched when it is asked for, taken for the example only if it
+has the size and the SHA-256 the app was made to expect, and unpacked. Run from a
+checkout, the app has the examples beside it in [`examples/`](examples) and copies one
+from there instead. [`shared/examples.json`](shared/examples.json) is the list of them.
+`npm run examples` packs them again after a change, into `release/examples/`, and writes
+their sizes and sums into the list; the archives then go up as a release under a new
+name (the list says which), since an app already made goes on fetching the ones it was
+made with. `ENCLOSE_EXAMPLES_URL` has them fetched from somewhere else, a folder of them
+served on your own machine say.
+
 **Starting from CAD files.** Open a STEP file (`.step`, `.stp`), several at once, or a
 folder that has some in it, and the app makes a project of them. It does not work in the
 folder they came from, which could be laid out any way at all: it copies the files into a
@@ -395,8 +412,8 @@ Down the right-hand edge:
   clock's own speed the balance swings and the train goes on in beats, four to the
   second. Glass shows the movement in its case, Explode takes it apart in the order it
   is put together, and the dial has a window on the balance. Open the folder as a
-  project, or, with no projects yet, press Start with example: that makes a project of
-  a copy of it, where new projects go.
+  project, or, with no projects yet, click it among the examples the window shows: that
+  makes a project of a copy of it, where new projects go.
 
   [`examples/arm`](examples/arm) is another: a robot arm that was not drawn here. It
   is the SO-101, an open-source arm, read from its makers' own CAD file
@@ -595,9 +612,11 @@ kit/         the exporter a project copies in to write its model (Python), the
              screws it can put in one, the app's own reference scenes, each drawn in
              code and kept as built, the figure of a person that stands in some
              of them, and how a project's own tools are written
-shared/      types and the manifest format, used by both sides
+shared/      types and the manifest format, used by both sides, and the list of
+             examples
 src/         the window: project cards, 3D view and its tools, conversation
-scripts/     dev loop, production build, the icon's sizes, and the reference scenes
+scripts/     dev loop, production build, the icon's sizes, the reference scenes,
+             and the examples' archives
 spikes/      experiments kept for their measurements
 ```
 
@@ -615,6 +634,7 @@ npm test
 ## Not there yet
 
 - No installer. It runs from a checkout.
+- The examples' archives are not up yet, so an example opens only from a checkout.
 - Of CAD files it opens only STEP. Meshes (STL, OBJ, 3MF) are not brought in: they could
   be shown, but there is no solid in them for Claude to change.
 - Only tried on macOS.

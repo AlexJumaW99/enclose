@@ -7,6 +7,8 @@ import {
   EXTENT,
   letter,
   LETTER_WIDTH,
+  LOGO,
+  LOGO_VIEW,
   LOOP,
   MARK,
   REST,
@@ -55,6 +57,7 @@ export function Letter({
   y,
   height,
   minus = false,
+  rise = MARK.labelRise,
   ...props
 }: {
   axis: Axis
@@ -62,6 +65,8 @@ export function Letter({
   y: number
   height: number
   minus?: boolean
+  /** how long the uprights its diagonals start and end with are, as a share of the height */
+  rise?: number
 } & Omit<React.SVGProps<SVGPathElement>, "x" | "y" | "height">) {
   const stroke = MARK.labelWeight * height
   const bar = minus ? MINUS.bar * height : 0
@@ -72,7 +77,7 @@ export function Letter({
     <path
       d={
         (minus ? `M${left} ${y}h${bar}` : "") +
-        letter(axis, x + before / 2, y, height, stroke, MARK.labelRise * height)
+        letter(axis, x + before / 2, y, height, stroke, rise * height)
       }
       fill="none"
       stroke="currentColor"
@@ -80,6 +85,80 @@ export function Letter({
       {...props}
     />
   )
+}
+
+/**
+ * The mark drawn in a square `size` px a side, seen from `view`, in the measures given:
+ * a filled dot with its letter at the end each axis points to, and an outlined dot at the
+ * end it points away from.
+ */
+function Drawn({
+  view,
+  measures,
+  size,
+  ink,
+  className,
+}: {
+  view: View
+  measures: typeof MARK
+  size: number
+  ink: string
+  className?: string
+}) {
+  return (
+    <svg
+      viewBox={`${-EXTENT} ${-EXTENT} ${2 * EXTENT} ${2 * EXTENT}`}
+      width={size}
+      height={size}
+      aria-hidden
+      className={cn("shrink-0", className)}
+    >
+      {ends(view).map(({ axis, sign, x, y }) => {
+        const cx = x * measures.length
+        const cy = y * measures.length
+        return sign > 0 ? (
+          <g key={`${axis}+`}>
+            <line
+              x2={cx}
+              y2={cy}
+              stroke="currentColor"
+              strokeWidth={measures.weight}
+              strokeLinecap="round"
+            />
+            <circle cx={cx} cy={cy} r={measures.dot} fill="currentColor" />
+            <Letter
+              axis={axis}
+              x={cx}
+              y={cy}
+              height={measures.labelSize * 2 * measures.dot}
+              rise={measures.labelRise}
+              stroke={ink}
+            />
+          </g>
+        ) : (
+          // the outline is drawn inside the dot's size, round a tint of the same colour
+          <circle
+            key={`${axis}-`}
+            cx={cx}
+            cy={cy}
+            r={measures.dot - measures.outline / 2}
+            fill="currentColor"
+            fillOpacity={measures.tint}
+            stroke="currentColor"
+            strokeWidth={measures.outline}
+          />
+        )
+      })}
+    </svg>
+  )
+}
+
+type MarkProps = {
+  /** how big the square it turns in is, px: at rest it is narrower (`RESTING_WIDTH`) */
+  size?: number
+  /** what its letters are written in, on the dots: as unlike the mark's colour as can be */
+  ink?: string
+  className?: string
 }
 
 /**
@@ -93,58 +172,35 @@ export function Mark({
   size = 64,
   ink = "var(--background)",
   className,
-}: {
-  moving?: boolean
-  /** how big the square it turns in is, px: at rest it is narrower (`RESTING_WIDTH`) */
-  size?: number
-  /** what its letters are written in, on the dots: as unlike the mark's colour as can be */
-  ink?: string
-  className?: string
-}) {
+}: MarkProps & { moving?: boolean }) {
   const view = useTurning(moving)
   return (
-    <svg
-      viewBox={`${-EXTENT} ${-EXTENT} ${2 * EXTENT} ${2 * EXTENT}`}
-      width={size}
-      height={size}
-      aria-hidden
-      className={cn("shrink-0", className)}
-    >
-      {ends(view).map(({ axis, sign, x, y }) => {
-        const cx = x * MARK.length
-        const cy = y * MARK.length
-        return sign > 0 ? (
-          <g key={`${axis}+`}>
-            <line
-              x2={cx}
-              y2={cy}
-              stroke="currentColor"
-              strokeWidth={MARK.weight}
-              strokeLinecap="round"
-            />
-            <circle cx={cx} cy={cy} r={MARK.dot} fill="currentColor" />
-            <Letter
-              axis={axis}
-              x={cx}
-              y={cy}
-              height={MARK.labelSize * 2 * MARK.dot}
-              stroke={ink}
-            />
-          </g>
-        ) : (
-          // the outline is drawn inside the dot's size, round a tint of the same colour
-          <circle
-            key={`${axis}-`}
-            cx={cx}
-            cy={cy}
-            r={MARK.dot - MARK.outline / 2}
-            fill="currentColor"
-            fillOpacity={MARK.tint}
-            stroke="currentColor"
-            strokeWidth={MARK.outline}
-          />
-        )
-      })}
-    </svg>
+    <Drawn
+      view={view}
+      measures={MARK}
+      size={size}
+      ink={ink}
+      className={className}
+    />
+  )
+}
+
+/**
+ * The mark as the app's name goes with it: the one on its icon, heavier than the mark
+ * that turns and still, where the app says who it is and nothing is waited for.
+ */
+export function Logo({
+  size = 64,
+  ink = "var(--background)",
+  className,
+}: MarkProps) {
+  return (
+    <Drawn
+      view={LOGO_VIEW}
+      measures={LOGO}
+      size={size}
+      ink={ink}
+      className={className}
+    />
   )
 }

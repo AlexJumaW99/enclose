@@ -471,8 +471,15 @@ export type CadApi = {
     open(paths: string[]): Promise<Project | null>
     /** make a folder where new projects go, under a stand-in name, and add it */
     create(): Promise<Project>
-    /** copy the app's example to where new projects go, and add the copy */
-    example(): Promise<Project | null>
+    /**
+     * Make a project of one of the app's examples (shared/examples.ts), where new
+     * projects go, and add it: the example is fetched first, unless the app has it.
+     */
+    example(id: string): Promise<Project | null>
+    /** how many bytes of an example being fetched have come, as they come */
+    onExampleProgress(
+      listener: (id: string, received: number) => void
+    ): () => void
     /** where on disk something dropped on the window is */
     pathOf(file: File): string
     /**
@@ -645,6 +652,7 @@ export const CHANNEL = {
   projectsOpen: "projects:open",
   projectsCreate: "projects:create",
   projectsExample: "projects:example",
+  projectsExampleProgress: "projects:example-progress",
   projectsRemove: "projects:remove",
   projectsReveal: "projects:reveal",
   projectsChanged: "projects:changed",

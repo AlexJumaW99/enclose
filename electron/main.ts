@@ -7,6 +7,7 @@ import {
   BrowserWindow,
   dialog,
   ipcMain,
+  net,
   protocol,
   safeStorage,
   shell,
@@ -39,7 +40,9 @@ import {
   type ViewportRequest,
   type ViewportResponse,
 } from "../shared/api"
+import { archiveOf, EXAMPLES, EXAMPLES_URL } from "../shared/examples"
 import { PICTURE_TYPES } from "../shared/pictures"
+import { unpack, type Filed } from "./archive"
 import { Changes } from "./changes"
 import { followRename, listCommands, lookAtClaude } from "./claude"
 import { lookAtCodex } from "./codex"
@@ -55,7 +58,7 @@ import {
   SCRIPT,
   sortOpened,
 } from "./imports"
-import { startFrom } from "./examples"
+import { fetched, startFrom } from "./examples"
 import { standInName } from "./names"
 import { groupNameOf } from "./naming"
 import { Pictures } from "./pictures"
@@ -83,11 +86,14 @@ const ICONS = path.join(HERE, "../icons")
 //   --script=<file.js>       run this in the window first; it may return a promise
 //   --wait=<ms>              how long to let the window settle before each step
 //   <folder or CAD file>     open it as a project, as if it were dropped on the window
+//   ENCLOSE_EXAMPLES_URL=<url>  fetch the examples from there (it ends in a slash), even
+//                            when the app has them beside it
 const flag = (name: string) =>
   process.argv
     .find((a) => a.startsWith(`--${name}=`))
     ?.slice(name.length + 3) ?? null
 const CAPTURE = flag("capture")
+const EXAMPLES_FROM = process.env.ENCLOSE_EXAMPLES_URL || null
 
 // (the second is what the variable was called before the app had its name)
 const ELSEWHERE =
@@ -149,11 +155,8 @@ let providers: Providers
 const toolServer = new ToolServer()
 /** where the app keeps the exporter a project copies to write its model */
 const KIT = path.join(app.getAppPath(), "kit", "enclose.py")
-/** the project the app has to start from, for someone with none of their own yet */
-const EXAMPLE = {
-  dir: path.join(app.getAppPath(), "examples", "clock"),
-  name: "Table clock",
-}
+/** where the examples are when the app is run from its source: beside it */
+const EXAMPLES_HERE = path.join(app.getAppPath(), "examples")
 /** the reference scenes the app has of its own, for a model to be seen in */
 const SCENES = appScenes(path.join(app.getAppPath(), "kit", "scenes"))
 
@@ -695,20 +698,45 @@ function wire() {
     const id = projects.add(made.dir, { name: made.name, standIn: true })
     return list().find((p) => p.id === id) ?? null
   })
-  ipcMain.handle(CHANNEL.projectsExample, async () => {
+  ipcMain.handle(CHANNEL.projectsExample, async (_, wanted: unknown) => {
+    const example = EXAMPLES.find((one) => one.id === wanted)
+    if (!example) return null
     let id: string | null = null
+    let fetching = false
     try {
+      // the app's own copy if it has one, unless it is told where to fetch them
+      let from: string | Filed[] = path.join(EXAMPLES_HERE, example.id)
+      if (EXAMPLES_FROM || !fs.existsSync(from)) {
+        fetching = true
+        from = await unpack(
+          await fetched(
+            (EXAMPLES_FROM ?? EXAMPLES_URL) + archiveOf(example),
+            example,
+            (received) =>
+              send(CHANNEL.projectsExampleProgress, example.id, received),
+            (url, init) => net.fetch(String(url), init)
+          )
+        )
+        fetching = false
+      }
       const { projectsFolder } = settings.get()
-      const dir = startFrom(EXAMPLE.dir, EXAMPLE.name, projectsFolder, KIT)
-      id = projects.add(dir, { name: EXAMPLE.name })
+      const dir = startFrom(from, example.name, projectsFolder, KIT)
+      id = projects.add(dir, { name: example.name })
       // an example that comes without its model built has it made now
       if (!projects.get(id)?.manifest) makeModel(id)
     } catch (error) {
+      console.error("[example]", error)
       if (win && !CAPTURE)
         await dialog.showMessageBox(win, {
           type: "info",
-          message: "The example could not be opened",
-          detail: error instanceof Error ? error.message : String(error),
+          message: fetching
+            ? "The example could not be downloaded"
+            : "The example could not be opened",
+          detail: fetching
+            ? "Check your connection and try again."
+            : error instanceof Error
+              ? error.message
+              : String(error),
         })
     }
     return list().find((p) => p.id === id) ?? null

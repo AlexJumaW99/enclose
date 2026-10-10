@@ -1,10 +1,12 @@
+import { createHash } from "node:crypto"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
-import { ownExporter, startFrom } from "./examples"
+import type { Example } from "../shared/examples"
+import { fetched, ownExporter, startFrom } from "./examples"
 
 let root: string
 const write = (file: string, content = "") => {
@@ -106,5 +108,117 @@ describe("startFrom", () => {
     fs.rmSync(path.join(root, "app/examples"), { recursive: true })
     expect(start).toThrow()
     expect(fs.readdirSync(path.join(root, "projects"))).toEqual([])
+  })
+
+  describe("of an example that was fetched", () => {
+    const unpacked = (files: Record<string, string>) =>
+      startFrom(
+        Object.entries(files).map(([file, content]) => ({
+          path: file,
+          data: Buffer.from(content),
+        })),
+        "Table clock",
+        path.join(root, "projects"),
+        path.join(root, "app/kit/enclose.py"),
+        made
+      )
+
+    it("writes its files into a new project's folder, exporter and all", () => {
+      const dir = unpacked({
+        "model.py": SCRIPT,
+        "build/step/base.step": "step",
+      })
+      const at = path.relative(root, dir)
+      expect(at).toBe("projects/2026-10-09-1230-table-clock")
+      expect(read(`${at}/build/step/base.step`)).toBe("step")
+      expect(read(`${at}/enclose.py`)).toBe("# exporter\n")
+      expect(read(`${at}/model.py`)).not.toContain("sys.path")
+    })
+
+    it("leaves no folder behind when a file would land outside it", () => {
+      expect(() => unpacked({ "../outside": "x" })).toThrow(/not a place/)
+      expect(fs.readdirSync(path.join(root, "projects"))).toEqual([])
+      expect(fs.existsSync(path.join(root, "outside"))).toBe(false)
+    })
+  })
+})
+
+describe("fetched", () => {
+  const archive = Buffer.from("an archive, as far as this goes")
+  const example: Example = {
+    id: "clock",
+    name: "Table clock",
+    bytes: archive.length,
+    sha256: createHash("sha256").update(archive).digest("hex"),
+  }
+  /** What answers in place of the network: the bytes, a few at a time. */
+  const answering =
+    (bytes: Buffer, status = 200): typeof fetch =>
+    () =>
+      Promise.resolve(
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              for (let at = 0; at < bytes.length; at += 10)
+                controller.enqueue(bytes.subarray(at, at + 10))
+              controller.close()
+            },
+          }),
+          { status }
+        )
+      )
+
+  it("gives the archive, saying how much of it has come as it comes", async () => {
+    const came: number[] = []
+    const got = await fetched(
+      "https://somewhere/clock.tar.br",
+      example,
+      (received) => came.push(received),
+      answering(archive)
+    )
+    expect(got.equals(archive)).toBe(true)
+    expect(came).toEqual([0, 10, 20, 30, archive.length])
+  })
+
+  it("asks where it is told to", async () => {
+    let asked = ""
+    await fetched(
+      "https://somewhere/clock.tar.br",
+      example,
+      () => {},
+      (url) => {
+        asked = String(url)
+        return answering(archive)(url)
+      }
+    )
+    expect(asked).toBe("https://somewhere/clock.tar.br")
+  })
+
+  it.each([
+    ["other bytes of the same number", Buffer.from(archive).fill(1, 0, 4)],
+    ["fewer bytes", archive.subarray(0, 12)],
+    ["more bytes", Buffer.concat([archive, archive])],
+  ])("will not take %s for the example", async (_, sent) => {
+    await expect(
+      fetched("https://somewhere/x", example, () => {}, answering(sent))
+    ).rejects.toThrow(/not the example/)
+  })
+
+  it("says what was answered when it is not the archive", async () => {
+    await expect(
+      fetched("https://somewhere/x", example, () => {}, answering(archive, 404))
+    ).rejects.toThrow(/404/)
+  })
+
+  it("gives up on an archive that stops coming", async () => {
+    const stuck: typeof fetch = (_, init) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () =>
+          reject(new Error("aborted"))
+        )
+      })
+    await expect(
+      fetched("https://somewhere/x", example, () => {}, stuck, 20)
+    ).rejects.toThrow(/stopped coming/)
   })
 })

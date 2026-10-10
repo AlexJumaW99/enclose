@@ -31,6 +31,21 @@ export const EXTENT = MARK.length + MARK.dot
 export const REST: View = { azimuth: -45, elevation: -35.26 }
 
 /**
+ * The mark as the app's name goes with it, and as its icon has it (the brand's preset
+ * 2026-10-06-6): heavier, the ends an axis points away from outlined and nothing more,
+ * and seen from the other side of where it rests, its three letters to the left.
+ */
+export const LOGO = {
+  ...MARK,
+  weight: 4,
+  outline: 4.5,
+  tint: 0,
+  labelSize: 0.48,
+  labelRise: 0.28,
+}
+export const LOGO_VIEW: View = { azimuth: 135, elevation: -35.26 }
+
+/**
  * How wide the mark is at rest, as a share of the square it turns in (which is `EXTENT`
  * either way from the middle): there the dots stand at the corners of a hexagon, a
  * point up, and it is narrower across than the square by this much.

@@ -12,6 +12,7 @@
     "start": "node scripts/start.mjs",
     "icons": "node scripts/icons.mjs",
     "scenes": "node scripts/scenes.mjs",
+    "examples": "node scripts/examples.mjs",
     "typecheck": "tsc -b",
     "lint": "eslint .",
     "test": "vitest run",

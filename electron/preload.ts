@@ -22,7 +22,9 @@ const api: CadApi = {
     add: (kind) => ipcRenderer.invoke(CHANNEL.projectsAdd, kind),
     open: (paths) => ipcRenderer.invoke(CHANNEL.projectsOpen, paths),
     create: () => ipcRenderer.invoke(CHANNEL.projectsCreate),
-    example: () => ipcRenderer.invoke(CHANNEL.projectsExample),
+    example: (id) => ipcRenderer.invoke(CHANNEL.projectsExample, id),
+    onExampleProgress: (listener) =>
+      on(CHANNEL.projectsExampleProgress, listener),
     pathOf: (file) => webUtils.getPathForFile(file),
     remove: (id) => ipcRenderer.invoke(CHANNEL.projectsRemove, id),
     reveal: (id) => ipcRenderer.invoke(CHANNEL.projectsReveal, id),

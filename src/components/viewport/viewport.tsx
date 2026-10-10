@@ -14,7 +14,7 @@ import { runTools, stopTools, useTools } from "@/lib/custom-tools/host"
 import type { PartFact } from "@/lib/custom-tools/types"
 import { Blueprint } from "@/components/blueprint/blueprint"
 import { Options } from "@/components/blueprint/options"
-import { Mark } from "@/components/mark"
+import { Logo } from "@/components/mark"
 import { RESTING_WIDTH } from "@/lib/mark"
 import { atWork } from "@/lib/steps"
 import { duration, useNow } from "@/lib/time"
@@ -23,14 +23,7 @@ import { ReferencePanel } from "@/components/reference-panel"
 import { Switch, Tools } from "@/components/tools"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty"
+import { Welcome } from "@/components/welcome"
 import {
   arranged,
   grouped,
@@ -329,14 +322,16 @@ function Saying() {
   )
 }
 
-/** How big the square the mark turns in is while something is waited for, px. */
+/** How big the square the mark stands in is while something is waited for, px. */
 const MARK_SIZE = 96
 
 /**
  * What is waited for, in the middle of the view while it has nothing else to show: the
- * mark, turning; what is being done, and under that how far along it is; and a bar of
- * the same, as wide as the mark is at rest. `progress` runs from 0 to 1, or is null
- * while there is no telling.
+ * mark; what is being done, and under that how far along it is; and a bar of the same,
+ * as wide as the mark. `progress` runs from 0 to 1, or is null while there is no
+ * telling. The mark stands still: what is waited for keeps the window too busy to turn
+ * it evenly, and a mark that turns in fits and starts looks stuck. The bar says that
+ * things are moving.
  */
 function Waiting({
   title,
@@ -357,12 +352,12 @@ function Waiting({
         late ? "delay-300 duration-300" : "duration-200"
       )}
     >
-      <Mark moving size={MARK_SIZE} />
+      <Logo size={MARK_SIZE} ink="var(--sidebar)" />
       {/* The mark, the words and the bar each have room to themselves, and as much of
-          it one way as the other by what is seen of them: the mark comes out to the
-          edge of its square as it turns, and a line of words has a little over and
-          under its letters. */}
-      <div className="mt-7 flex max-w-md flex-col items-center text-center text-xl/[1.3]">
+          it one way as the other by what is seen of them: the mark stops short of the
+          edge of its square, and a line of words has a little over and under its
+          letters. */}
+      <div className="mt-5.5 flex max-w-md flex-col items-center text-center text-xl/[1.3]">
         <div className="max-w-full truncate font-bold">{title}</div>
         <div className="text-foreground/45">{detail}</div>
       </div>
@@ -1501,55 +1496,6 @@ function Model({ project }: { project: Project }) {
 }
 
 const nothing = () => {}
-
-/** How big the mark stands over the words of welcome, px. */
-const WELCOME_MARK = 72
-
-/** No projects at all: how one is started. */
-function Welcome() {
-  const addProject = useStore((s) => s.addProject)
-  const createProject = useStore((s) => s.createProject)
-  const startExample = useStore((s) => s.startExample)
-  return (
-    <Empty className="h-full">
-      <EmptyHeader>
-        <EmptyMedia>
-          <Mark size={WELCOME_MARK} />
-        </EmptyMedia>
-        <EmptyTitle>Drop a file or folder here</EmptyTitle>
-        <EmptyDescription>
-          Drop a STEP file, a folder or create something new
-        </EmptyDescription>
-      </EmptyHeader>
-      <EmptyContent className="max-w-56 items-stretch gap-2">
-        <Button onClick={() => void createProject()}>
-          Create something new
-        </Button>
-        {/* a Mac's picker takes files and folders alike; no other system's does */}
-        {MAC ? (
-          <Button variant="secondary" onClick={() => void addProject()}>
-            Open file or folder
-          </Button>
-        ) : (
-          <div className="grid grid-cols-2 gap-2">
-            <Button variant="secondary" onClick={() => void addProject("file")}>
-              Open file
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => void addProject("folder")}
-            >
-              Open folder
-            </Button>
-          </div>
-        )}
-        <Button variant="secondary" onClick={() => void startExample()}>
-          Start with example
-        </Button>
-      </EmptyContent>
-    </Empty>
-  )
-}
 
 /** The middle of the window: the open project's model, or what to do about not having one. */
 export function Viewport({ project }: { project: Project | null }) {

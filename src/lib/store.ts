@@ -412,6 +412,11 @@ type State = {
   ready: boolean
   projects: Project[]
   activeId: string | null
+  /**
+   * The examples a project is being made of, by example: how many bytes of each have
+   * been fetched so far. One that is not being made into anything is not in here.
+   */
+  starting: Record<string, number>
   /** what has been said in the conversations that have been looked at, by conversation */
   items: Record<string, ThreadItem[]>
   /**
@@ -570,8 +575,8 @@ type State = {
   openPaths(paths: string[]): Promise<void>
   /** Make a new project's folder where new projects go, and open it. */
   createProject(): Promise<void>
-  /** Make a project of the app's example, and open it. */
-  startExample(): Promise<void>
+  /** Make a project of one of the app's examples, fetching it first, and open it. */
+  startExample(id: string): Promise<void>
   removeProject(id: string): Promise<void>
   setView(patch: Partial<View>): void
   /**
@@ -774,6 +779,7 @@ export const useStore = create<State>()((set, get) => ({
   ready: false,
   projects: [],
   activeId: null,
+  starting: {},
   items: {},
   picked: {},
   finished: savedFinished(),
@@ -866,8 +872,14 @@ export const useStore = create<State>()((set, get) => ({
     get().activate(project.id)
   },
 
-  async startExample() {
-    const project = await window.cad.projects.example()
+  async startExample(id) {
+    // one that is on its way is not asked for again
+    if (id in get().starting) return
+    set({ starting: { ...get().starting, [id]: 0 } })
+    const project = await window.cad.projects.example(id).catch(() => null)
+    const starting = { ...get().starting }
+    delete starting[id]
+    set({ starting })
     if (project) get().activate(project.id)
   },
 
@@ -1565,6 +1577,11 @@ export function connect() {
   void cad.projects.list().then((projects) => {
     reconcile(projects)
     useStore.setState({ ready: true })
+  })
+  cad.projects.onExampleProgress((id, received) => {
+    useStore.setState(({ starting }) =>
+      id in starting ? { starting: { ...starting, [id]: received } } : {}
+    )
   })
   cad.providers.onChange((providers) => useStore.setState({ providers }))
   void cad.providers
