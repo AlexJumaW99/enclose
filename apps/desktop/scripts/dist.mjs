@@ -1,5 +1,6 @@
-// The app as something to install: the production build made into Enclose.app, and that
-// into a disk image to download, one for each kind of Mac. They are written to release/.
+// The app as something to install: the production build made into Enclose (Alpha).app,
+// and that into a disk image to download, one for each kind of Mac. They are written to
+// release/.
 // It needs a Mac.
 //   npm run dist                build, then make both
 //   npm run dist -- --arm64     ...only the one for Apple silicon (--x64: for Intel)
@@ -64,7 +65,9 @@ const made = await build({
     mac: {
       category: "public.app-category.graphics-design",
       icon: "icons/icon.icns",
-      artifactName: "${productName}-${version}-${arch}.${ext}",
+      // (by the name alone: what the app is shown as has spaces in it, and a download
+      // is linked to by this)
+      artifactName: "Enclose-${version}-${arch}.${ext}",
       notarize: notarized,
       // A Mac asks its user before an app, or anything the app runs, reads one of these
       // folders, and shows them this as the reason.

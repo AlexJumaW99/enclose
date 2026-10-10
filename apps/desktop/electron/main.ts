@@ -95,6 +95,14 @@ const flag = (name: string) =>
 const CAPTURE = flag("capture")
 const EXAMPLES_FROM = process.env.ENCLOSE_EXAMPLES_URL || null
 
+// The package's name for the app says how far along it is ("Enclose (Alpha)"), and that
+// is what a Mac shows the app as. What the app keeps is filed under its name alone, as it
+// was before the app said so: its state, in Application Support, and the key a Mac's
+// keychain holds for what the settings seal. So the app goes by that name here, from
+// before either is looked for, and neither is lost when what it is shown as changes.
+const SHOWN = app.name
+app.setName("Enclose")
+
 const ELSEWHERE = process.env.ENCLOSE_USER_DATA ?? null
 if (ELSEWHERE) app.setPath("userData", ELSEWHERE)
 
@@ -1078,7 +1086,7 @@ if (!app.requestSingleInstanceLock()) {
     // (A version given here is shown just as it is given, so the word goes with it.)
     if (!app.isPackaged && process.platform === "darwin")
       app.setAboutPanelOptions({
-        applicationName: app.name,
+        applicationName: SHOWN,
         applicationVersion: `Version ${app.getVersion()}`,
         version: "",
       })

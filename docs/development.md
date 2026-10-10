@@ -101,7 +101,7 @@ your own machine say.
 
 ### The installer
 
-`npm run dist` builds the app, makes `Enclose.app` of it with
+`npm run dist` builds the app, makes `Enclose (Alpha).app` of it with
 [electron-builder](https://www.electron.build), and of that a disk image for Apple
 silicon and one for Intel: `release/Enclose-<version>-arm64.dmg` and `-x64.dmg`. It needs
 a Mac. [`scripts/dist.mjs`](../apps/desktop/scripts/dist.mjs) says what goes in, and two
@@ -112,7 +112,7 @@ things follow from it:
   `devDependency`, React among them. A package the Electron side imports has to be a
   dependency, or the installed app does not start.
 - The kit goes in as files, beside the app's own archive
-  (`Enclose.app/Contents/Resources/kit`), where Python and an agent can read it.
+  (`Enclose (Alpha).app/Contents/Resources/kit`), where Python and an agent can read it.
 
 A Mac opens an app that was downloaded only if it is signed by a developer Apple knows
 and has been notarized, which is Apple looking it over. The script signs with the
@@ -142,8 +142,9 @@ Every command is run from `apps/desktop`.
    ```
 
 3. `APPLE_KEYCHAIN_PROFILE=<profile> npm run dist`
-4. See that a Mac will take it. `spctl -a -t exec -vv release/mac-arm64/Enclose.app`
-   answers `accepted`, from `Notarized Developer ID`.
+4. See that a Mac will take it.
+   `spctl -a -t exec -vv "release/mac-arm64/Enclose (Alpha).app"` answers `accepted`,
+   from `Notarized Developer ID`.
 5. Tag the commit, push it with its tag, and publish the two disk images:
 
    ```

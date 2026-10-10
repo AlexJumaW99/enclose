@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 
 import type { ConversationSummary, Project } from "@shared/api"
+import { EXAMPLES, type Example } from "@shared/examples"
 import { Button } from "@/components/ui/button"
 import {
   ContextMenu,
@@ -23,13 +24,17 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Spinner } from "@/components/ui/spinner"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { sizeOf } from "@/lib/model"
 import { MAC } from "@/lib/platform"
 import { useStack, useStore } from "@/lib/store"
 import { ago, useNow } from "@/lib/time"
@@ -455,6 +460,28 @@ function ProjectMenu({
   )
 }
 
+/** One of the app's examples, in the list of what a project is started from. */
+function ExampleItem({ example }: { example: Example }) {
+  const startExample = useStore((state) => state.startExample)
+  // how much of it has come, while a project is being made of it
+  const received = useStore((state) => state.starting[example.id])
+  const starting = received !== undefined
+  return (
+    <DropdownMenuItem
+      disabled={starting}
+      onClick={() => void startExample(example.id)}
+    >
+      {example.name}
+      {/* what there is of it to fetch, and then how much of that has come */}
+      <span className="ml-auto pl-4 text-xs text-muted-foreground tabular-nums">
+        {starting && received > 0
+          ? `${Math.floor((received / example.bytes) * 100)}%`
+          : sizeOf(example.bytes)}
+      </span>
+    </DropdownMenuItem>
+  )
+}
+
 /**
  * The projects: one card per folder, with what its conversation is up to, and its earlier
  * conversations under it. The cards float over the 3D view rather than taking a column
@@ -469,6 +496,9 @@ export function Sidebar() {
   const blueprint = useStore((state) => state.view.blueprint)
   const addProject = useStore((state) => state.addProject)
   const createProject = useStore((state) => state.createProject)
+  // an example is a while coming, and the list it was picked from has closed by then:
+  // the button it opens from says so until the project is there
+  const starting = useStore((state) => Object.keys(state.starting).length > 0)
   const [adding, setAdding] = React.useState(false)
   const now = useNow()
   // with no projects the middle of the window is where one is started
@@ -511,7 +541,7 @@ export function Sidebar() {
                   />
                 }
               >
-                <PlusIcon />
+                {starting ? <Spinner /> : <PlusIcon />}
                 <span className="sr-only">New project</span>
               </TooltipTrigger>
               {!adding && (
@@ -538,6 +568,13 @@ export function Sidebar() {
                     </DropdownMenuItem>
                   </>
                 )}
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Examples</DropdownMenuLabel>
+                {EXAMPLES.map((example) => (
+                  <ExampleItem key={example.id} example={example} />
+                ))}
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
