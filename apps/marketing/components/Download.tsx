@@ -2,7 +2,11 @@ import { useEffect, useState } from 'react'
 import { REPOSITORY } from '../shell/Header'
 import { AppleIcon } from './app/icons'
 
-const LATEST = `${REPOSITORY}/releases/latest`
+/**
+ * The site's own ways to the newest disk image of each kind, which it sends on to
+ * GitHub (vite.config.ts). They need no script, and nothing asked of anyone.
+ */
+const WAY: Record<'silicon' | 'intel', string> = { silicon: '/download', intel: '/download/intel' }
 
 type Chip = 'silicon' | 'intel'
 type Release = { version: string } & Record<Chip, string>
@@ -74,9 +78,10 @@ async function chipOf(): Promise<Chip | null> {
 
 /**
  * The way to the app: the disk image for the kind of Mac the page is read on, which is
- * taken for Apple Silicon where it cannot be told, and under it which that is. Until
- * GitHub has said which files there are, and if it never does, the button goes to the
- * page of the newest release, where both are.
+ * taken for Apple Silicon where it cannot be told, and under it which that is. The
+ * button goes by the site's own way to the newest image, which is always right; once
+ * GitHub has said which release that is, it goes straight to the file, and the version
+ * is said under it.
  */
 export function Download() {
   const [release, setRelease] = useState<Release | null>(null)
@@ -98,7 +103,7 @@ export function Download() {
 
   return (
     <div className="download">
-      <a className="download__button" href={release?.[chip] ?? LATEST} data-native>
+      <a className="download__button" href={release?.[chip] ?? WAY[chip]} data-native>
         <AppleIcon />
         Download for Mac
       </a>

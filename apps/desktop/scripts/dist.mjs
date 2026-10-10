@@ -93,6 +93,14 @@ const made = await build({
     // window is the size of that picture. It is a light one: Finder writes the names
     // under the icons in black whatever is behind them.
     dmg: {
+      // The disk images are named for the kind of Mac and not for the version, so that
+      // the newest of each is always at one address: the site's download button, and
+      // enclose.dev/download, go to
+      //   github.com/enclosedev/enclose/releases/latest/download/Enclose-arm64.dmg
+      // (and -x64), which GitHub answers with whichever release is the latest. The
+      // archives an installed app updates from keep their versions: latest-mac.yml
+      // names them, and nothing else has to find them.
+      artifactName: "Enclose-${arch}.${ext}",
       title: "${productName}",
       background: "installer/background.png",
       iconSize: 128,

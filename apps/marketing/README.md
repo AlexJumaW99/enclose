@@ -51,6 +51,15 @@ npm run blueprints   # public/blueprint: its sheets, as the app would save them
 `npm run blueprints` runs the desktop app's own drawing code, so `apps/desktop`
 has to have its packages installed.
 
+## The download
+
+`/download` and `/download/intel` send whoever asks to the newest disk image for each
+kind of Mac. They are set in `vite.config.ts`, and go to GitHub's address for the latest
+release's `Enclose-arm64.dmg` and `Enclose-x64.dmg`: the app's releases name their disk
+images that way so that a new release needs nothing changed here
+([how a release is made](../../docs/development.md#a-release)). The button on the page
+goes the same way, and by the right one for the Mac it is read on.
+
 ## What the page says, and its link card
 
 The headline, the line under it and what search engines are told are in

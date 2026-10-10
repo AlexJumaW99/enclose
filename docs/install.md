@@ -19,8 +19,8 @@ Take the disk image for your Mac from
 
 | Your Mac | The file |
 |---|---|
-| Apple silicon (M1 and later) | `Enclose-<version>-arm64.dmg` |
-| Intel | `Enclose-<version>-x64.dmg` |
+| Apple silicon (M1 and later) | `Enclose-arm64.dmg` |
+| Intel | `Enclose-x64.dmg` |
 
 About This Mac, in the Apple menu, says which yours is: it names a chip that is Apple's,
 or a processor that is Intel's. Open the disk image and drag the app into Applications,

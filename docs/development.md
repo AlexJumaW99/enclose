@@ -153,8 +153,14 @@ Every command is run from `apps/desktop`.
 
    ```
    git tag v<version> && git push origin main v<version>
-   gh release create v<version> release/Enclose-<version>-*.dmg release/Enclose-<version>-*.zip release/Enclose-<version>-*.zip.blockmap release/latest-mac.yml --title "Enclose <version>" --generate-notes --notes-start-tag v<the version before>
+   gh release create v<version> release/Enclose-arm64.dmg release/Enclose-x64.dmg release/Enclose-<version>-*.zip release/Enclose-<version>-*.zip.blockmap release/latest-mac.yml --title "Enclose <version>" --generate-notes --notes-start-tag v<the version before>
    ```
+
+The disk images are named for the kind of Mac and not for the version
+(`Enclose-arm64.dmg`, `Enclose-x64.dmg`), so that the newest is always at one address:
+`https://github.com/enclosedev/enclose/releases/latest/download/Enclose-arm64.dmg`. The
+site's download button and `enclose.dev/download` go there, so a release needs nothing
+changed on the site. They have to go up under exactly those names.
 
 The README sends people to the repository's latest release, which has to be the app's:
 the examples' release is made with `--latest=false`.
