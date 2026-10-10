@@ -1,0 +1,327 @@
+{
+ "title": "SO-101 robot arm",
+ "reference": "table",
+ "groups": [
+  {
+   "id": "base",
+   "label": "Base"
+  },
+  {
+   "id": "shoulder",
+   "label": "Shoulder"
+  },
+  {
+   "id": "upper-arm",
+   "label": "Upper arm"
+  },
+  {
+   "id": "lower-arm",
+   "label": "Lower arm"
+  },
+  {
+   "id": "wrist",
+   "label": "Wrist"
+  },
+  {
+   "id": "gripper",
+   "label": "Gripper"
+  },
+  {
+   "id": "jaw",
+   "label": "Jaw"
+  },
+  {
+   "id": "cables",
+   "label": "Cables"
+  }
+ ],
+ "parts": [
+  {
+   "id": "base",
+   "label": "Base",
+   "group": "base",
+   "file": "base.glb",
+   "edges": "base.edges.bin"
+  },
+  {
+   "id": "shoulder",
+   "label": "Shoulder",
+   "group": "shoulder",
+   "file": "shoulder.glb",
+   "edges": "shoulder.edges.bin"
+  },
+  {
+   "id": "upper-arm",
+   "label": "Upper arm",
+   "group": "upper-arm",
+   "file": "upper-arm.glb",
+   "edges": "upper-arm.edges.bin"
+  },
+  {
+   "id": "lower-arm",
+   "label": "Lower arm",
+   "group": "lower-arm",
+   "file": "lower-arm.glb",
+   "edges": "lower-arm.edges.bin"
+  },
+  {
+   "id": "base-motor-holder",
+   "label": "Base motor holder",
+   "group": "base",
+   "file": "base-motor-holder.glb",
+   "edges": "base-motor-holder.edges.bin"
+  },
+  {
+   "id": "shoulder-motor-holder",
+   "label": "Shoulder motor holder",
+   "group": "shoulder",
+   "file": "shoulder-motor-holder.glb",
+   "edges": "shoulder-motor-holder.edges.bin"
+  },
+  {
+   "id": "wrist-motor-holder",
+   "label": "Wrist motor holder",
+   "group": "lower-arm",
+   "file": "wrist-motor-holder.glb",
+   "edges": "wrist-motor-holder.edges.bin"
+  },
+  {
+   "id": "wrist",
+   "label": "Wrist",
+   "group": "wrist",
+   "file": "wrist.glb",
+   "edges": "wrist.edges.bin"
+  },
+  {
+   "id": "gripper",
+   "label": "Gripper",
+   "group": "gripper",
+   "file": "gripper.glb",
+   "edges": "gripper.edges.bin"
+  },
+  {
+   "id": "jaw",
+   "label": "Jaw",
+   "group": "jaw",
+   "file": "jaw.glb",
+   "edges": "jaw.edges.bin"
+  },
+  {
+   "id": "board-mount",
+   "label": "Board mount",
+   "group": "base",
+   "file": "board-mount.glb",
+   "edges": "board-mount.edges.bin"
+  },
+  {
+   "id": "board",
+   "label": "Servo driver board",
+   "group": "base",
+   "color": "green",
+   "file": "board.glb",
+   "edges": "board.edges.bin"
+  },
+  {
+   "id": "servo-1",
+   "label": "Servo 1, shoulder pan",
+   "group": "base",
+   "color": "grey",
+   "file": "servo-1.glb",
+   "edges": "servo-1.edges.bin"
+  },
+  {
+   "id": "horns-1",
+   "label": "Horns of servo 1",
+   "group": "shoulder",
+   "finish": "metal",
+   "file": "horns-1.glb",
+   "edges": "horns-1.edges.bin"
+  },
+  {
+   "id": "servo-2",
+   "label": "Servo 2, shoulder lift",
+   "group": "shoulder",
+   "color": "grey",
+   "file": "servo-2.glb",
+   "edges": "servo-2.edges.bin"
+  },
+  {
+   "id": "horns-2",
+   "label": "Horns of servo 2",
+   "group": "upper-arm",
+   "finish": "metal",
+   "file": "horns-2.glb",
+   "edges": "horns-2.edges.bin"
+  },
+  {
+   "id": "servo-3",
+   "label": "Servo 3, elbow",
+   "group": "upper-arm",
+   "color": "grey",
+   "file": "servo-3.glb",
+   "edges": "servo-3.edges.bin"
+  },
+  {
+   "id": "horns-3",
+   "label": "Horns of servo 3",
+   "group": "lower-arm",
+   "finish": "metal",
+   "file": "horns-3.glb",
+   "edges": "horns-3.edges.bin"
+  },
+  {
+   "id": "servo-4",
+   "label": "Servo 4, wrist flex",
+   "group": "lower-arm",
+   "color": "grey",
+   "file": "servo-4.glb",
+   "edges": "servo-4.edges.bin"
+  },
+  {
+   "id": "horns-4",
+   "label": "Horns of servo 4",
+   "group": "wrist",
+   "finish": "metal",
+   "file": "horns-4.glb",
+   "edges": "horns-4.edges.bin"
+  },
+  {
+   "id": "servo-5",
+   "label": "Servo 5, wrist roll",
+   "group": "wrist",
+   "color": "grey",
+   "file": "servo-5.glb",
+   "edges": "servo-5.edges.bin"
+  },
+  {
+   "id": "horns-5",
+   "label": "Horns of servo 5",
+   "group": "gripper",
+   "finish": "metal",
+   "file": "horns-5.glb",
+   "edges": "horns-5.edges.bin"
+  },
+  {
+   "id": "servo-6",
+   "label": "Servo 6, gripper",
+   "group": "gripper",
+   "color": "grey",
+   "file": "servo-6.glb",
+   "edges": "servo-6.edges.bin"
+  },
+  {
+   "id": "horns-6",
+   "label": "Horns of servo 6",
+   "group": "jaw",
+   "finish": "metal",
+   "file": "horns-6.glb",
+   "edges": "horns-6.edges.bin"
+  },
+  {
+   "id": "screws-base",
+   "label": "Screws, base",
+   "group": "base",
+   "finish": "metal",
+   "file": "screws-base.glb",
+   "edges": "screws-base.edges.bin"
+  },
+  {
+   "id": "screws-shoulder",
+   "label": "Screws, shoulder",
+   "group": "shoulder",
+   "finish": "metal",
+   "file": "screws-shoulder.glb",
+   "edges": "screws-shoulder.edges.bin"
+  },
+  {
+   "id": "screws-upper-arm",
+   "label": "Screws, upper arm",
+   "group": "upper-arm",
+   "finish": "metal",
+   "file": "screws-upper-arm.glb",
+   "edges": "screws-upper-arm.edges.bin"
+  },
+  {
+   "id": "screws-lower-arm",
+   "label": "Screws, lower arm",
+   "group": "lower-arm",
+   "finish": "metal",
+   "file": "screws-lower-arm.glb",
+   "edges": "screws-lower-arm.edges.bin"
+  },
+  {
+   "id": "screws-wrist",
+   "label": "Screws, wrist",
+   "group": "wrist",
+   "finish": "metal",
+   "file": "screws-wrist.glb",
+   "edges": "screws-wrist.edges.bin"
+  },
+  {
+   "id": "screws-gripper",
+   "label": "Screws, gripper",
+   "group": "gripper",
+   "finish": "metal",
+   "file": "screws-gripper.glb",
+   "edges": "screws-gripper.edges.bin"
+  },
+  {
+   "id": "screws-jaw",
+   "label": "Screws, jaw",
+   "group": "jaw",
+   "finish": "metal",
+   "file": "screws-jaw.glb",
+   "edges": "screws-jaw.edges.bin"
+  },
+  {
+   "id": "cable-1",
+   "label": "Cable 1",
+   "group": "cables",
+   "color": "grey",
+   "file": "cable-1.glb",
+   "edges": "cable-1.edges.bin"
+  },
+  {
+   "id": "cable-2",
+   "label": "Cable 2",
+   "group": "cables",
+   "color": "grey",
+   "file": "cable-2.glb",
+   "edges": "cable-2.edges.bin"
+  },
+  {
+   "id": "cable-3",
+   "label": "Cable 3",
+   "group": "cables",
+   "color": "grey",
+   "file": "cable-3.glb",
+   "edges": "cable-3.edges.bin"
+  },
+  {
+   "id": "cable-4",
+   "label": "Cable 4",
+   "group": "cables",
+   "color": "grey",
+   "file": "cable-4.glb",
+   "edges": "cable-4.edges.bin"
+  },
+  {
+   "id": "cable-5",
+   "label": "Cable 5",
+   "group": "cables",
+   "color": "grey",
+   "file": "cable-5.glb",
+   "edges": "cable-5.edges.bin"
+  },
+  {
+   "id": "cable-6",
+   "label": "Cable 6",
+   "group": "cables",
+   "color": "grey",
+   "file": "cable-6.glb",
+   "edges": "cable-6.edges.bin"
+  }
+ ],
+ "keepouts": [],
+ "downloads": []
+}

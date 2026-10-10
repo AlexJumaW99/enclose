@@ -398,6 +398,11 @@ Down the right-hand edge:
   project, or, with no projects yet, press Start with example: that makes a project of
   a copy of it, where new projects go.
 
+  [`examples/arm`](examples/arm) is another: a robot arm that was not drawn here. It
+  is the SO-101, an open-source arm, read from its makers' own CAD file
+  ([where it is from](examples/arm/source/README.md)), and its tool steers it joint by
+  joint or takes it to a pose.
+
 Esc puts the search away if it is up, and then the parts list, the list of reference
 scenes, or the project's tools. After that it gets back out of the section, the explode,
 the reference scene, the tools' hold on the model, whatever is showing on its own and
@@ -582,8 +587,9 @@ and a list of every shortcut.
 ```
 electron/    the app's own process: window, project list, the line to Claude
 examples/    projects to open and try things on: a table clock, with a tool, a
-             counter stool, to see beside a person, and a clip lamp on a wall shelf,
-             with its wire
+             counter stool, to see beside a person, a clip lamp on a wall shelf,
+             with its wire, and an open-source robot arm, read from its CAD file
+             and steered by a tool
 icons/       the app's icon, in the sizes each system asks for
 kit/         the exporter a project copies in to write its model (Python), the
              screws it can put in one, the app's own reference scenes, each drawn in

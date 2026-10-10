@@ -1,4 +1,7 @@
-@import "tailwindcss";
+/* Class names are looked for in src/ and nowhere else. Left to look through the whole
+   folder, Tailwind reads every model's meshes in examples/ as well, and a big one sends
+   the dev server through all the memory there is. */
+@import "tailwindcss" source("../src");
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/inter";

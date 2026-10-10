@@ -306,26 +306,23 @@ function ProjectCard({ project, now }: { project: Project; now: number }) {
                 under.length > 0 ? "Start a new session" : "No messages yet"
               }
             />
-            {/* the branch, for a folder that is kept in git: a card has the line for
-                it either way, and is as tall for a folder that is not */}
-            <span
-              className={cn(
-                SMALL,
-                "mt-1.5 flex h-[1lh] items-center gap-1 text-muted-foreground/70"
-              )}
-            >
-              {project.branch && (
-                <>
-                  <GitBranchIcon
-                    size={11}
-                    absoluteStrokeWidth
-                    strokeWidth={1}
-                    className="shrink-0"
-                  />
-                  <span className="truncate">{project.branch}</span>
-                </>
-              )}
-            </span>
+            {/* the branch, for a folder that is kept in git: a line more on its card */}
+            {project.branch && (
+              <span
+                className={cn(
+                  SMALL,
+                  "mt-1.5 flex items-center gap-1 text-muted-foreground/70"
+                )}
+              >
+                <GitBranchIcon
+                  size={11}
+                  absoluteStrokeWidth
+                  strokeWidth={1}
+                  className="shrink-0"
+                />
+                <span className="truncate">{project.branch}</span>
+              </span>
+            )}
           </Written>
         </ProjectMenu>
         <Button

@@ -491,6 +491,7 @@ class Model:
         out: str = "build",
         fine: bool = False,
         reference: str | None = None,
+        downloads: bool = True,
     ):
         """`out` is relative to the script being run. What is round is drawn round: in
         flats that keep within a fiftieth of a millimetre of the curve, however big the
@@ -499,10 +500,14 @@ class Model:
         `reference` names the one of the app's reference scenes that the thing is best
         seen in, by where it is used: "table" for what stands on a desk or is held in
         the hand, "room" for what stands on the floor. Leave it out and the app goes by
-        how big the model is."""
+        how big the model is.
+        `downloads=False` leaves out the STEP files the app offers of each part and of
+        the whole: for a model read from a CAD file the project already has, which they
+        would only be copies of, and bigger ones."""
         self.title = title
         self.fine = fine
         self.reference = reference
+        self.downloads = downloads
         here = os.path.dirname(os.path.abspath(sys.argv[0] or "."))
         self.out = out if os.path.isabs(out) else os.path.join(here, out)
         self._groups: list[dict] = []
@@ -577,7 +582,7 @@ class Model:
         what makes the app reload. Returns the path of the manifest."""
         if not self._parts:
             raise ValueError("a model needs at least one part")
-        os.makedirs(os.path.join(self.out, "step"), exist_ok=True)
+        os.makedirs(os.path.join(self.out, "step" if self.downloads else ""), exist_ok=True)
         downloads = []
         # how many there are to write, then each as it is done: the app shows how far
         # along a model is from these lines
@@ -587,23 +592,24 @@ class Model:
             id, shape = entry["id"], self._shapes[entry["id"]]
             _write_mesh(shape, id, os.path.join(self.out, f"{id}.glb"), self.fine)
             _write_edges(shape, os.path.join(self.out, f"{id}.edges.bin"))
-            step = os.path.join(self.out, "step", f"{id}.step")
-            export_step(shape, step)
             entry.update(file=f"{id}.glb", edges=f"{id}.edges.bin")
-            downloads.append(
-                {
-                    "file": f"step/{id}.step",
-                    "name": f"{id}.step",
-                    "label": entry["label"],
-                    "detail": "",
-                    "kind": "part",
-                    "part": id,
-                    "bytes": os.path.getsize(step),
-                }
-            )
+            if self.downloads:
+                step = os.path.join(self.out, "step", f"{id}.step")
+                export_step(shape, step)
+                downloads.append(
+                    {
+                        "file": f"step/{id}.step",
+                        "name": f"{id}.step",
+                        "label": entry["label"],
+                        "detail": "",
+                        "kind": "part",
+                        "part": id,
+                        "bytes": os.path.getsize(step),
+                    }
+                )
             print(f"  {entry['label']}: {time.time() - started:.1f}s")
 
-        if len(self._parts) > 1:
+        if self.downloads and len(self._parts) > 1:
             name = _slug(self.title or "model")
             bodies = []
             for entry in self._parts:
