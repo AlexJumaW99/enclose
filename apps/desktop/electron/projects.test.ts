@@ -138,6 +138,21 @@ describe("Projects", () => {
     projects.close()
   })
 
+  it("lists the project added last first, and so it does after a restart", () => {
+    const file = path.join(root, "state/projects.json")
+    const projects = new Projects(file, () => {})
+    const ids = ["first", "second", "third"].map((name) => {
+      fs.mkdirSync(path.join(root, name))
+      return projects.add(path.join(root, name))
+    })
+    const newestFirst = [...ids].reverse()
+    expect(projects.list(idle).map((p) => p.id)).toEqual(newestFirst)
+    expect(new Projects(file, () => {}).list(idle).map((p) => p.id)).toEqual(
+      newestFirst
+    )
+    projects.close()
+  })
+
   it("forgets the projects that an earlier version only closed", () => {
     write("open/model.json", MANIFEST)
     write("shut/model.json", MANIFEST)

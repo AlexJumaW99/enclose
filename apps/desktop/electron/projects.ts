@@ -440,8 +440,9 @@ export class Projects {
     return true
   }
 
+  /** The projects, the one added last first: they are kept in the order they came. */
   list(conversations: (id: string) => ConversationSummary[]): Project[] {
-    return this.saved.map((p) => {
+    return [...this.saved].reverse().map((p) => {
       const manifest = this.found.get(p.id)?.manifest ?? null
       return {
         id: p.id,

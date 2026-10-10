@@ -4,6 +4,10 @@ A project is a folder. Drop one on the window, or use the + under the project ca
 open one or to start a new project. STEP files can be dropped and opened the same way:
 see [Starting from CAD files](#starting-from-cad-files).
 
+The cards are in the order the projects were added, the newest at the top. With more of
+them than the window has room for, the cards scroll and the + stays where it can be
+reached, over the settings button.
+
 ## New projects
 
 A new project is given a stand-in name to begin with ("Quiet heron") and a folder to

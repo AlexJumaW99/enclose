@@ -60,7 +60,7 @@ examples: those it fetches.
 
 | Command | What it makes |
 |---|---|
-| `npm run icons` | The icon's other sizes, from `icons/icon.png`, and the picture behind the installer's window |
+| `npm run icons` | The icon's other sizes, from `icons/icon.png`, the icon of the app as it is run from a checkout, and the picture behind the installer's window |
 | `npm run scenes` | The app's reference scenes, from [`kit/scenes`](../kit/scenes) |
 | `npm run examples` | The examples' archives, from [`examples/`](../examples) |
 | `npm run dist` | The app to install, a disk image for each kind of Mac, and what an installed app updates itself from, in `release/` |
@@ -71,6 +71,13 @@ The icon is drawn once, as [`icons/icon.png`](../apps/desktop/icons/icon.png): 1
 Apple's grid, with the margin a Mac wants round the tile. `npm run icons` makes the rest
 from it: `icon.icns` for macOS, and for Windows and Linux, where an icon fills its
 square, `icon.ico` and `icon-512.png` with the margin cut away.
+
+Run from a checkout, the app has another icon, and another name, Enclose (Dev):
+[`icons/icon-dev.png`](../apps/desktop/icons/icon-dev.png) is the same mark on blue, and
+`icon-dev.icns` is made from it by the same command. It is what the Dock shows, and what
+the copy of Electron the app is run as carries (`scripts/electron-name.mjs`), so that a
+Mac asked for Enclose by name shows the app being worked on apart from the one that is
+installed. It does not go into the installer.
 
 The same command makes the picture behind the window the
 [installer](#the-installer) opens, from the drawing of it,

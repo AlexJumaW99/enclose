@@ -191,9 +191,8 @@ export function App() {
           {ready && <Viewport project={project} />}
           {/* the top edge of the view is also what the window is dragged by */}
           <div className="drag absolute inset-x-0 top-0 h-3" />
-          <Sidebar />
-          {/* the settings, and over them the app's newer version, where there is one */}
-          <div className="absolute bottom-4 left-4.5 flex flex-col gap-2">
+          <Sidebar>
+            {/* the settings, and over them the app's newer version, where there is one */}
             <UpdateButton />
             <Tooltip>
               <TooltipTrigger
@@ -217,7 +216,7 @@ export function App() {
                 <Kbd>{MAC ? "⌘," : "Ctrl ,"}</Kbd>
               </TooltipContent>
             </Tooltip>
-          </div>
+          </Sidebar>
         </main>
         {threadOpen && project && <Thread project={project} />}
         {settingsOpen && <Settings />}

@@ -53,6 +53,9 @@ const LIT = "bg-sidebar-accent/90 shadow-sm ring-foreground/15"
 const UNLIT =
   "bg-sidebar-accent/45 ring-foreground/5 hover:bg-sidebar-accent/65"
 
+/** What is kept at the foot of the sidebar: one thing over another. */
+const FOOT = "flex shrink-0 flex-col gap-2"
+
 /** What a card is written in, and its name: the same size, and heavier. */
 const SMALL = "text-[12px] leading-[1.4]"
 const NAME = `truncate ${SMALL} font-medium`
@@ -294,9 +297,16 @@ function ProjectCard({ project, now }: { project: Project; now: number }) {
   // the card is lit for its project, unless what is open is spread out under it
   const openUnder = under.some((c) => c.id === open?.id)
   const lit = active && !(spread && openUnder)
+  // The card of the project that is opened is brought to where it can be seen: a new
+  // one comes in at the top of the list, which may have been scrolled a long way down.
+  const card = React.useRef<HTMLDivElement>(null)
+  React.useEffect(() => {
+    if (active) card.current?.scrollIntoView({ block: "nearest" })
+  }, [active])
 
   return (
-    <div className="flex shrink-0 flex-col gap-1.5">
+    // (as far from the edge of the list, when it is brought there, as its own edge is drawn)
+    <div ref={card} className="flex shrink-0 scroll-my-1 flex-col gap-1.5">
       {/* the card is one button, and closing it another beside it: one cannot go in the other */}
       <div
         className={cn(
@@ -501,11 +511,16 @@ function ExampleItem({ example }: { example: Example }) {
 
 /**
  * The projects: one card per folder, with what its conversation is up to, and its earlier
- * conversations under it. The cards float over the 3D view rather than taking a column
- * from it, so the model is never cut off at an edge; everything between and below them
- * still belongs to the view.
+ * conversations under it, the one added last at the top. The cards float over the 3D view
+ * rather than taking a column from it, so the model is never cut off at an edge;
+ * everything between and below them still belongs to the view.
+ *
+ * Under the cards is the button a project is added with, and at the foot of the window
+ * whatever the sidebar is given to keep there: the settings. With more cards than there
+ * is room for, it is the cards that scroll, on down to the window's edge, and the button
+ * stays over what is at the foot, with the cards going by behind the two of them.
  */
-export function Sidebar() {
+export function Sidebar({ children }: { children: React.ReactNode }) {
   const projects = useStore((state) => state.projects)
   // While it is a model's blueprint that is looked at, the sheets have the window: the
   // card of the project they are of stays, at the top, and the rest are put away.
@@ -521,9 +536,12 @@ export function Sidebar() {
   // with no projects the middle of the window is where one is started
   if (projects.length === 0)
     return (
-      <aside className="pointer-events-none absolute inset-x-0 top-0">
-        <div className="drag pointer-events-auto h-12" />
-      </aside>
+      <>
+        <aside className="pointer-events-none absolute inset-x-0 top-0">
+          <div className="drag pointer-events-auto h-12" />
+        </aside>
+        <div className={cn("absolute bottom-4 left-4.5", FOOT)}>{children}</div>
+      </>
     )
 
   return (
@@ -533,69 +551,78 @@ export function Sidebar() {
       <div className="drag pointer-events-auto h-12 w-58 shrink-0" />
       {/* a list that scrolls cuts off whatever is outside it, and a card's edge is drawn
           just outside the card: it starts a little higher than the first card does */}
-      <div className="-mt-1 flex min-h-0 [scrollbar-width:none] flex-col items-start gap-1.5 overflow-y-auto px-4.5 pt-1 pb-4">
+      <div className="-mt-1 flex min-h-0 grow [scrollbar-width:none] flex-col items-start gap-1.5 overflow-y-auto px-4.5 pt-1">
         {projects.map((project) => (
           <Tucked key={project.id} away={blueprint && project.id !== activeId}>
             <ProjectCard project={project} now={now} />
           </Tucked>
         ))}
-        <Tucked away={blueprint}>
-          <DropdownMenu open={adding} onOpenChange={setAdding}>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <DropdownMenuTrigger
-                    render={
-                      <Button
-                        variant="outline"
-                        size="icon-sm"
-                        className={cn(
-                          "pointer-events-auto mt-1.5 shrink-0 bg-background shadow-sm",
-                          FADES
-                        )}
-                      />
-                    }
-                  />
-                }
-              >
-                {starting ? <Spinner /> : <PlusIcon />}
-                <span className="sr-only">New project</span>
-              </TooltipTrigger>
-              {!adding && (
-                <TooltipContent side="right">New project</TooltipContent>
-              )}
-            </Tooltip>
-            <DropdownMenuContent side="right" align="start">
-              <DropdownMenuGroup>
-                <DropdownMenuItem onClick={() => void createProject()}>
-                  New project
-                </DropdownMenuItem>
-                {/* a Mac's picker takes files and folders alike; no other system's does */}
-                {MAC ? (
-                  <DropdownMenuItem onClick={() => void addProject()}>
-                    Open file or folder…
-                  </DropdownMenuItem>
-                ) : (
-                  <>
-                    <DropdownMenuItem onClick={() => void addProject("file")}>
-                      Open file…
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => void addProject("folder")}>
-                      Open folder…
-                    </DropdownMenuItem>
-                  </>
+        {/* What is under the cards takes the rest of the list's height, the button at
+            the top of it and the settings at the foot. With no height left over it is
+            the two of them one over the other, and that stays at the foot of the list
+            as the cards go by: over them, and over what shows from under a card. */}
+        <div className="sticky bottom-0 z-20 flex shrink-0 grow flex-col justify-between gap-2 pb-4">
+          <Tucked away={blueprint}>
+            <DropdownMenu open={adding} onOpenChange={setAdding}>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          variant="outline"
+                          size="icon-sm"
+                          className={cn(
+                            "pointer-events-auto mt-1.5 shrink-0 bg-background shadow-sm",
+                            FADES
+                          )}
+                        />
+                      }
+                    />
+                  }
+                >
+                  {starting ? <Spinner /> : <PlusIcon />}
+                  <span className="sr-only">New project</span>
+                </TooltipTrigger>
+                {!adding && (
+                  <TooltipContent side="right">New project</TooltipContent>
                 )}
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                <DropdownMenuLabel>Examples</DropdownMenuLabel>
-                {EXAMPLES.map((example) => (
-                  <ExampleItem key={example.id} example={example} />
-                ))}
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </Tucked>
+              </Tooltip>
+              <DropdownMenuContent side="right" align="start">
+                <DropdownMenuGroup>
+                  <DropdownMenuItem onClick={() => void createProject()}>
+                    New project
+                  </DropdownMenuItem>
+                  {/* a Mac's picker takes files and folders alike; no other system's does */}
+                  {MAC ? (
+                    <DropdownMenuItem onClick={() => void addProject()}>
+                      Open file or folder…
+                    </DropdownMenuItem>
+                  ) : (
+                    <>
+                      <DropdownMenuItem onClick={() => void addProject("file")}>
+                        Open file…
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => void addProject("folder")}
+                      >
+                        Open folder…
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>Examples</DropdownMenuLabel>
+                  {EXAMPLES.map((example) => (
+                    <ExampleItem key={example.id} example={example} />
+                  ))}
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </Tucked>
+          <div className={cn("pointer-events-auto", FOOT)}>{children}</div>
+        </div>
       </div>
     </aside>
   )

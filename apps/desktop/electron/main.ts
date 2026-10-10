@@ -119,7 +119,11 @@ const SYSTEMS: Partial<Record<NodeJS.Platform, string>> = {
 // was before the app said so: its state, in Application Support, and the key a Mac's
 // keychain holds for what the settings seal. So the app goes by that name here, from
 // before either is looked for, and neither is lost when what it is shown as changes.
-const SHOWN = app.name
+// Run from a checkout it is shown as the one being worked on, "Enclose (Dev)", which is
+// what the copy of Electron it is run as is called too (scripts/electron-name.mjs).
+const SHOWN = app.isPackaged
+  ? app.name
+  : `${app.name.replace(/\s*\(.*\)$/, "")} (Dev)`
 app.setName("Enclose")
 
 const ELSEWHERE = process.env.ENCLOSE_USER_DATA ?? null
@@ -1280,9 +1284,10 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   void app.whenReady().then(() => {
-    // Run from a checkout, the app in the Dock is Electron's own, and so is its icon.
-    // An app made into a package has the icon in it, and macOS draws that one.
-    if (!app.isPackaged) app.dock?.setIcon(path.join(ICONS, "icon.png"))
+    // Run from a checkout, the app in the Dock is Electron's own, and so is its icon:
+    // it is given the app's mark on another colour, which tells it from the app that is
+    // installed. An app made into a package has the icon in it, and macOS draws that one.
+    if (!app.isPackaged) app.dock?.setIcon(path.join(ICONS, "icon-dev.png"))
     // What a Mac's About says is Electron's own too, down to the version, twice over.
     // (A version given here is shown just as it is given, so the word goes with it.)
     if (!app.isPackaged && process.platform === "darwin")
