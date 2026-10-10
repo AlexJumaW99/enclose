@@ -1,8 +1,8 @@
 {
-  "release": "examples-v1",
+  "release": "examples-v2",
   "examples": [
     { "id": "clock", "name": "Table clock", "bytes": 2542572, "sha256": "1940730dfc2ce4f2d6826dbc62086119c245cb5d746e78da945699152bf2c777" },
-    { "id": "arm", "name": "Robot arm", "bytes": 11039695, "sha256": "3ef6b11f7c1766741f08e6623051c408b83e6a369be821efda66146d5fab2fa7" },
+    { "id": "arm", "name": "Robot arm", "bytes": 11039858, "sha256": "d2cc9d1d6557197a4dd95bc887415d561725f3a949da5d7c8c9708d5dd6199da" },
     { "id": "lamp", "name": "Clip lamp", "bytes": 4126234, "sha256": "b70d67ab53d45274711c7818cb2681ae6b6aa9e07a8ce434c29330c5f0e73237" },
     { "id": "stool", "name": "Counter stool", "bytes": 2695800, "sha256": "a5af7d1743bc97563b3f6e8fa92233b73c5d0109db926cfdd1fcd8b51420ae7c" }
   ]
