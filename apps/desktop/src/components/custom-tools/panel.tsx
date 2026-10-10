@@ -9,11 +9,19 @@ import {
   useTools,
   type Tool,
 } from "@/lib/custom-tools/host"
+import type { ControlKind } from "@/lib/custom-tools/types"
 import { useStore } from "@/lib/store"
 import { ControlOf } from "./controls"
 
 /** The line between one thing and the next in the panel, in white on its blue. */
 const LINE = "border-white/17"
+
+/**
+ * The controls that are small things: a switch, and what a tool says. One of these has
+ * no use for the room the others are given: it stands at the far end of its line, and
+ * what it is called and does has the rest.
+ */
+const SMALL: ReadonlySet<ControlKind> = new Set(["toggle", "readout"])
 
 /**
  * A tool that came to nothing: what went wrong in it, in its own words, and the way to
@@ -137,33 +145,48 @@ export function ToolsPanel({
             This tool has no controls.
           </div>
         ) : (
-          tool?.controls.map((control) => (
-            <div
-              key={control.id}
-              data-control={control.id}
-              className={cn("flex gap-4 border-b p-5 last:border-b-0", LINE)}
-            >
-              {/* what it is called and, under that in the same letters, what it does */}
-              <div className="w-32 shrink-0 text-xs/4">
-                <div className="font-medium">{control.title}</div>
-                {/* its lines as long as one another: no word left on a line alone */}
-                <div className="text-balance text-white/60">
-                  {control.description}
+          tool?.controls.map((control) => {
+            const small = SMALL.has(control.kind)
+            return (
+              <div
+                key={control.id}
+                data-control={control.id}
+                className={cn("flex gap-4 border-b p-5 last:border-b-0", LINE)}
+              >
+                {/* what it is called and, under that in the same letters, what it does */}
+                <div
+                  className={cn(
+                    "text-xs/4",
+                    small ? "min-w-0 flex-1" : "w-32 shrink-0"
+                  )}
+                >
+                  <div className="font-medium">{control.title}</div>
+                  {/* its lines as long as one another: no word left on a line alone */}
+                  <div className="text-balance text-white/60">
+                    {control.description}
+                  </div>
+                </div>
+                {/* in the room beside that, which a control fills: or at the far end
+                    of the line, half way up it, where it is a small thing */}
+                <div
+                  className={cn(
+                    "flex items-center",
+                    small
+                      ? "max-w-[55%] shrink-0"
+                      : "min-w-0 flex-1 justify-center"
+                  )}
+                >
+                  <ControlOf
+                    control={control}
+                    onSet={(value) => setControl(tool.id, control.id, value)}
+                    onPress={(option) =>
+                      pressControl(tool.id, control.id, option)
+                    }
+                  />
                 </div>
               </div>
-              {/* in the room beside that: a control fills it, or where it is a
-                  small thing, stands in the middle of it */}
-              <div className="flex min-w-0 flex-1 items-center justify-center">
-                <ControlOf
-                  control={control}
-                  onSet={(value) => setControl(tool.id, control.id, value)}
-                  onPress={(option) =>
-                    pressControl(tool.id, control.id, option)
-                  }
-                />
-              </div>
-            </div>
-          ))
+            )
+          })
         )}
         {/* room for it, while it has not yet said what it is */}
         {tool &&

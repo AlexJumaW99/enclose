@@ -346,15 +346,15 @@ export function Tools({
           )}
           {/* The project's own tools, made for its model and not the app's: so it is
               the one button here that is painted, blue, off as on, and is there only
-              where the project has some. On, it has a white line round it: while
-              the tools are up, and while they are at work on the model with their
-              panel put away. */}
+              where the project has some. On, it has a white line round it, which is
+              while the tools are up: put away, they may be at work on the model
+              still, and the button says nothing of that. */}
           {!loaded.standIn && hasTools && (
             <Switch
               label="Tools"
               shortcut="T"
               opens="tools"
-              on={(toolsOpen || view.tools) && !blueprint}
+              on={toolsOpen && !blueprint}
               disabled={blueprint}
               onChange={() => setToolsOpen(!toolsOpen)}
               className="bg-tool text-white ring-tool hover:bg-tool/85 hover:text-white aria-pressed:bg-tool aria-pressed:text-white aria-pressed:ring-2 aria-pressed:ring-white aria-pressed:hover:bg-tool/85 aria-pressed:hover:text-white"

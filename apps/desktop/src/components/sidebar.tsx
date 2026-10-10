@@ -37,7 +37,7 @@ import {
 import { sizeOf } from "@/lib/model"
 import { MAC } from "@/lib/platform"
 import { useStack, useStore } from "@/lib/store"
-import { ago, useNow } from "@/lib/time"
+import { ago, elapsed, useNow } from "@/lib/time"
 
 /**
  * What fades out of anything that is put away (see Tucked), and back in. It is each thing
@@ -145,6 +145,18 @@ function Said({
 }
 
 /**
+ * Under the word that a card's conversation is being worked on: for how long it has
+ * been, in the same colour and a lighter letter.
+ */
+function Going({ since }: { since: number }) {
+  // (it is counted in seconds to begin with, which the cards' own clock is too slow for)
+  const now = useNow(1000)
+  return (
+    <span className="font-normal tabular-nums">{elapsed(now - since)}</span>
+  )
+}
+
+/**
  * Everything written on a card. While there is news of the card's conversation all of
  * it, the name included, gives way at its far end to the card's saying so, half way up
  * the card: the name is on show elsewhere, and this is the news. It gives way to all but
@@ -176,10 +188,15 @@ function Written({
         <span
           className={cn(
             SMALL,
-            "absolute top-1/2 right-3 -translate-y-1/2 font-medium"
+            "absolute top-1/2 right-3 flex -translate-y-1/2 flex-col items-end font-medium",
+            // (the light that passes along one being worked on passes along both its lines)
+            NEWS[news].className
           )}
         >
-          <span className={NEWS[news].className}>{NEWS[news].label}</span>
+          {NEWS[news].label}
+          {news === "working" && conversation?.since != null && (
+            <Going since={conversation.since} />
+          )}
         </span>
       )}
     </>

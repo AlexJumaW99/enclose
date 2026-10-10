@@ -25,6 +25,20 @@ export function duration(ms: number): string {
     .join(" ")
 }
 
+/**
+ * How long something has been going on, in the one thing it is counted in by now:
+ * "2 s", "21 min", "1 h 5 min".
+ */
+export function elapsed(ms: number): string {
+  const seconds = Math.max(0, Math.floor(ms / 1000))
+  if (seconds < 60) return `${seconds} s`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes} min`
+  const hours = Math.floor(minutes / 60)
+  // minutes there are none of are not said: two hours flat is "2 h"
+  return minutes % 60 ? `${hours} h ${minutes % 60} min` : `${hours} h`
+}
+
 /** The current time, refreshed often enough for labels that count in minutes. */
 export function useNow(everyMs = 20_000): number {
   const [now, setNow] = React.useState(() => Date.now())

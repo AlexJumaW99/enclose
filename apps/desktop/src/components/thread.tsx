@@ -568,13 +568,6 @@ export function Thread({ project }: { project: Project }) {
   // what was said here while it was being answered, and waits its turn
   const queued = open?.queued ?? NOTHING_QUEUED
 
-  // follow the conversation as it grows
-  const last = items?.at(-1)
-  const tail = last && "text" in last ? last.text.length : 0
-  React.useEffect(() => {
-    end.current?.scrollIntoView({ block: "end" })
-  }, [items?.length, tail, queued.length])
-
   const blocks = React.useMemo(() => inBlocks(items ?? []), [items])
   const working = open?.status === "working"
   // one thing at a time is done in a project's folder
@@ -585,6 +578,16 @@ export function Thread({ project }: { project: Project }) {
   const latest = blocks.at(-1)
   const quiet =
     working && latest?.kind !== "assistant" && latest?.kind !== "steps"
+
+  // follow the conversation as it grows, to the very end of it: past the room left under
+  // the last thing said, and the word that it is being worked on, which comes a moment
+  // after what was said to set it going
+  const last = items?.at(-1)
+  const tail = last && "text" in last ? last.text.length : 0
+  React.useEffect(() => {
+    const view = end.current?.closest("[data-slot=scroll-area-viewport]")
+    if (view) view.scrollTop = view.scrollHeight
+  }, [items?.length, tail, queued.length, quiet])
 
   return (
     <aside

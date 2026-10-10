@@ -147,9 +147,6 @@ function useDrag(to: (x: number, y: number) => void, done?: () => void) {
   }
 }
 
-/** How wide the knob of a slider is, px: its track stops half of that short at each end. */
-const KNOB = 14
-
 function Slider({
   control,
   onSet,
@@ -161,21 +158,28 @@ function Slider({
   const along = (value - min) / (max - min || 1)
   const drag = useDrag((x) => onSet(min + x * (max - min)))
   return (
-    // The line is in the middle of the room the control has, and what it is set to is
-    // said over the knob, and goes along with it. The words keep inside the room: they
-    // are over the knob by their own middle half way along, and by their nearer end
-    // towards either end of the line.
-    <div className="relative flex min-h-13 w-full items-center self-stretch">
-      <div
-        className={cn(
-          SAYS,
-          "pointer-events-none absolute bottom-1/2 mb-[13px] whitespace-nowrap"
-        )}
-        style={{ left: `${along * 100}%`, translate: `${-along * 100}%` }}
-      >
-        {control.says ?? plainly(value, control.step)}
+    // What it is set to is said over the handle, and goes along with it. Under that is
+    // the trail, made to look like the switches it is found among, as the one that
+    // pulls an exploded model apart is: as tall as a switch, with the same thing in it
+    // to take hold of, and nothing round it.
+    <div className="flex w-full flex-col gap-1.5">
+      {/* The words keep inside the room: they are over the handle by their own middle
+          half way along, and by their nearer end towards either end of the trail. (They
+          start a little in from its ends, where a figure alone is over the handle too.) */}
+      <div className="px-[7px]">
+        <div
+          className={cn(
+            SAYS,
+            "pointer-events-none relative w-fit whitespace-nowrap"
+          )}
+          style={{ left: `${along * 100}%`, translate: `${-along * 100}%` }}
+        >
+          {control.says ?? plainly(value, control.step)}
+        </div>
       </div>
-      <div className="w-full px-[7px]">
+      {/* the handle is all of it inside the trail: at either end it is against the
+          end, with as much room round it as a switch leaves round its own */}
+      <div className="h-6 rounded-full bg-white/25 px-3">
         <div
           role="slider"
           aria-label={control.title}
@@ -183,17 +187,14 @@ function Slider({
           aria-valuemax={max}
           aria-valuenow={value}
           aria-valuetext={control.says ?? undefined}
-          className="relative h-5 cursor-pointer touch-none"
+          // (a press on the ends of the trail, past where the handle's middle goes, is
+          // a press on it all the same)
+          className="relative h-full cursor-ew-resize touch-none before:absolute before:-inset-x-3 before:inset-y-0"
           {...drag}
         >
-          <div className="absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-white/25" />
           <div
-            className="absolute top-1/2 left-0 h-0.5 -translate-y-1/2 rounded-full bg-white"
-            style={{ width: `${along * 100}%` }}
-          />
-          <div
-            className="absolute top-1/2 -translate-1/2 rounded-full bg-white shadow-sm"
-            style={{ left: `${along * 100}%`, width: KNOB, height: KNOB }}
+            className="absolute top-1/2 size-4.5 -translate-1/2 rounded-full bg-white"
+            style={{ left: `${along * 100}%` }}
           />
         </div>
       </div>
@@ -419,10 +420,16 @@ export function ControlOf({
     case "palette":
       return <Palette control={control} onSet={onSet} />
     case "readout":
-      return (
-        <div className="text-center text-[28px]/8 font-medium tracking-tight">
-          {control.value || " "}
+      // What a tool says is not a thing to be worked, and is said quietly: on a tag,
+      // fainter than a button and smaller, and cut short where it is too long for it.
+      // With nothing to say there is no tag.
+      return control.value ? (
+        <div
+          title={control.value}
+          className="h-6 min-w-0 truncate rounded-full bg-white/12 px-2.5 text-xs/6 font-medium text-white/85 tabular-nums"
+        >
+          {control.value}
         </div>
-      )
+      ) : null
   }
 }

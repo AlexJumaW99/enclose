@@ -26,8 +26,8 @@ control is one of the app's kinds, whatever the tool:
 - something the tool says
 
 The panel stays up while the view is turned, since a tool is worked with the model in
-sight. The button or Esc puts it away, and the tools are still at work then, the button
-still lit: Esc again lets go of the model, which is back as it is built.
+sight. The button or Esc puts it away, and the tools are still at work then: Esc again
+lets go of the model, which is back as it is built.
 
 ## How a tool is written
 
