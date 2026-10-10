@@ -1340,7 +1340,7 @@ function Model({ project }: { project: Project }) {
           color:
             useStore.getState().colours[project.id]?.[part.part.id] ??
             part.part.color,
-          shown: appearance(part, loaded, useStore.getState().view).shown,
+          shown: appearance(part, useStore.getState().view).shown,
         }
       })
     return () => {

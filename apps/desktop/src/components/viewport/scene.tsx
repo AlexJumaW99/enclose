@@ -41,8 +41,6 @@ const WHITE = new THREE.Color("#ffffff")
 const NOT_PICKED = () => {}
 const NOT_HINTED: string[] = []
 const NOT_NAMED: Named[] = []
-/** A shell part smaller than this share of the model stays solid in glass mode: buttons, feet. */
-const GLASS_FROM = 0.25
 // drawn in this order, so what is behind glass is tinted by it and the glass keeps its outline
 const ORDER = {
   solid: 0,
@@ -500,10 +498,13 @@ export function onShow(
   )
 }
 
-/** Whether a part is drawn at all, and how, under the current view. */
+/**
+ * Whether a part is drawn at all, and how, under the current view. The shading that is
+ * chosen is every part's alike: in glass the whole model is seen through, and no part
+ * or group of it is left solid.
+ */
 export function appearance(
   loaded: LoadedPart,
-  model: LoadedModel,
   view: View
 ): { shown: boolean; look: Look } {
   const shown = onShow(loaded, view)
@@ -512,17 +513,7 @@ export function appearance(
   if (view.mode === "outline") return { shown, look: "outline" }
   // (a part that is made of something clear is seen through, drawn solid or not)
   if (loaded.part.clear) return { shown, look: "glass" }
-  if (view.mode === "solid") return { shown, look: "solid" }
-  // Glass is for seeing inside: only the outside goes see-through. A model that does
-  // not say which parts are its outside goes see-through as a whole.
-  const shells = model.model.groups.filter((group) => group.shell)
-  if (shells.length === 0) return { shown, look: "glass" }
-  const outside =
-    shells.some((group) => group.id === loaded.part.group) &&
-    (loaded.part.glass ??
-      loaded.box.getSize(new THREE.Vector3()).length() >=
-        model.box.getSize(new THREE.Vector3()).length() * GLASS_FROM)
-  return { shown, look: outside ? "glass" : "solid" }
+  return { shown, look: view.mode === "glass" ? "glass" : "solid" }
 }
 
 /** Where a part moved by a tool is worked out, and what is left over of working it out. */
@@ -1791,8 +1782,8 @@ export function Scene({
     // looked for by name, a part is looked for in all of the model: what the view was
     // cut down to is on show again meanwhile, and what was put out of sight
     const seen = finding
-      ? { ...appearance(part, loaded, view), shown: true }
-      : appearance(part, loaded, view)
+      ? { ...appearance(part, view), shown: true }
+      : appearance(part, view)
     // While a part is looked for, it alone is solid and all the rest is see-through,
     // whatever the shading: it is found wherever it is, inside another part or behind.
     // It is the same while a box is drawn: what it takes in so far is seen through all

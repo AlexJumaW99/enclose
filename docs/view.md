@@ -88,9 +88,8 @@ cut open a tap of Z is the cut across Z instead, and the menu comes up when the 
 held.
 
 - **Solid** draws the model as it is.
-- **Glass** makes the outside see-through (the groups a manifest marks as `shell`, or
-  everything if it marks none). A small part of the outside, a button or a foot, stays
-  solid unless the model says otherwise of it (`glass=True`).
+- **Glass** makes the whole model see-through, every part of it, so that what is inside
+  anything shows.
 - **Pattern** is wireframe with every face ruled into squares, in three of the colours
   parts are drawn in: one for the lines across each of the part's axes. Each face is
   ruled into about as many squares as any other, so a small face is ruled finely and a

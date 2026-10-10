@@ -543,7 +543,6 @@ export function standInModel(): LoadedModel {
     paint: "all",
     matrix: null,
     explode: [0, 0, 0],
-    glass: null,
     metal: false,
     clear: false,
   }

@@ -4,7 +4,7 @@ import type { Vec3 } from "@shared/api"
 
 /**
  * A named group of parts, as the parts list shows them. `shell` marks the outside of
- * the thing: the parts that go see-through in glass mode, so what they enclose shows.
+ * the thing: the parts that come apart each on its own when the model is pulled apart.
  */
 export type Group = { id: string; label: string; shell: boolean }
 
@@ -21,8 +21,6 @@ export type Part = {
   /** 16 numbers, row-major */
   matrix: number[] | null
   explode: Vec3
-  /** see-through in glass mode; null leaves it to the part's size */
-  glass: boolean | null
   /** drawn as bare metal rather than plastic */
   metal: boolean
   /**
@@ -119,7 +117,6 @@ export function readModel(manifest: unknown): Model {
       paint: color && (declared || group !== "inside") ? "all" : "bare",
       matrix,
       explode: vec3(raw.explode) ?? [0, 0, 0],
-      glass: typeof raw.glass === "boolean" ? raw.glass : null,
       metal: raw.finish === "metal" || (!declared && group === "screws"),
       clear: raw.finish === "glass",
     }

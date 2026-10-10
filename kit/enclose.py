@@ -8,7 +8,7 @@ build123d and hands them over, one part at a time:
     from enclose import Model
 
     model = Model("Sensor box")
-    case = model.group("Case", shell=True)     # the outside: see-through in glass mode
+    case = model.group("Case", shell=True)     # the outside: comes apart part by part
     fixings = model.group("Fixings")
 
     model.part("body", Box(60, 40, 20), label="Body", group=case, color="#e8e8e4")
@@ -517,10 +517,9 @@ class Model:
 
     def group(self, label: str, *, shell: bool = False, id: str | None = None) -> str:
         """A group the parts list shows, in the order groups are made. Returns its id,
-        to give to `part`. `shell` marks the outside of the thing: what goes see-through
-        in glass mode so that what it encloses shows, and what comes apart part by part
-        when the model is pulled apart. In any other group, the parts that touch one
-        another stay together then, as one object: a board with its components."""
+        to give to `part`. `shell` marks the outside of the thing: what comes apart part
+        by part when the model is pulled apart. In any other group, the parts that touch
+        one another stay together then, as one object: a board with its components."""
         group = {"id": id or _slug(label), "label": label}
         if shell:
             group["shell"] = True
@@ -551,7 +550,9 @@ class Model:
         `finish="metal"` draws bare metal, and `finish="glass"` what is made of
         something clear, a window or a lens: it is seen through, whatever the view.
         `explode` is where the part goes when the model is pulled apart, in mm; leave
-        it out and the app works one out."""
+        it out and the app works one out. (`glass` did something once and does nothing
+        now: the app's glass view sees through every part. It is taken so that a model
+        written with it still builds.)"""
         if id in self._shapes:
             raise ValueError(f'two parts share the id "{id}"')
         if group is None:
@@ -565,8 +566,6 @@ class Model:
             entry["finish"] = finish
         if explode:
             entry["explode"] = [float(v) for v in explode]
-        if glass is not None:
-            entry["glass"] = glass
         self._shapes[id] = _shape(shape)
         self._parts.append(entry)
 

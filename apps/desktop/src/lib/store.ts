@@ -55,7 +55,7 @@ import {
 import type { Turn } from "@/lib/orient"
 
 /**
- * solid: as built. glass: the outside goes see-through. wireframe: lines only, as far as
+ * solid: as built. glass: all of it is seen through. wireframe: lines only, as far as
  * the model itself does not hide them. outline: every line, the hidden ones too.
  * pattern: as wireframe, with every face ruled into squares.
  */

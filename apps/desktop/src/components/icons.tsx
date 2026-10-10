@@ -50,7 +50,7 @@ export function SolidIcon(props: IconProps) {
   )
 }
 
-/** The outside drawn see-through, so what is inside it shows. */
+/** The model drawn see-through, so what is inside anything shows. */
 export function GlassIcon(props: IconProps) {
   return (
     <Icon {...props}>

@@ -33,7 +33,7 @@ its own.
   "title": "Enclosure",                 // optional
   "reference": "table",                 // optional: the reference scene of the app's that the thing is best seen in, by where it is used
   "groups": [                            // how the parts list is grouped, in this order
-    { "id": "enclosure", "label": "Enclosure", "shell": true },   // the outside: see-through in glass mode, and taken apart part by part when exploded
+    { "id": "enclosure", "label": "Enclosure", "shell": true },   // the outside: taken apart part by part when exploded
     { "id": "inside", "label": "Electronics" },
     { "id": "screws", "label": "Screws" }
   ],
@@ -47,7 +47,6 @@ its own.
       "color": "blue",                   // optional: one of ${PALETTE_NAMES.join(", ")}; any other colour is drawn as the nearest of them. Omit it to keep the colours in the file, or to be given one by the group
       "matrix": null,                    // optional: 16 numbers, row-major, placing the part
       "explode": [0, 0, 46],             // optional: where it goes when exploded, mm (worked out when no part says: the parts of a group that touch go together)
-      "glass": true,                     // optional: force see-through (or not) in glass mode
       "finish": "metal"                  // optional: "metal" is drawn as bare metal (screws, pins), "glass" see-through whatever the view (a window, a lens)
     }
   ],
