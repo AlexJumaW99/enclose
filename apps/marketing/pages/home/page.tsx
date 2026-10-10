@@ -2,6 +2,7 @@ import { useMotion } from '@modulato/gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import gsapCore from 'gsap'
 import { useEffect, useRef } from 'react'
+import { WINDOW } from '../../components/app/data'
 import { Window } from '../../components/app/Window'
 import type { Look } from '../../components/app/look'
 import type { View } from '../../components/app/view'
@@ -21,7 +22,7 @@ const STOPS = [
   },
   {
     side: 'right',
-    title: 'The essentials,\nin one place',
+    title: 'The essentials, in one place',
     says: 'The view tools you reach for most, each one a click or a key away.',
   },
   {
@@ -97,9 +98,17 @@ export default function Home({ headline, description }: { headline: string; desc
             <p className="home__lede">{description}</p>
             <Download />
           </div>
-          <div className="home__window">
+          <div className="home__window" suppressHydrationWarning>
             <Window />
           </div>
+          {/* The window is scaled to the room it is given, by how many times its own
+              width goes into that: worked out here, as the page is read, so that it is
+              right the first time it is drawn. (tour.ts keeps it right after.) */}
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `(function(w){w&&w.style.setProperty('--fit',w.offsetWidth/${WINDOW.width})})(document.querySelector('.home__window'))`,
+            }}
+          />
           {STOPS.map((stop) => (
             <div key={stop.title} className={`home__caption home__caption--${stop.side}`}>
               <h2>{stop.title}</h2>

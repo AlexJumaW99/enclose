@@ -65,7 +65,9 @@
       text-decoration: none;
       transition: opacity 0.2s;
 
-      &:hover { opacity: 0.82; }
+      &:hover {
+        opacity: 0.82;
+      }
 
       svg {
         width: 18px;
@@ -83,8 +85,12 @@
 
   // ── the app's window ────────────────────────────────────────────────────
   // It is laid out as wide as the page leaves it, and the window inside, which
-  // is drawn at the app's own size, is scaled to fit: the tangent of the angle
-  // two lengths make is how many of one go into the other.
+  // is drawn at the app's own size, is scaled to fit. How many times the one goes
+  // into the other is `--fit`, which the page works out as soon as the window is
+  // there (page.tsx) and whenever the screen changes (tour.ts). Until then, and
+  // without the script, it is asked of the stylesheet: the tangent of the angle
+  // two lengths make is how many of one go into the other. (That is not to be
+  // relied on: Safari 26 has it wrong, and draws the window tiny and upside down.)
   &__window {
     position: relative;
     width: calc(100cqw - 2 * var(--edge));
@@ -98,7 +104,7 @@
       top: 0;
       left: 0;
       transform-origin: 0 0;
-      transform: scale(tan(atan2(100cqw - 2 * var(--edge), 1720px)));
+      transform: scale(var(--fit, tan(atan2(100cqw - 2 * var(--edge), 1720px))));
     }
   }
 
@@ -106,7 +112,10 @@
   [data-app='canvas'] {
     opacity: 0;
     transition: opacity 0.8s;
-    &[data-ready] { opacity: 1; }
+
+    &[data-ready] {
+      opacity: 1;
+    }
   }
 
   // ── what is said beside the window ──────────────────────────────────────
@@ -119,14 +128,17 @@
     opacity: 0;
     visibility: hidden;
 
-    &--left { left: clamp(24px, 13cqw, 260px); }
-    &--right { left: 77cqw; }
+    &--left {
+      left: clamp(24px, 13cqw, 260px);
+    }
 
-    // (a title breaks where it is written to)
+    &--right {
+      left: 77cqw;
+    }
+
     h2 {
       @include type.headline;
-      margin: 0;
-      white-space: pre-line;
+      margin: 0 0 1px;
     }
 
     p {
@@ -138,8 +150,15 @@
   @media (max-width: 1100px) {
     &__caption {
       min-width: 200px;
-      &--left { left: 24px; }
-      &--right { left: auto; right: 24px; }
+
+      &--left {
+        left: 24px;
+      }
+
+      &--right {
+        left: auto;
+        right: 24px;
+      }
     }
   }
 
@@ -166,7 +185,7 @@
 // The page's foot lies over the foot of the screen the window is on: at the last stop
 // the window has gone up to leave that room, as at the first it is down to leave the
 // room for what the page says.
-.home > .footer {
+.home>.footer {
   position: absolute;
   inset: auto 0 0;
   z-index: 1;

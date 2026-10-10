@@ -1,6 +1,13 @@
 @use './tokens';
 @use './typography' as type;
 
+// (see `.header`: how far the mark has gone to where a page of terms has it)
+@property --legal {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
 * { box-sizing: border-box; }
 
 html, body { margin: 0; padding: 0; }
@@ -44,6 +51,21 @@ html.lenis, html.lenis body { height: auto; }
 
   a { pointer-events: auto; }
 
+  // How far the mark has gone to where a page of terms has it, 0 to 1: the header is
+  // told which page is up (or coming up), and this goes from one to the other in its
+  // own time. (A number the browser is told is a number is one it can do that with.)
+  --legal: 0;
+  transition: --legal 0.9s cubic-bezier(0.65, 0, 0.35, 1);
+
+  &[data-page='terms'],
+  &[data-page='privacy'] {
+    --legal: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+
   &__mark {
     // Where the mark rests, and how far from there it starts on the first
     // page: in the middle, over the heading, and bigger. `--fly` is 1 there
@@ -51,20 +73,34 @@ html.lenis, html.lenis body { height: auto; }
     --rest: 44px;
     // (it keeps nearer the corner than the page's edge: the one thing that does)
     --in: 20px;
+    --top: 14px;
     --fly: 0;
     --lift: var(--mark-lift, 96px);
+    // On a page of terms it is bigger again, at the head of the page's one column:
+    // until the page is scrolled, when it goes back to its corner as it does on the
+    // first page (`--stay`, 1 to 0, which Mark.tsx keeps by how far that is). Where
+    // it is on the first page counts for nothing while a page of terms is up.
+    --flown: calc(var(--fly) * (1 - var(--legal)));
+    --there: calc(var(--legal) * var(--stay, 1));
+    --legal-size: calc(var(--rest) * var(--legal-scale));
     position: absolute;
-    top: 14px;
+    top: var(--top);
     left: var(--in);
     display: block;
     width: var(--rest);
     height: var(--rest);
     transform:
       translate(
-        calc(var(--fly) * (50vw - var(--in) - var(--rest) / 2)),
-        calc(var(--fly) * (var(--lift) - 14px - var(--rest) / 2))
+        calc(
+          var(--flown) * (50vw - var(--in) - var(--rest) / 2) + var(--there) *
+            (var(--legal-edge) + var(--legal-size) / 2 - var(--in) - var(--rest) / 2)
+        ),
+        calc(
+          var(--flown) * (var(--lift) - var(--top) - var(--rest) / 2) + var(--there) *
+            (var(--legal-top) + var(--legal-size) / 2 - var(--top) - var(--rest) / 2)
+        )
       )
-      scale(calc(1 + var(--fly) * 0.45));
+      scale(calc(1 + var(--flown) * 0.45 + var(--there) * (var(--legal-scale) - 1)));
 
     svg {
       display: block;
@@ -76,7 +112,7 @@ html.lenis, html.lenis body { height: auto; }
 
   // Before the page's script has run, the first page already has the mark
   // where it starts.
-  body:has(.home) &__mark { --fly: 1; }
+  &[data-page='home'] &__mark { --fly: 1; }
 
   &__source {
     @include type.small;
@@ -90,7 +126,7 @@ html.lenis, html.lenis body { height: auto; }
   }
 
   @media (max-width: 767px) {
-    &__mark { top: 10px; --rest: 40px; --in: 12px; }
+    &__mark { --top: 10px; --rest: 40px; --in: 12px; }
     &__source { top: 20px; right: 16px; }
   }
 }
@@ -127,7 +163,9 @@ html.lenis, html.lenis body { height: auto; }
   }
 }
 
-// A page of terms: long text in one column, set to be read.
+// A page of terms: long text in one narrow column down the left of the page, with the
+// mark at its head until the page is scrolled (it is the header's, come down to it:
+// see `.header`).
 .legal {
   min-height: 100dvh;
   display: flex;
@@ -137,35 +175,45 @@ html.lenis, html.lenis body { height: auto; }
   &__text {
     @include type.prose;
     flex: 1;
-    width: 100%;
-    max-width: 696px;
-    margin: 0 auto;
-    padding: 144px 24px 96px;
+    box-sizing: content-box;
+    max-width: 424px;
+    padding: 258px var(--legal-edge) 120px;
+    color: var(--muted);
 
+    // whose it is, and under that, quieter, what it is
     h1 {
       @include type.title;
       margin: 0;
+      color: var(--fg);
+
+      span {
+        display: block;
+        color: var(--muted);
+      }
     }
 
     h2 {
       @include type.prose;
-      margin: 40px 0 0;
+      margin: 40px 0 4px;
+      color: var(--fg);
       font-weight: 600;
     }
 
+    // (long text fills its column: lines evened out would leave each paragraph a
+    // width of its own)
     p,
     ul {
-      margin: 12px 0 0;
+      margin: 0;
+      text-wrap: pretty;
     }
 
     ul { padding-left: 20px; }
-    li + li { margin-top: 4px; }
 
     a {
       text-decoration: underline;
-      text-decoration-color: var(--rule);
+      text-decoration-thickness: 1px;
       text-underline-offset: 3px;
-      &:hover { text-decoration-color: currentColor; }
+      &:hover { color: var(--fg); }
     }
 
     code {
@@ -176,9 +224,21 @@ html.lenis, html.lenis body { height: auto; }
     }
   }
 
-  &__updated { color: var(--muted); }
+  // its foot keeps to the column's edge, which is further in than the page's
+  > .footer {
+    padding-right: var(--legal-edge);
+    padding-bottom: var(--legal-edge);
+    padding-left: var(--legal-edge);
+  }
+
+  // when it was last changed, and then what it says to begin with
+  &__updated#{&}__updated {
+    margin: 20px 0 40px;
+    color: var(--fg);
+    font-weight: 500;
+  }
 
   @media (max-width: 767px) {
-    &__text { padding: 112px 20px 72px; }
+    &__text { padding: 176px var(--legal-edge) 96px; }
   }
 }

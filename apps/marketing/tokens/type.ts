@@ -74,7 +74,7 @@ export default typography({
     body: {
       font: 'sans',
       size: 'text',
-      leading: 1.2,
+      leading: 1.3,
       tracking: -0.012,
       weight: 400,
       wrap: 'balance',

@@ -25,3 +25,16 @@
   // line up.
   --edge: clamp(16px, 3.3vw, 64px);
 }
+
+:root {
+  // A page of terms: how far in from the left its one column is, how far down the
+  // mark at its head is, and how much bigger than in the corner the mark is there.
+  --legal-edge: clamp(20px, 5.2vw, 96px);
+  --legal-top: 88px;
+  --legal-scale: 2.18;
+
+  @media (max-width: 767px) {
+    --legal-top: 72px;
+    --legal-scale: 1.7;
+  }
+}

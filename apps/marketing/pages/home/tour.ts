@@ -116,7 +116,11 @@ export function runTour({
     )
   }
 
+  /** The window is scaled to the room it is laid out in: see `--fit` in styles.scss. */
+  const fit = () => frame.style.setProperty('--fit', String(frame.offsetWidth / WINDOW.width))
+
   const build = () => {
+    fit()
     const wide = stage.clientWidth
     const tall = stage.clientHeight
     home = { x: frame.offsetLeft, y: frame.offsetTop, s: frame.offsetWidth / WINDOW.width }
@@ -228,7 +232,10 @@ export function runTour({
     const perUnit = (tour.offsetHeight - tall) / length
     tl.to(hero, { y: -perUnit * 12, duration: 12, ease: 'none' }, 0)
     tl.to(hero, { autoAlpha: 0, duration: 5, ease: 'none' }, 1.5)
-    if (mark) tl.to(mark, { '--fly': 0, duration: 9, ease: 'power2.inOut' }, 0)
+    // (Written on the mark from the start, and not left to the stylesheet, which has
+    // it there only while this is the page that is up: see `stop`.)
+    if (mark)
+      tl.fromTo(mark, { '--fly': 1 }, { '--fly': 0, duration: 9, ease: 'power2.inOut' }, 0)
     go('projects', 0, { azimuth: -38 })
     caption(0, 'projects')
 
@@ -437,6 +444,7 @@ export function runTour({
   let size = `${stage.clientWidth}x${stage.clientHeight}`
   let waiting = 0
   const resized = () => {
+    fit()
     window.clearTimeout(waiting)
     waiting = window.setTimeout(() => {
       const now = `${stage.clientWidth}x${stage.clientHeight}`
@@ -474,8 +482,12 @@ export function runTour({
       atWork.removeAttribute('data-working')
       window.removeEventListener('resize', resized)
       window.clearTimeout(waiting)
+      // The mark is the shell's, and on its way to where the next page has it: it
+      // goes from wherever this page left it, so that is left written on it.
+      const flown = mark?.style.getPropertyValue('--fly') ?? ''
       context.revert()
       frame.style.transform = ''
+      if (flown) mark?.style.setProperty('--fly', flown)
     },
   }
 }

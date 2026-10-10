@@ -15,7 +15,7 @@ export default motion({
     azimuth: -90,
     elevation: 0,
     duration: 1.8,
-    ease: 'power2.inOut',
+    ease: 'expo.inOut',
     reduced: { duration: 0 },
   },
   stops: {

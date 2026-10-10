@@ -3,7 +3,7 @@ import { REPOSITORY } from '../../shell/Header'
 
 export default function Privacy() {
   return (
-    <Legal page="privacy" title="Privacy" updated="10 October 2026">
+    <Legal page="privacy" title="Privacy Policy" updated="10 October 2026">
       <p>
         Enclose is an open-source project maintained by Glauber. This page says what the
         Enclose app and this website send anywhere, and what they do not. In short: the app

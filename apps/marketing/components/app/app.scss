@@ -29,6 +29,7 @@ $tool-line: oklch(from var(--axis-z) calc(l + 0.066) calc(c - 0.056) calc(h + 2)
   background-repeat: no-repeat;
   background-size: calc(200% + var(--spread) * 2) 100%;
   background-position: 0 0;
+  -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
   animation: app-shimmer 2s linear infinite;
@@ -163,6 +164,7 @@ $tool-line: oklch(from var(--axis-z) calc(l + 0.066) calc(c - 0.056) calc(h + 2)
     );
     box-shadow: 0 0 0 1px
       color-mix(in oklab, rgb(250 250 250 / 0.15) calc(var(--lit) * 100%), rgb(250 250 250 / 0.05));
+    -webkit-backdrop-filter: blur(20px) saturate(1.3) brightness(0.55);
     backdrop-filter: blur(20px) saturate(1.3) brightness(0.55);
 
     &--lit { --lit: 1; }
@@ -190,6 +192,11 @@ $tool-line: oklch(from var(--axis-z) calc(l + 0.066) calc(c - 0.056) calc(h + 2)
     // it gives way at its far end to the card's news
     &--news,
     [data-working] > & {
+      -webkit-mask-image: linear-gradient(
+        to right,
+        black calc(100% - 108px),
+        rgb(0 0 0 / 0.04) calc(100% - 70px)
+      );
       mask-image: linear-gradient(
         to right,
         black calc(100% - 108px),
@@ -319,6 +326,7 @@ $tool-line: oklch(from var(--axis-z) calc(l + 0.066) calc(c - 0.056) calc(h + 2)
     box-shadow:
       0 1px 2px rgb(0 0 0 / 0.2),
       0 0 0 1px rgb(250 250 250 / 0.1);
+    -webkit-backdrop-filter: blur(20px) saturate(1.3) brightness(0.55);
     backdrop-filter: blur(20px) saturate(1.3) brightness(0.55);
 
     &--on { --on: 1; }
@@ -328,6 +336,7 @@ $tool-line: oklch(from var(--axis-z) calc(l + 0.066) calc(c - 0.056) calc(h + 2)
       width: 32px;
       height: 32px;
       background: var(--app-thread);
+      -webkit-backdrop-filter: none;
       backdrop-filter: none;
     }
 
@@ -671,6 +680,7 @@ $tool-line: oklch(from var(--axis-z) calc(l + 0.066) calc(c - 0.056) calc(h + 2)
       0 4px 6px -1px rgb(0 0 0 / 0.1),
       0 0 0 1px rgb(250 250 250 / 0.1);
     @include type.style('ui-title');
+    -webkit-backdrop-filter: blur(20px) saturate(1.3) brightness(0.55);
     backdrop-filter: blur(20px) saturate(1.3) brightness(0.55);
     white-space: nowrap;
 

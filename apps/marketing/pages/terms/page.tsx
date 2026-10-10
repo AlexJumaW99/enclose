@@ -3,7 +3,7 @@ import { REPOSITORY } from '../../shell/Header'
 
 export default function Terms() {
   return (
-    <Legal page="terms" title="Terms" updated="10 October 2026">
+    <Legal page="terms" title="Terms of Use" updated="10 October 2026">
       <p>
         Enclose is an open-source project maintained by Glauber. These terms cover this
         website and the Enclose app as it is downloaded from the project’s releases. Using

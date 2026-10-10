@@ -17,6 +17,8 @@ export default motion({
       settle: 1.4,
       // how far above and below the ground it is seen from on the way, in degrees
       elevation: 35.26,
+      // how far a page of terms is scrolled, px, before the mark is back in its corner
+      corner: 260,
     },
   },
 })
