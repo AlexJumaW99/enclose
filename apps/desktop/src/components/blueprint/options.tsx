@@ -11,7 +11,7 @@ import { DownloadIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { Spread } from "@/components/viewport/explode-slider"
+import { Spread, Twice } from "@/components/viewport/explode-slider"
 import { usePreferences, type Unit } from "@/lib/preferences"
 import { SPREAD, useStore } from "@/lib/store"
 import { useSaving } from "./saving"
@@ -64,7 +64,12 @@ function With({
   )
 }
 
-export function Options() {
+export function Options({
+  further,
+}: {
+  /** the model comes apart twice: into its pieces, and those into their parts */
+  further: boolean
+}) {
   const exploded = useStore((state) => state.view.exploded)
   const dimensions = useStore((state) => state.view.dimensions)
   const setView = useStore((state) => state.setView)
@@ -120,13 +125,14 @@ export function Options() {
           checked={exploded}
           // pulled apart afresh, it is by the model's own distances
           onCheckedChange={(exploded) =>
-            setView({ exploded, spread: SPREAD.min })
+            setView({ exploded, alone: false, spread: SPREAD.min })
           }
         />
       </label>
       <With on={exploded}>
         {(fades) => (
-          <div className={cn(BAR, "px-3.5", fades)}>
+          <div className={cn(BAR, "gap-2 px-3.5", fades)}>
+            {further && <Twice />}
             <Spread />
           </div>
         )}

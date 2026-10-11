@@ -299,7 +299,14 @@ export function Tools({
             label="Explode"
             shortcut="E"
             on={view.exploded}
-            onChange={(exploded) => setView({ exploded, spread: SPREAD.min })}
+            // (pulled apart afresh, it is into its pieces, by the model's own distances)
+            onChange={(exploded) =>
+              setView({
+                exploded,
+                spread: SPREAD.min,
+                ...(exploded && { alone: false }),
+              })
+            }
           >
             <UnfoldVerticalIcon />
           </Switch>

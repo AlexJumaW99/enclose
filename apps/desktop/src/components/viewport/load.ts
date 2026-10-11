@@ -49,6 +49,11 @@ export type LoadedPart = {
   piece: number
   /** where it moves to when the model is exploded, mm: with the rest of its piece */
   away: THREE.Vector3
+  /**
+   * And where it moves to when every part of the model goes by itself. It is the same,
+   * for a model that says where its parts go or one with no piece of more than a part.
+   */
+  alone: THREE.Vector3
   faces: number
 }
 
@@ -62,6 +67,11 @@ export type LoadedModel = {
    * apart is the app's working out, from the pieces it is in
    */
   worked: boolean
+  /**
+   * pulled apart, it comes apart again: some piece of it is of more than one part,
+   * which go their own ways when every part goes by itself
+   */
+  further: boolean
   /** not a model of the project's: the cube shown until it has one */
   standIn?: true
 }
@@ -184,6 +194,7 @@ async function loadPart(
   const home = new THREE.Matrix4()
   if (part.matrix)
     home.set(...(part.matrix as Parameters<THREE.Matrix4["set"]>))
+  const away = new THREE.Vector3(...part.explode)
   return {
     part,
     skins,
@@ -194,7 +205,8 @@ async function loadPart(
     box,
     home,
     piece: 0,
-    away: new THREE.Vector3(...part.explode),
+    away,
+    alone: away,
     faces,
   }
 }
@@ -358,25 +370,31 @@ export async function loadModel(
   const box = new THREE.Box3()
   for (const part of parts) box.union(part.box.clone().applyMatrix4(part.home))
   const worked = parts.every((part) => part.away.lengthSq() === 0)
-  const { pieces, ways } = pieced(parts, model.groups, box, worked)
+  const { pieces, ways, alone } = pieced(parts, model.groups, box, worked)
   parts.forEach((part, index) => {
     part.piece = pieces[index]
     if (ways) part.away.copy(ways[index])
+    part.alone = alone ? alone[index] : part.away
   })
-  return { model, parts, box, worked }
+  return { model, parts, box, worked, further: alone !== null }
 }
 
 /**
  * Which piece of the model each part is of, going by the groups the parts are in: and,
  * for a model that does not say how it comes apart (`worked`), where each part goes
- * when it is pulled apart.
+ * when it is pulled apart. And where each goes when every part goes by itself (`alone`),
+ * if that is anywhere else: it is, when some piece is of more than one part.
  */
 function pieced(
   parts: LoadedPart[],
   groups: Group[],
   box: THREE.Box3,
   worked: boolean
-): { pieces: number[]; ways: THREE.Vector3[] | null } {
+): {
+  pieces: number[]
+  ways: THREE.Vector3[] | null
+  alone: THREE.Vector3[] | null
+} {
   // The parts of a group that are one object are a piece of the model (see apart.ts).
   const across = box.getSize(new THREE.Vector3()).length()
   const boxes = parts.map((part) => part.box.clone().applyMatrix4(part.home))
@@ -415,9 +433,25 @@ function pieced(
       else whole.box.getCenter(whole.centre)
     const ways = waysOut([...wholes.values()], middle, across)
     const way = new Map([...wholes.keys()].map((piece, n) => [piece, ways[n]]))
-    return { pieces, ways: pieces.map((piece) => way.get(piece)!.clone()) }
+    // every part by itself: each is a piece, clear of all the others
+    const alone =
+      wholes.size < parts.length
+        ? waysOut(
+            parts.map((part, index) => ({
+              box: boxes[index],
+              centre: surfaceOf(part).centre,
+            })),
+            middle,
+            across
+          )
+        : null
+    return {
+      pieces,
+      ways: pieces.map((piece) => way.get(piece)!.clone()),
+      alone,
+    }
   }
-  return { pieces, ways: null }
+  return { pieces, ways: null, alone: null }
 }
 
 /**
@@ -447,15 +481,42 @@ export function regrouped(
     const now = placed.get(part.part.id) ?? part.part
     return now === part.part ? part : { ...part, part: now }
   })
-  const { pieces, ways } = pieced(moved, groups, loaded.box, loaded.worked)
+  const { pieces, ways, alone } = pieced(
+    moved,
+    groups,
+    loaded.box,
+    loaded.worked
+  )
   const parts = moved.map((part, index) => {
     const away =
       ways && !ways[index].equals(part.away) ? ways[index] : part.away
-    return part.piece === pieces[index] && away === part.away
+    const own = !alone
+      ? away
+      : alone[index].equals(part.alone)
+        ? part.alone
+        : alone[index]
+    return part.piece === pieces[index] &&
+      away === part.away &&
+      own === part.alone
       ? part
-      : { ...part, piece: pieces[index], away }
+      : { ...part, piece: pieces[index], away, alone: own }
   })
-  return { ...loaded, model, parts }
+  return { ...loaded, model, parts, further: alone !== null }
+}
+
+/**
+ * A model as it comes apart with every part going by itself, and not with the rest of
+ * its piece: the same model, but for where its parts go when it is pulled apart. A part
+ * that goes the same way either way is the very same one.
+ */
+export function eachAlone(loaded: LoadedModel): LoadedModel {
+  if (!loaded.further) return loaded
+  return {
+    ...loaded,
+    parts: loaded.parts.map((part) =>
+      part.alone.equals(part.away) ? part : { ...part, away: part.alone }
+    ),
+  }
 }
 
 /**
@@ -547,6 +608,7 @@ export function standInModel(): LoadedModel {
     clear: false,
   }
   const box = geometry.boundingBox!.clone()
+  const nowhere = new THREE.Vector3()
   // The view frames a model's box closely. Left to that the cube would fill the window,
   // so it is given room: something to look at in the middle, not a wall.
   const stage = box.clone().expandByScalar(STAND_IN * 0.75)
@@ -573,11 +635,13 @@ export function standInModel(): LoadedModel {
         box,
         home: new THREE.Matrix4(),
         piece: 0,
-        away: new THREE.Vector3(),
+        away: nowhere,
+        alone: nowhere,
         faces: 6,
       },
     ],
     box: stage,
+    further: false,
   }
 }
 

@@ -14,6 +14,11 @@
 // moved clear, the way that takes the least moving, which for things laid one on another
 // is up and down.
 //
+// Moving one piece clear of a second can take it into a third, or right past it. Where
+// the two were plainly one after the other in the model as it was built, a face over the
+// works it covers, they stay so: the third is moved on ahead, and not left behind. (One
+// piece inside another is on no side of it, and either may be moved past the other.)
+//
 // Where a piece is, for this, is where the stuff of it is, not the middle of the box
 // round it. A shell is a floor with walls: the middle of its box is in the air over the
 // floor, and a board lying on the floor is under that. Going by the boxes, the board
@@ -200,16 +205,35 @@ function settle(needs: Need[], at: number[], middle: number): number[] {
     }
     return index
   }
+  for (const need of needs) tied[of(need.high)] = of(need.low)
+  // Each goes as far as what it has to clear takes it, once that has been taken as far
+  // as it goes itself: so each is come to after all it has to clear.
   const onto = new Map<number, Need[]>()
+  const waits = at.map(() => 0)
   for (const need of needs) {
-    tied[of(need.high)] = of(need.low)
-    onto.set(need.high, [...(onto.get(need.high) ?? []), need])
+    onto.set(need.low, [...(onto.get(need.low) ?? []), need])
+    waits[need.high]++
   }
-  // the lower first: by the time a piece is come to, all it has to clear are settled
-  const order = [...onto.keys()].sort((a, b) => at[a] - at[b] || a - b)
-  for (const index of order)
-    for (const need of onto.get(index)!)
-      by[index] = Math.max(by[index], by[need.low] + need.by)
+  const left = new Set(at.map((_, index) => index))
+  const ready = [...left].filter((index) => waits[index] === 0)
+  while (left.size > 0) {
+    // Needs can go round in a ring, each piece waiting on the next, since which of two
+    // is to be the further is not always told the same way (see waysOut). The lowest
+    // of them goes first then, clear of nothing still to come: what that leaves in
+    // another is found the next time round.
+    const index =
+      ready.pop() ??
+      [...left].reduce(
+        (a, b) => (at[b] < at[a] ? b : a),
+        left.values().next().value!
+      )
+    if (!left.delete(index)) continue
+    for (const need of onto.get(index) ?? []) {
+      if (!left.has(need.high)) continue
+      by[need.high] = Math.max(by[need.high], by[index] + need.by)
+      if (--waits[need.high] === 0) ready.push(need.high)
+    }
+  }
   // each lot of them about its own middle one
   const stays = new Map<number, number>()
   at.forEach((where, index) => {
@@ -242,6 +266,17 @@ export function waysOut(
   const ways = pieces.map((piece) => piece.centre.clone().sub(middle))
   if (pieces.length < 2 || pieces.length > MOST) return ways
   const clear = across * CLEAR
+  // Whether one piece is plainly before another along an axis, in the model as built:
+  // the other reaches further along it at one end, and no less far at the other. A lid
+  // let into the top of a case is over the case, though it ends where the case does;
+  // works that are short of the case at both ends are inside it, and on no side of it.
+  // (No less far, and further, by more than parts meant to be flush are drawn out by.)
+  const plain = Math.max(TOUCH.least, across * TOUCH.share)
+  const before = (a: number, b: number, axis: Axis) => {
+    const low = pieces[b].box.min[axis] - pieces[a].box.min[axis]
+    const high = pieces[b].box.max[axis] - pieces[a].box.max[axis]
+    return low > -plain && high > -plain && (low > plain || high > plain)
+  }
   for (let round = 0; round < ROUNDS; round++) {
     const moved = pieces.map((piece, index) =>
       piece.box.clone().translate(ways[index])
@@ -253,13 +288,42 @@ export function waysOut(
     let any = false
     for (let a = 0; a < moved.length; a++)
       for (let b = a + 1; b < moved.length; b++) {
-        if (!moved[a].intersectsBox(moved[b])) continue
+        if (!moved[a].intersectsBox(moved[b])) {
+          // Clear of one another: but one that was moved along the only way there is
+          // between them may have gone right past the other. If they were plainly one
+          // after the other, it is on the wrong side now, as much as if it had stopped
+          // inside it.
+          const between = AXES.filter(
+            (axis) =>
+              moved[a].max[axis] < moved[b].min[axis] ||
+              moved[b].max[axis] < moved[a].min[axis]
+          )
+          if (between.length !== 1) continue
+          const [axis] = between
+          const [low, high] = before(a, b, axis)
+            ? [a, b]
+            : before(b, a, axis)
+              ? [b, a]
+              : [null, null]
+          if (low === null || moved[low].min[axis] < moved[high].max[axis])
+            continue
+          const by = moved[low].max[axis] - moved[high].min[axis] + clear
+          needs[axis].push({ low, high, by })
+          any = true
+          continue
+        }
         // the way that parts these two with the least moving, each staying on the side
-        // of the other that it is on
+        // of the other that it is on: the side it was built on, where that is plain,
+        // and otherwise the side it is on by now
         let least: (Need & { axis: Axis; cost: number }) | null = null
         for (const axis of AXES) {
-          const [low, high] =
-            centres[a][axis] <= centres[b][axis] ? [a, b] : [b, a]
+          const [low, high] = before(a, b, axis)
+            ? [a, b]
+            : before(b, a, axis)
+              ? [b, a]
+              : centres[a][axis] <= centres[b][axis]
+                ? [a, b]
+                : [b, a]
           const by = moved[low].max[axis] - moved[high].min[axis] + clear
           const cost = by * (axis === "z" ? UPRIGHT : 1)
           if (!least || cost < least.cost) least = { axis, low, high, by, cost }

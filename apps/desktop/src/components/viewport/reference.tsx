@@ -391,16 +391,19 @@ export function placing(scene: ReferenceScene, model: THREE.Box3) {
  */
 export function sinking(parts: LoadedPart[], model: THREE.Box3) {
   // how low each part is, put together, and how fast it goes down as it is pulled out
-  const lows = parts.map((part) => ({
-    low: part.box.clone().applyMatrix4(part.home).min.z,
-    down: part.away.z,
-  }))
-  return (explode: number) => {
-    let sunk = 0
-    for (const { low, down } of lows)
-      sunk = Math.max(sunk, model.min.z - (low + down * explode))
-    return sunk
+  const lows = parts.map(
+    (part) => part.box.clone().applyMatrix4(part.home).min.z
+  )
+  const downs = parts.map((part) => part.away.z)
+  /** `going` is how fast each goes down just now, where that is not yet as fast as it will */
+  const sunk = (explode: number, going: ArrayLike<number> = downs) => {
+    let most = 0
+    lows.forEach((low, index) => {
+      most = Math.max(most, model.min.z - (low + going[index] * explode))
+    })
+    return most
   }
+  return Object.assign(sunk, { downs })
 }
 
 /**
@@ -476,7 +479,11 @@ export function Reference({
 
   const sunk = React.useMemo(() => sinking(parts, model), [parts, model])
   const current = React.useRef(explode)
-  React.useEffect(() => invalidate(), [explode, at, invalidate])
+  // How fast each part is going down. A model that comes apart another way, piece by
+  // piece or part by part, has its parts go over to their other places, and what is
+  // under them goes with the lowest of them the while (see PartModel).
+  const going = React.useRef(sunk.downs)
+  React.useEffect(() => invalidate(), [explode, at, sunk, invalidate])
   useFrame((_, delta) => {
     const next = THREE.MathUtils.damp(
       current.current,
@@ -484,9 +491,27 @@ export function Reference({
       FOLLOWING,
       Math.min(delta, 0.05)
     )
-    const moving = Math.abs(next - explode) > 0.0005
-    current.current = moving ? next : explode
-    group.current?.position.set(at.x, at.y, at.z - sunk(current.current))
+    let turning = false
+    if (going.current !== sunk.downs) {
+      const from = going.current
+      // (put together, or with other parts than there were, there is nothing to go over)
+      if (current.current !== 0 && from.length === sunk.downs.length) {
+        const share = 1 - Math.exp(-FOLLOWING * Math.min(delta, 0.05))
+        going.current = sunk.downs.map((to, index) => {
+          const now = from[index] + (to - from[index]) * share
+          if (Math.abs(to - now) > 0.01) turning = true
+          return now
+        })
+      }
+      if (!turning) going.current = sunk.downs
+    }
+    const moving = Math.abs(next - explode) > 0.0005 || turning
+    current.current = Math.abs(next - explode) > 0.0005 ? next : explode
+    group.current?.position.set(
+      at.x,
+      at.y,
+      at.z - sunk(current.current, going.current)
+    )
     if (moving) invalidate()
   })
 

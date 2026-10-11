@@ -691,7 +691,13 @@ const PartModel = React.memo(function PartModel({
     material.color.copy(skinColors[index]).lerp(colors.picked, tint.current)
 
   const current = React.useRef(explode)
-  React.useEffect(() => invalidate(), [explode, filled, invalidate])
+  // Where it is on its way to, pulled apart. That is another place when the model comes
+  // apart another way, piece by piece or part by part, and it goes over to it.
+  const way = React.useRef(loaded.away.clone())
+  React.useEffect(
+    () => invalidate(),
+    [explode, filled, loaded.away, invalidate]
+  )
   useFrame((_, delta) => {
     const to = filled ? 1 : 0
     if (tint.current !== to) {
@@ -714,8 +720,15 @@ const PartModel = React.memo(function PartModel({
       9,
       Math.min(delta, 0.05)
     )
-    const moving = Math.abs(next - explode) > 0.0005
-    current.current = moving ? next : explode
+    // (put together, it is nowhere along the way: there is nothing to be seen going)
+    const turning =
+      current.current !== 0 &&
+      way.current.distanceToSquared(loaded.away) > 0.0001
+    if (turning)
+      way.current.lerp(loaded.away, 1 - Math.exp(-9 * Math.min(delta, 0.05)))
+    else way.current.copy(loaded.away)
+    const moving = Math.abs(next - explode) > 0.0005 || turning
+    current.current = Math.abs(next - explode) > 0.0005 ? next : explode
     // where the model has it: or, with a tool of the project's at work on it, where the
     // tool has it from there
     const pose = posed(part.id)
@@ -729,7 +742,7 @@ const PartModel = React.memo(function PartModel({
       group.current.position.copy(home.position)
       group.current.quaternion.copy(home.quaternion)
     }
-    group.current.position.addScaledVector(loaded.away, current.current)
+    group.current.position.addScaledVector(way.current, current.current)
     if (moving) invalidate()
   })
 

@@ -1,6 +1,11 @@
 import { Slider } from "@base-ui/react/slider"
 import { cn } from "cn"
 
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { SPREAD, useStore } from "@/lib/store"
 
 /**
@@ -35,10 +40,44 @@ export function Spread({ className }: { className?: string }) {
   )
 }
 
-/** The same at the foot of the view, by itself, while the model is exploded. */
-export function ExplodeSlider() {
+/**
+ * What goes before it, for a model that comes apart twice: pressed, the pieces the
+ * model is pulled apart into come apart too, every part by itself, and pressed again
+ * they are pieces once more. It says which of the two it goes to: 2x, with the model
+ * apart the once. It never puts the model together, which the key does, and Esc.
+ */
+export function Twice() {
+  const alone = useStore((state) => state.view.alone)
+  const setView = useStore((state) => state.setView)
   return (
-    <div className="glass pointer-events-auto flex h-10 items-center rounded-full bg-background/60 px-3.5 shadow-sm ring-1 ring-foreground/10">
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            onClick={() => setView({ alone: !alone })}
+            // as wide for the one as for the other: the slider beside it stays put
+            className="-ml-1 flex h-6 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-xs font-medium text-muted-foreground tabular-nums transition-colors outline-none hover:bg-foreground/10 hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          />
+        }
+      >
+        {alone ? "1x" : "2x"}
+      </TooltipTrigger>
+      <TooltipContent side="top">
+        {alone ? "Back to its groups" : "Every part by itself"}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+/**
+ * The same at the foot of the view, by itself, while the model is exploded: after what
+ * pulls its pieces apart in their turn, where the model comes apart twice (`further`).
+ */
+export function ExplodeSlider({ further }: { further: boolean }) {
+  return (
+    <div className="glass pointer-events-auto flex h-10 items-center gap-2 rounded-full bg-background/60 px-3.5 shadow-sm ring-1 ring-foreground/10">
+      {further && <Twice />}
       <Spread className="w-56" />
     </div>
   )

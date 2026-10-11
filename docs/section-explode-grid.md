@@ -31,6 +31,19 @@ board keeps its components and a switch its pins. The outside (a group marked `s
 still comes apart part by part, as do parts in no group and a model that is all one
 group.
 
+Such a model comes apart twice. E pulls it apart into those pieces; a second time, with
+the model still apart, it pulls the pieces apart too, every part by itself; and a third
+puts the model together. Beside the slider there is a button for the same: **2x** pulls
+the pieces apart into their parts, and **1x** puts them back as pieces. It never puts
+the model together, which E does, and Esc, and the Explode button. A model that says
+where its own parts go, or one with no piece of more than a part, has nothing further
+to come apart into: it has no such button, and E a second time puts it together.
+
+Pieces that would still be in one another are then moved clear, up and down where that
+is about as short a way as any. What was plainly over something in the model stays over
+it: a face ends up above the works it covers, however far the works had to be lifted to
+come out of the case.
+
 ## Grid
 
 **Grid** (Shift+G, as in Figma) rules the ground into squares and draws the world's

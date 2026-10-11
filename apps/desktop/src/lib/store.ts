@@ -75,6 +75,12 @@ export type Section = {
 export type View = {
   mode: DisplayMode
   exploded: boolean
+  /**
+   * pulled apart, every part goes by itself, and not with the rest of the piece it is
+   * of: what a model that is pulled apart is pulled apart into next. It is still so
+   * while the model goes back together, and is not until it is pulled apart again.
+   */
+  alone: boolean
   /** how far apart the parts are pulled, as a multiple of the model's own distances */
   spread: number
   section: Section | null
@@ -120,6 +126,20 @@ export type Only =
 
 /** Exploding starts at the model's own distances and can be pushed this much further. */
 export const SPREAD = { min: 1, max: 4 }
+
+/**
+ * What Explode does to the view the next time it is asked for. A model put together is
+ * pulled apart, into its pieces. One that is pulled apart, and comes apart again
+ * (`further`: some piece of it is of more than one part), is pulled apart into its
+ * parts, as far apart as it is. And then, or at once if it does not, it is put together.
+ */
+export function exploding(view: View, further: boolean): Partial<View> {
+  if (!view.exploded)
+    return { exploded: true, alone: false, spread: SPREAD.min }
+  if (further && !view.alone) return { alone: true }
+  // (it goes back together the way it came apart: `alone` is as it was until next time)
+  return { exploded: false }
+}
 
 /** How wide the conversation is, px: at the least, and until its edge is dragged. */
 export const THREAD_WIDTH = { min: 320, initial: 400 }
@@ -372,6 +392,7 @@ const savedFinished = (): string[] => {
 const homeView = (): View => ({
   mode: savedMode(),
   exploded: false,
+  alone: false,
   spread: SPREAD.min,
   section: null,
   only: null,

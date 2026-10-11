@@ -318,6 +318,119 @@ describe("waysOut", () => {
     expect(heights).toEqual([...heights].sort((a, b) => a - b))
   })
 
+  it("keeps a face over the works it covers, when the works come up out of the case", () => {
+    // a clock: a case, a movement low in it that lifts the case off itself, the works
+    // in the middle of the case, and a face let into the top of the case over them
+    const body = piece([-60, -60, -25], [60, 60, 25], [0, 0, 0.2])
+    const movement = piece([-20, -20, -25], [20, 20, 19.4], [0, 0, -13.2])
+    const works = piece([-40, -40, -6], [40, 40, 23], [0, 0, 0.7])
+    const face = piece([-45, -45, 19.4], [45, 45, 25], [0, 0, 23.6])
+    const pieces = [body, movement, works, face]
+    const boxes = pulled(pieces, waysOut(pieces, MIDDLE, 204))
+    expect(anyInAnother(boxes)).toBe(false)
+    // the works are lifted clear of the case, which takes them up to where the face
+    // has got to: and the face goes on up ahead of them
+    expect(boxes[3].min.z).toBeGreaterThan(boxes[2].max.z)
+  })
+
+  it("keeps it over them when they are moved right past it, too", () => {
+    // the same, with a face thin enough to be left in the room between the case and
+    // the works lifted clear of it, touching neither
+    const body = piece([-60, -60, -25], [60, 60, 25], [0, 0, 0.2])
+    const movement = piece([-20, -20, -25], [20, 20, -5], [0, 0, -8])
+    const works = piece([-40, -40, -6], [40, 40, 23], [0, 0, 0.7])
+    const face = piece([-45, -45, 23], [45, 45, 25])
+    const pieces = [body, movement, works, face]
+    const boxes = pulled(pieces, waysOut(pieces, MIDDLE, 150))
+    expect(anyInAnother(boxes)).toBe(false)
+    expect(boxes[3].min.z).toBeGreaterThan(boxes[2].max.z)
+  })
+
+  it("lets a thing be moved past what is inside it, which is on no side of it", () => {
+    // a block with nine tubes through it, a lid on it and a base under it: the block
+    // goes off to one side of the tubes, and none of them is sent on ahead of it
+    const block = piece([-20, -20, 0], [20, 20, 40])
+    const tubes = [-12, 0, 12].flatMap((x) =>
+      [-12, 0, 12].map((y) => piece([x - 4, y - 4, 0], [x + 4, y + 4, 40]))
+    )
+    const lid = piece([-20, -20, 32], [20, 20, 46], [0, 0, 40])
+    const base = piece([-20, -20, -5], [20, 20, 8], [0, 0, 0])
+    const pieces = [block, ...tubes, lid, base]
+    const ways = waysOut(pieces, new THREE.Vector3(0, 0, 20.6), 76)
+    expect(anyInAnother(pulled(pieces, ways))).toBe(false)
+    for (const way of ways.slice(1, 10)) expect(way.length()).toBeLessThan(30)
+  })
+
+  it("takes a clock apart part by part, each to somewhere near, the face uppermost", () => {
+    // every part of a clock by itself: a case with a face let into its top, flush with
+    // it, and the works and a movement inside, one thing in another all the way in
+    const clock: [string, number[], number[], number[]][] = [
+      ["body", [-70, -70, -24.9], [70, 70, 25], [0, 0, 0.2]],
+      ["back_cover", [-67.7, -67.7, -24.9], [67.7, 67.7, 4.1], [0, 0, -19.3]],
+      ["outer_carrier", [-58.7, -58.7, -6.1], [58.7, 58.7, 23], [0, 0, -2.7]],
+      ["planet_shaft_1", [-25.9, -8.9, 9.5], [-8.1, 8.9, 18.4], [-17, 0, 11.4]],
+      ["planet_shaft_2", [8.1, -8.9, 9.5], [25.9, 8.9, 18.4], [17, 0, 11.4]],
+      ["hour_carrier", [-39.5, -6, 12.2], [39.5, 6, 22.8], [0, 0, 14.7]],
+      ["planet_gear_1", [-25.9, -8.9, 14.7], [-8.1, 8.9, 18.4], [-17, 0, 16.5]],
+      ["planet_gear_2", [8.1, -8.9, 14.7], [25.9, 8.9, 18.4], [17, 0, 16.5]],
+      ["minute_sun_gear", [-10, -9.9, 15.5], [10, 9.9, 18.4], [0, 0, 16.9]],
+      ["hour_dot", [-10, 29.6, 21.5], [10, 44.4, 23.9], [0, 37, 22.7]],
+      ["middle_ring", [-46.5, -46.5, 19.7], [46.5, 46.5, 25], [0, -0.5, 23.7]],
+      ["minute_dot", [-10, 48.6, 21.7], [10, 63.4, 24.1], [0, 56, 22.8]],
+      ["outer_ring", [-65, -65, 19.3], [65, 65, 25], [0, -0.8, 23.9]],
+      ["seconds_dot", [-10, 9.6, 20.3], [10, 24.4, 24.1], [0, 17, 22]],
+      ["seconds_disc", [-27.5, -27.5, 20.1], [27.5, 27.5, 25], [0, -0.5, 23.2]],
+      ["carrier_bearings", [-13, -13, -6.1], [13, 13, 3.9], [0, 0, -1.1]],
+      [
+        "contact_2",
+        [-26.2, -24.2, -22.7],
+        [-25.5, -9.1, -9.8],
+        [-26, -17.3, -15.6],
+      ],
+      [
+        "contact_1",
+        [25.2, -24.8, -20.9],
+        [26, -9.1, -10.5],
+        [25.8, -18.1, -15.5],
+      ],
+      ["seconds_pin", [-0.3, -0.2, 14], [0.3, 0.2, 19], [0, 0, 16.5]],
+      ["battery", [-25.8, -25.5, -25], [25.3, -11.5, -11], [0, -18.5, -18]],
+      [
+        "setting_wheel",
+        [11.2, -9.9, -25],
+        [26.2, 5.1, -21.7],
+        [18.7, -2.4, -23.5],
+      ],
+      [
+        "movement_case",
+        [-27.5, -27.5, -24.7],
+        [27.5, 27.5, -8.7],
+        [-0.3, -2.1, -15.5],
+      ],
+      ["movement_shaft", [-4, -4, -9.7], [4, 4, 19.3], [0, 0, 1.9]],
+      ["movement_nut", [-6.9, -6, 4.2], [6.9, 6, 6.7], [0, 0, 5.4]],
+      ["screws", [-60.5, -60.5, -24.2], [60.5, 60.5, -14.1], [0, 0, -20.2]],
+    ]
+    const across = 204
+    const pieces = clock.map(([, low, high, centre]) =>
+      piece(
+        low as [number, number, number],
+        high as [number, number, number],
+        centre as [number, number, number]
+      )
+    )
+    const ways = waysOut(pieces, MIDDLE, across)
+    const boxes = pulled(pieces, ways)
+    expect(anyInAnother(boxes)).toBe(false)
+    // none is sent off out of sight, as one that needs went round and round for was
+    for (const way of ways) expect(way.length()).toBeLessThan(across)
+    // the rings of the face are over the case they are let into, and over the works
+    const at = (name: string) => boxes[clock.findIndex(([id]) => id === name)]
+    for (const ring of ["outer_ring", "middle_ring", "seconds_disc"])
+      for (const under of ["body", "outer_carrier", "hour_carrier"])
+        expect(at(ring).min.z).toBeGreaterThan(at(under).max.z)
+  })
+
   it("moves a piece out sideways where that is the short way", () => {
     // a cap on the end of a long body, and a button that comes through it
     const body = piece([-50, -10, -10], [50, 10, 10])

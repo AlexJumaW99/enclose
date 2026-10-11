@@ -45,7 +45,7 @@ import {
   allOf,
   calledAs,
   calledScene,
-  SPREAD,
+  exploding,
   useStore,
   type Called,
   type Note,
@@ -58,6 +58,7 @@ import { bridge } from "./bridge"
 import { ExplodeSlider } from "./explode-slider"
 import {
   disposeModel,
+  eachAlone,
   loadModel,
   regrouped,
   standInModel,
@@ -536,11 +537,17 @@ function Model({ project }: { project: Project }) {
   // but for its groups and what follows from them.
   const arrangement = useStore((s) => s.arranged[project.id] ?? NOT_ARRANGED)
   const named = useStore((s) => s.named[project.id] ?? NO_NAMES)
-  const loaded = React.useMemo(() => {
+  const inGroups = React.useMemo(() => {
     if (!base || base.standIn || untouched(arrangement)) return base
     const { groups, of } = arranged(base.model, arrangement, named)
     return regrouped(base, groups, of)
   }, [base, arrangement, named])
+  // And as it comes apart: piece by piece, or, pulled apart a second time, part by part.
+  const alone = useStore((s) => s.view.alone)
+  const loaded = React.useMemo(
+    () => (inGroups && alone ? eachAlone(inGroups) : inGroups),
+    [inGroups, alone]
+  )
   const view = useStore((s) => s.view)
   const setView = useStore((s) => s.setView)
   const selection = useStore((s) => s.selection)
@@ -1144,8 +1151,7 @@ function Model({ project }: { project: Project }) {
       } else if (letter === "s") {
         if (view.section) setView({ section: null })
         else cutOpen(() => sectionFacing(loaded.box))
-      } else if (letter === "e")
-        setView({ exploded: !view.exploded, spread: SPREAD.min })
+      } else if (letter === "e") setView(exploding(view, loaded.further))
       else if (letter === "i") {
         const wanted = pickedOut()
         const near = nearOf(view.only, loaded)
@@ -1511,7 +1517,11 @@ function Model({ project }: { project: Project }) {
           )}
           {/* how far apart the parts are pulled: which a blueprint has beside its own
               bar, with the rest of how its sheets show the model */}
-          {blueprint ? <Options /> : view.exploded && <ExplodeSlider />}
+          {blueprint ? (
+            <Options further={loaded.further} />
+          ) : (
+            view.exploded && <ExplodeSlider further={loaded.further} />
+          )}
         </div>
       )}
       {loaded && middle && !lookingOver && !blueprint && (
