@@ -26,7 +26,7 @@ import { usePreferences } from "@/lib/preferences"
 import { savedAs } from "@/lib/saved"
 import { useStore } from "@/lib/store"
 import { dimensionsOf, type Room } from "./dimensions"
-import { clearFor, columnFor, labelsOf } from "./labels"
+import { clearFor, columnFor, heightFor, labelsOf } from "./labels"
 import { drawn, type Body, type Looking, type Stroke } from "./lines"
 import { useSaving } from "./saving"
 import {
@@ -58,15 +58,13 @@ const AT_A_TIME_MS = 10
  */
 const SETTLED_MS = 120
 /**
- * How wide a line is on the screen, in pixels: what it is on a sheet shown at its full
- * size, a pixel to the point, and no thinner on a sheet that a small window shows smaller.
+ * How thin a line can get on the screen, in pixels of the screen's own, on a drawing
+ * that is shown small: a sheet in the row is its drawing made to fit, lines, writing and
+ * all, and a line that came to less than this would not be there to be seen. (The
+ * writing is let get as small as it comes: a sheet in the row is to be looked at, and
+ * read once it has the view to itself.)
  */
-const LINE_PX = (LINE * 72) / 25.4
-/** And the same of what a sheet says of the model's size: its lines, and its figures. */
-const THIN_PX = (THIN * 72) / 25.4
-const FIGURES_PX = (FIGURES * 72) / 25.4
-/** And of the names of the parts, where it has those. */
-const WRITING_PX = (WRITING * 72) / 25.4
+const HAIRLINE = 1
 /**
  * How many pixels a millimetre of paper is, of a sheet shown by itself: a pixel to the
  * point, which is what a sheet in the row is at its full size.
@@ -85,8 +83,9 @@ const PULLED_PX = 4
 /** A moment for the window to draw itself in. */
 const breathe = () => new Promise((resolve) => setTimeout(resolve, 0))
 
-/** One side of the model, drawn: the lines of each part, and where they sit on the sheet. */
-type Drawing = { strokes: Stroke[][]; placing: Placing }
+/** One side of the model, drawn: the lines of each part. And where they sit on its paper. */
+type Drawn = { strokes: Stroke[][] }
+type Drawing = Drawn & { placing: Placing }
 
 /** The sheets of a model: its sides, as far as they have been drawn. */
 type Sheets = {
@@ -98,7 +97,7 @@ type Sheets = {
   room: Room
   /** and the room they take up as each side sees them, which is what places its drawing */
   seen: Seen[]
-  sides: (Drawing | null)[]
+  sides: (Drawn | null)[]
 }
 
 /**
@@ -194,7 +193,7 @@ function laidOut(parts: LoadedPart[], apart: number) {
     })
     return parts.length > 0 ? room : { x0: 0, x1: 0, y0: 0, y1: 0 }
   })
-  return { bodies, placings: placed(rooms), room, seen: rooms }
+  return { bodies, room, seen: rooms }
 }
 
 /**
@@ -260,7 +259,7 @@ function useSheets(
     if (keptOf(of)) return
     let stopped = false
     const draw = async () => {
-      const { bodies, placings, room, seen } = laidOut(parts, apart)
+      const { bodies, room, seen } = laidOut(parts, apart)
       const fresh: Sheets = {
         of,
         parts: parts.map((part) => part.part.id),
@@ -274,10 +273,7 @@ function useSheets(
         for (;;) {
           const step = run.next()
           if (step.done) {
-            fresh.sides[index] = {
-              strokes: step.value,
-              placing: placings[index],
-            }
+            fresh.sides[index] = { strokes: step.value }
             break
           }
           if (performance.now() - since < AT_A_TIME_MS) continue
@@ -349,7 +345,7 @@ function Lines({
       const scale = per / by
       const left = (on.width / 2) * per - middle[0] * scale
       const top = (on.height / 2) * per + middle[1] * scale
-      context.lineWidth = Math.max(LINE * per, LINE_PX * ratio)
+      context.lineWidth = Math.max(LINE * per, HAIRLINE)
       context.lineJoin = "round"
       context.lineCap = "round"
       context.strokeStyle = INK
@@ -365,13 +361,13 @@ function Lines({
           if (closed) context.closePath()
         }
       context.stroke()
-      context.lineWidth = Math.max(THIN * per, THIN_PX * ratio)
+      context.lineWidth = Math.max(THIN * per, HAIRLINE / 2)
       context.strokeStyle = PENCIL
       context.fillStyle = PENCIL
       context.textBaseline = "alphabetic"
       // the names of the parts: a line from each to its part, a dot where it ends
       if (labels) {
-        context.font = `600 ${Math.max(WRITING * per, WRITING_PX * ratio)}px "Inter Variable", sans-serif`
+        context.font = `600 ${WRITING * per}px "Inter Variable", sans-serif`
         // (the line is of dots: no nearer one another than three of them would lie)
         const dotted = [0, Math.max(DOTTED * per, context.lineWidth * 3)]
         for (const { said, line, at, text } of labels) {
@@ -390,7 +386,7 @@ function Lines({
         }
       }
       if (!measures) return
-      context.font = `400 ${Math.max(FIGURES * per, FIGURES_PX * ratio)}px "Inter Variable", sans-serif`
+      context.font = `400 ${FIGURES * per}px "Inter Variable", sans-serif`
       context.textAlign = "center"
       for (const { lines, arrows, text } of measures) {
         context.beginPath()
@@ -449,6 +445,7 @@ function Sheet({
   /** the paper was pressed: it is to be shown by itself */
   onEnlarge: () => void
 }) {
+  const paper = paperOf(drawing?.placing ?? { middle: [0, 0], by: 1 })
   return (
     <section
       // The sheets come in one after another along the row as the blueprint comes up:
@@ -499,11 +496,24 @@ function Sheet({
             place: but not at once, in case that is here before anyone could tell */}
         <div
           className={cn(
-            "absolute inset-0 transition-opacity duration-200",
+            "[container-type:size] absolute inset-3 flex items-center justify-center transition-opacity duration-200",
             stale && "opacity-25 delay-200"
           )}
         >
-          <Lines drawing={drawing} measures={measures} labels={labels} />
+          {/* The drawing's own paper, all of it, as big as the sheet has room for: a
+              sheet in the row is the drawing seen small, what is written on it and all,
+              and is not that drawing set out again to be read at this size. */}
+          {drawing && (
+            <div
+              className="relative shrink-0"
+              style={{
+                aspectRatio: `${paper.width} / ${paper.height}`,
+                width: `min(100cqw, 100cqh * ${paper.width / paper.height})`,
+              }}
+            >
+              <Lines drawing={drawing} measures={measures} labels={labels} />
+            </div>
+          )}
         </div>
         {(!drawing || stale) && (
           <div className="absolute inset-0 flex animate-in items-center justify-center delay-300 duration-300 fill-mode-both fade-in">
@@ -695,41 +705,56 @@ export function Blueprint({
       })
       return [...things.values()]
     }
-    // The names stand at either side of a drawing, in columns as wide as the longest of
-    // them, and a sheet that has them keeps that much more of itself clear of its
-    // drawing: which may be to a smaller scale for it, as all the sheets then are.
-    /** The room a sheet has to find for its drawing: with what says its size, if that is said. */
+    /** The room a drawing has to be found: with what says its size, if that is said. */
     const taken = (of: Sheets, index: number) =>
       dimensions
         ? withCorners(of.seen[index], of.room, SIDES[index].looking)
         : of.seen[index]
-    const named = new Map<
+    // How a set of drawings is set out, each on paper of its own: to the scale that
+    // makes the biggest of them as big as paper gets, with as much of the paper kept
+    // clear at either side as the names need, which stand there in columns as wide as
+    // the longest of them, and paper tall enough for the names of what shows on it.
+    const set = new Map<
       Sheets,
-      { things: ReturnType<typeof nameable>; column: number; at: Placing[] }
+      {
+        names: { things: ReturnType<typeof nameable>; column: number } | null
+        at: Placing[]
+      }
     >()
-    const namesOf = (of: Sheets) => {
-      let names = named.get(of)
-      if (!names) {
-        const things = nameable(of)
-        const column = columnFor(things.map((thing) => thing.label))
-        // (and clear of where the model's size is said, where the sheets say that too)
+    const setOut = (of: Sheets) => {
+      let out = set.get(of)
+      if (!out) {
+        const things = labels ? nameable(of) : null
+        const names = things && {
+          things,
+          column: columnFor(things.map((thing) => thing.label)),
+        }
         const at = placed(
           of.seen.map((_, index) => taken(of, index)),
           {
-            x: clearFor(column, dimensions),
+            x: names ? clearFor(names.column, dimensions) : MARGIN,
             y: MARGIN,
-          }
+          },
+          of.sides.map((side) =>
+            names && side
+              ? heightFor(
+                  names.things.filter(({ parts }) =>
+                    parts.some((part) => side.strokes[part].length > 0)
+                  ).length
+                )
+              : 0
+          )
         )
-        named.set(of, (names = { things, column, at }))
+        set.set(of, (out = { names, at }))
       }
-      return names
+      return out
     }
     // each sheet's drawing: of the model as it is on show, or of it as it was
     const found = SIDES.map((_, index) => {
       const of = now?.sides[index] ? now : was?.sides[index] ? was : null
       const as = of?.sides[index] ?? null
       return of && as
-        ? { of, as, names: labels ? namesOf(of) : null, stale: of !== now }
+        ? { of, as, names: setOut(of).names, stale: of !== now }
         : null
     })
     /** All that is on a sheet, with its drawing placed so. */
@@ -757,7 +782,7 @@ export function Blueprint({
     return {
       sides: found.map((one, index) =>
         one
-          ? said(index, one.names?.at[index] ?? one.as.placing)
+          ? said(index, setOut(one.of).at[index])
           : { drawing: null, stale: false, measures: null, labels: null }
       ),
       /**

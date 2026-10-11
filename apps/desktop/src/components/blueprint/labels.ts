@@ -53,6 +53,10 @@ export function columnFor(names: string[]): number {
   return Math.min(COLUMN, Math.max(NARROW, longest * LETTER * WRITING))
 }
 
+/** How tall paper has to be for this many names to be written on it, half of them in each column. */
+export const heightFor = (names: number) =>
+  names > 0 ? 2 * ENDS + CAPITAL + (Math.ceil(names / 2) - 1) * PITCH : 0
+
 /** How much of a sheet's width is kept clear of the drawing at either side, with names in columns this wide. */
 export const clearFor = (column: number, measured: boolean) =>
   Math.max(MARGIN, EDGE + column + (measured ? GAP.measured : GAP.plain))

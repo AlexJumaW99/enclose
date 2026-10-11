@@ -7,8 +7,19 @@ import type { Vec3 } from "@shared/api"
 import { viewFrom, VIEWS } from "@/lib/orient"
 import type { Looking, Stroke } from "./lines"
 
-/** A sheet, in mm: upright, as wide as A4, and four wide to five high. */
+/**
+ * A sheet as it stands in the row, in mm: upright, as wide as A4, and four wide to five
+ * high. It is the shape of what a drawing is shown on there, small; the drawing itself
+ * is on paper of its own (see PAPER), which a sheet shows all of.
+ */
 export const SHEET = { width: 210, height: 262.5 }
+/**
+ * The most paper a drawing is given, in mm: A2, on its side. A drawing is made as big as
+ * fits that, to a scale drawings are made to, and its paper is then no bigger than it
+ * needs: so the model is most of what is on it, and what is written round it is small
+ * beside the model, as on a drawing that is pinned to a wall.
+ */
+export const PAPER = { width: 594, height: 420 }
 /** How much of the sheet is kept clear all round a drawing, at the least, in mm. */
 export const MARGIN = 15
 /**
@@ -125,35 +136,47 @@ export function lookingFrom({
   return { right: model(right), up: model(up), back: model(back) }
 }
 
-/** How many times smaller than life a drawing can be: the steps drawings are made in. */
+/** How many times smaller than life a drawing can be, or bigger: the steps drawings are made in. */
 const REDUCED = [1, 2, 5]
+/** The most a drawing is made bigger than life: a thousand times, as ten to this. */
+const ENLARGED = -3
 
 /**
  * How many times smaller than life drawings are, so that the largest of them fits its
- * sheet: life size where it does, and the least that does where not. The six sides of a
- * model are all to the one scale, so that a length on one sheet is that length on the
+ * paper and no more than fits: the least that does, of the scales drawings are made to.
+ * Less than one is bigger than life, which is what a small thing is drawn. The six sides
+ * of a model are all to the one scale, so that a length on one is that length on the
  * next; and so are its four corners, which take more room and are not for measuring.
  */
 export function reduction(
   sizes: { width: number; height: number }[],
-  /** how much of the sheet is kept clear of a drawing, at either side and at top and foot */
-  clear: { x: number; y: number } = { x: MARGIN, y: MARGIN }
+  /** how much of the paper is kept clear of a drawing, at either side and at top and foot */
+  clear: { x: number; y: number } = { x: MARGIN, y: MARGIN },
+  /** the most paper there is for one */
+  within: { width: number; height: number } = PAPER
 ): number {
   const most = Math.max(
     0,
     ...sizes.map(({ width, height }) =>
       Math.max(
-        width / (SHEET.width - 2 * clear.x),
-        height / (SHEET.height - 2 * clear.y)
+        width / (within.width - 2 * clear.x),
+        height / (within.height - 2 * clear.y)
       )
     )
   )
-  for (let tens = 1; ; tens *= 10)
-    for (const step of REDUCED) if (step * tens >= most) return step * tens
+  // (nothing to draw is drawn life size)
+  if (!(most > 0)) return 1
+  for (let tens = ENLARGED; ; tens++)
+    for (const step of REDUCED) {
+      // (ten to a power that is not whole comes out a hair off: said as one over the other)
+      const by = tens < 0 ? step / 10 ** -tens : step * 10 ** tens
+      if (by >= most) return by
+    }
 }
 
-/** A scale as it is written: "1:2". */
-export const scaleSaid = (by: number) => `1:${by}`
+/** A scale as it is written: "1:2", or "5:1" of what is drawn bigger than life. */
+export const scaleSaid = (by: number) =>
+  by >= 1 ? `1:${by}` : `${Math.round(1 / by)}:1`
 
 /** Where a drawing sits on its sheet: what of the model is at the sheet's middle, and the scale. */
 export type Placing = {
@@ -162,8 +185,9 @@ export type Placing = {
   /** how many times smaller than life it is drawn */
   by: number
   /**
-   * The paper it is drawn on, where that is not a sheet: one shown by itself is drawn on
-   * paper the shape of the view, as big as there is of that (see Blueprint).
+   * The paper it is drawn on, in mm: no bigger than the drawing needs, with what is
+   * said round it. Or, of one shown by itself, paper as big as the view has room for
+   * (see Blueprint).
    */
   paper?: { width: number; height: number }
 }
@@ -175,13 +199,16 @@ export const paperOf = (placing: Placing) => placing.paper ?? SHEET
 export type Seen = { x0: number; x1: number; y0: number; y1: number }
 
 /**
- * Where the drawing of each side sits on its sheet, by the room each takes up, in the
- * order of the sides: in the middle of the sheet, the sides to one scale and the
- * corners to one. `clear` is how much of the sheet is kept clear of a drawing.
+ * Where the drawing of each side sits on its paper, by the room each takes up, in the
+ * order of the sides: in the middle of it, the sides to one scale and the corners to
+ * one. `clear` is how much of the paper is kept clear of a drawing at its edges, and
+ * the paper is the drawing and that much round it: or as tall as `tall` says, where
+ * what is written beside the drawing needs more.
  */
 export function placed(
   seen: Seen[],
-  clear?: { x: number; y: number }
+  clear: { x: number; y: number } = { x: MARGIN, y: MARGIN },
+  tall: number[] = []
 ): Placing[] {
   const scales = [true, false].map((flat) =>
     reduction(
@@ -194,10 +221,20 @@ export function placed(
       clear
     )
   )
-  return seen.map((room, index) => ({
-    middle: [(room.x0 + room.x1) / 2, (room.y0 + room.y1) / 2],
-    by: scales[SIDES[index].flat ? 0 : 1],
-  }))
+  return seen.map((room, index) => {
+    const by = scales[SIDES[index].flat ? 0 : 1]
+    return {
+      middle: [(room.x0 + room.x1) / 2, (room.y0 + room.y1) / 2],
+      by,
+      paper: {
+        width: (room.x1 - room.x0) / by + 2 * clear.x,
+        height: Math.min(
+          PAPER.height,
+          Math.max((room.y1 - room.y0) / by + 2 * clear.y, tall[index] ?? 0)
+        ),
+      },
+    }
+  })
 }
 
 /** A point of a drawing as it falls on the sheet, in mm from its top left corner. */
@@ -241,9 +278,9 @@ function named() {
 }
 
 /**
- * A sheet as an SVG, in mm, with the lines of each part together under the part's
- * name, and the parts of each group together under the group's. Nothing is filled in,
- * and there is no paper in it: only the lines.
+ * A drawing as an SVG, in mm and the size of its paper, with the lines of each part
+ * together under the part's name, and the parts of each group together under the
+ * group's. Nothing is filled in, and there is no paper in it: only the lines.
  */
 export function svgOf(sheet: {
   /** what the file says it is of */
@@ -257,9 +294,11 @@ export function svgOf(sheet: {
   labels?: Label[]
 }): string {
   const name = named()
+  const paper = paperOf(sheet.placing)
+  const [wide, high] = [short(paper.width), short(paper.height)]
   const out = [
     `<?xml version="1.0" encoding="UTF-8"?>`,
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${SHEET.width}mm" height="${SHEET.height}mm" viewBox="0 0 ${SHEET.width} ${SHEET.height}">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${wide}mm" height="${high}mm" viewBox="0 0 ${wide} ${high}">`,
     `<title>${escaped(sheet.title)}</title>`,
     `<g fill="none" stroke="${INK}" stroke-width="${short(LINE)}" stroke-linecap="round" stroke-linejoin="round">`,
   ]

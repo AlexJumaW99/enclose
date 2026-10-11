@@ -3,8 +3,11 @@ import { describe, expect, it } from "vitest"
 import {
   lookingFrom,
   onSheet,
+  PAPER,
   pathOf,
+  placed,
   reduction,
+  scaleSaid,
   SHEET,
   SIDES,
   svgOf,
@@ -83,34 +86,104 @@ describe("the sides a model is drawn from", () => {
 })
 
 describe("reduction", () => {
-  it("draws life size what fits the sheet", () => {
-    expect(reduction([{ width: 40, height: 40 }])).toBe(1)
-    expect(reduction([{ width: 180, height: 232.5 }])).toBe(1)
-    // (it is four wide to five high: what would fit a taller sheet does not fit it)
-    expect(reduction([{ width: 180, height: 267 }])).toBe(2)
-    expect(reduction([])).toBe(1)
+  // the most paper a drawing is given, less what is kept clear at its edges: 564 by 390
+  it("draws life size what fills its paper so", () => {
+    expect(reduction([{ width: 400, height: 300 }])).toBe(1)
+    expect(reduction([{ width: 564, height: 390 }])).toBe(1)
   })
 
-  it("draws smaller, by the least step that fits, what does not", () => {
-    expect(reduction([{ width: 181, height: 20 }])).toBe(2)
-    expect(reduction([{ width: 100, height: 600 }])).toBe(5)
-    expect(reduction([{ width: 1700, height: 100 }])).toBe(10)
-    expect(reduction([{ width: 3000, height: 3000 }])).toBe(20)
+  it("draws smaller, by the least step that fits, what does not fit", () => {
+    expect(reduction([{ width: 565, height: 100 }])).toBe(2)
+    expect(reduction([{ width: 100, height: 800 }])).toBe(5)
+    expect(reduction([{ width: 3000, height: 100 }])).toBe(10)
+    expect(reduction([{ width: 100, height: 4000 }])).toBe(20)
   })
 
-  it("draws smaller what does not fit beside what a sheet keeps clear for names", () => {
-    // 150 mm across fits a sheet 210 wide: but not with 50 kept clear at either side
-    expect(reduction([{ width: 150, height: 100 }])).toBe(1)
-    expect(reduction([{ width: 150, height: 100 }], { x: 50, y: 15 })).toBe(2)
+  it("draws bigger than life, by the most that fits, what is small", () => {
+    // twice over it would be 560 across, which fits: five times, 1400
+    expect(reduction([{ width: 280, height: 100 }])).toBe(0.5)
+    expect(reduction([{ width: 100, height: 60 }])).toBe(0.2)
+    expect(reduction([{ width: 10, height: 30 }])).toBe(0.1)
+    expect(reduction([{ width: 3, height: 3 }])).toBe(0.01)
+  })
+
+  it("draws smaller what does not fit beside what is kept clear for names", () => {
+    // 500 mm across fits paper 594 wide: but not with 60 kept clear at either side
+    expect(reduction([{ width: 500, height: 100 }])).toBe(1)
+    expect(reduction([{ width: 500, height: 100 }], { x: 60, y: 15 })).toBe(2)
   })
 
   it("goes by the largest of the drawings, which are all to one scale", () => {
     expect(
       reduction([
-        { width: 60, height: 40 },
-        { width: 400, height: 40 },
+        { width: 100, height: 100 },
+        { width: 100, height: 800 },
       ])
     ).toBe(5)
+  })
+
+  it("draws nothing life size, there being nothing to fit", () => {
+    expect(reduction([])).toBe(1)
+    expect(reduction([{ width: 0, height: 0 }])).toBe(1)
+  })
+})
+
+describe("a scale as it is written", () => {
+  it("is one to so many, of what is drawn smaller than life or as big", () => {
+    expect(scaleSaid(1)).toBe("1:1")
+    expect(scaleSaid(5)).toBe("1:5")
+  })
+
+  it("is so many to one, of what is drawn bigger", () => {
+    expect(scaleSaid(0.5)).toBe("2:1")
+    expect(scaleSaid(0.2)).toBe("5:1")
+    expect(scaleSaid(0.01)).toBe("100:1")
+  })
+})
+
+describe("the paper of a drawing", () => {
+  // the six sides come after the four corners: a box 280 by 100 by 60, seen from each
+  const seen = SIDES.map((side, index) =>
+    side.flat
+      ? index % 2
+        ? { x0: -140, x1: 140, y0: -30, y1: 30 }
+        : { x0: -50, x1: 50, y0: -30, y1: 30 }
+      : { x0: -160, x1: 160, y0: -110, y1: 110 }
+  )
+
+  it("is the drawing and what is kept clear round it, and no more", () => {
+    const flat = placed(seen)[SIDES.findIndex((side) => side.flat) + 1]
+    // twice life size: 560 across and 120 high, and 15 clear all round
+    expect(flat.by).toBe(0.5)
+    expect(flat.paper).toEqual({ width: 590, height: 150 })
+  })
+
+  it("has the sides to one scale, and the smaller of them on smaller paper", () => {
+    const sides = placed(seen).filter((_, index) => SIDES[index].flat)
+    expect(new Set(sides.map((side) => side.by)).size).toBe(1)
+    expect(sides[0].paper!.width).toBeLessThan(sides[1].paper!.width)
+  })
+
+  it("is as tall as what is written beside the drawing needs, and no taller than paper gets", () => {
+    const index = SIDES.findIndex((side) => side.flat)
+    const tall = SIDES.map(() => 300)
+    expect(placed(seen, undefined, tall)[index].paper!.height).toBe(300)
+    expect(
+      placed(
+        seen,
+        undefined,
+        SIDES.map(() => 9000)
+      )[index].paper!.height
+    ).toBe(PAPER.height)
+  })
+
+  it("is what the file is the size of", () => {
+    const svg = svgOf({
+      title: "Box",
+      placing: { middle: [0, 0], by: 1, paper: { width: 590, height: 150 } },
+      groups: [],
+    })
+    expect(svg).toContain('width="590mm" height="150mm" viewBox="0 0 590 150"')
   })
 })
 
