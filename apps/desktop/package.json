@@ -14,6 +14,7 @@
     "build": "tsc -b && node scripts/build.mjs",
     "start": "node scripts/start.mjs",
     "dist": "npm run build && node scripts/dist.mjs",
+    "release": "node scripts/release.mjs",
     "icons": "node scripts/icons.mjs",
     "scenes": "node scripts/scenes.mjs",
     "examples": "node scripts/examples.mjs",

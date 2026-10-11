@@ -139,7 +139,21 @@ try the installed app out.
 
 ### A release
 
-Every command is run from `apps/desktop`.
+Every command is run from `apps/desktop`. One of them does all of it:
+
+```
+APPLE_KEYCHAIN_PROFILE=<profile> npm run release
+```
+
+[`scripts/release.mjs`](../apps/desktop/scripts/release.mjs) makes the next version
+(0.0.5 after 0.0.4; `npm run release -- 0.1.0` makes that one), having first seen that
+one can be made: nothing uncommitted, on main with all the remote has, the tests
+passing. It asks before it goes on (`-- --yes` has it not ask), and publishes nothing
+until the app is built and a Mac has been seen to take it. `-- --dry` only sees that
+everything is ready. If it stops after the version was committed, run it again with that
+version and it goes on from there.
+
+What it does, a step at a time, which can also be done by hand:
 
 1. Commit what is to go out, and leave nothing uncommitted. The build takes the files as
    they stand, committed or not, and a release is what its tag says it is.
