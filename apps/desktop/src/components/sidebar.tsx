@@ -427,19 +427,23 @@ function ProjectCard({ project, now }: { project: Project; now: number }) {
 /**
  * Something in the list that can be put away, and brought back: it closes up to nothing
  * as it fades, and whatever is under it in the list comes up to where it was. Neither
- * slowly nor in a hurry. Put away, nothing of it is there to be pressed.
+ * slowly nor in a hurry. Put away, nothing of it is there to be pressed. Or it only
+ * fades (`faded`), and keeps its place: for when all of the list goes at once, and
+ * there is nothing left to come up to where it was.
  */
 function Tucked({
   away,
+  faded = false,
   children,
 }: {
   away: boolean
+  faded?: boolean
   children: React.ReactNode
 }) {
   return (
     <div
-      inert={away}
-      data-away={away || undefined}
+      inert={away || faded}
+      data-away={away || faded || undefined}
       className={cn(
         "group/tuck grid shrink-0 transition-[grid-template-rows,margin-bottom] duration-300 ease-in-out motion-reduce:transition-none",
         // with nothing of it left, nor is the room the list keeps between two things
@@ -526,8 +530,9 @@ export function Sidebar({ children }: { children: React.ReactNode }) {
   // card of the project they are of stays, at the top, and the rest are put away.
   const activeId = useStore((state) => state.activeId)
   const blueprint = useStore((state) => state.view.blueprint)
-  // And while one sheet has the view to itself that card is put away too, and what is
-  // at the foot with it: there is nothing over the sheet that is not the sheet's.
+  // And while one sheet has the view to itself that card is gone too, and what is at
+  // the foot with it: there is nothing over the sheet that is not the sheet's. They
+  // fade where they are, and come back the same way.
   const alone = useStore((state) => state.view.sheet !== null)
   const addProject = useStore((state) => state.addProject)
   const createProject = useStore((state) => state.createProject)
@@ -558,7 +563,8 @@ export function Sidebar({ children }: { children: React.ReactNode }) {
         {projects.map((project) => (
           <Tucked
             key={project.id}
-            away={alone || (blueprint && project.id !== activeId)}
+            away={blueprint && project.id !== activeId}
+            faded={alone}
           >
             <ProjectCard project={project} now={now} />
           </Tucked>

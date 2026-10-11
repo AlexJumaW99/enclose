@@ -66,10 +66,34 @@ const SETTLED_MS = 120
  */
 const HAIRLINE = 1
 /**
- * How many pixels a millimetre of paper is, of a sheet shown by itself: a pixel to the
- * point, which is what a sheet in the row is at its full size.
+ * How long the sheets take to come up to the view, and to go back into their row, in
+ * ms; and the way they go, which is quick away and slow into place, as the sheets come
+ * into the row.
  */
-const MM_PX = 72 / 25.4
+const OPENS = { ms: 520, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }
+/**
+ * The row the sheets stand in, in px: how far in the first starts, clear of the
+ * projects' cards; how far apart they are; and how far past the last the row goes on,
+ * clear of the buttons down the other edge. A sheet in it: how tall it is at the most,
+ * how much of the view's height it leaves clear, and how wide it is for how tall. And a
+ * sheet opened out, with the view to itself: how much of the view its drawing keeps
+ * clear of, at either side, at the top and at the foot. (They are what the classes of
+ * the row and of a sheet say, for working out where a sheet and its drawing will be.)
+ */
+const ROW = { before: 272, between: 40, after: 100 }
+const SMALL = { tall: 744, clear: 180, wide: 0.8 }
+const OPEN = { side: 60, top: 24, foot: 84 }
+/**
+ * How long a drawing waits for its sheet's size to stop changing before it is drawn
+ * again, in ms: until then what was drawn is stretched to fit, which is what is seen
+ * while the sheets open out, and no line is drawn twice on the way.
+ */
+const REDRAWN_MS = 140
+/**
+ * How wide a drawing that is nowhere near the view is kept, at the most, in pixels of
+ * the screen's own: it is drawn in full when it comes near.
+ */
+const FAR_PX = 1400
 
 /** How long after the sheet before it each sheet comes in, as the blueprint comes up, ms. */
 const AFTER_MS = 70
@@ -326,10 +350,20 @@ function Lines({
   React.useEffect(() => {
     const paper = canvas.current
     if (!paper) return
-    const paint = () => {
+    /** it is in the view, or close by: far off, it is kept small */
+    let near = true
+    /** How big it is to be drawn, in pixels of the screen's own. */
+    const sized = () => {
       const ratio = window.devicePixelRatio || 1
-      const width = Math.round(paper.clientWidth * ratio)
-      const height = Math.round(paper.clientHeight * ratio)
+      const full = paper.clientWidth * ratio
+      const scale = near || full <= FAR_PX ? 1 : FAR_PX / full
+      return {
+        width: Math.round(full * scale),
+        height: Math.round(paper.clientHeight * ratio * scale),
+      }
+    }
+    const paint = () => {
+      const { width, height } = sized()
       if (paper.width !== width || paper.height !== height) {
         paper.width = width
         paper.height = height
@@ -411,10 +445,32 @@ function Lines({
       }
     }
     paint()
-    // drawn again at whatever size the sheet comes to be
-    const watch = new ResizeObserver(paint)
+    // Drawn again at whatever size the sheet comes to be: once it has come to be it,
+    // and not at every size on the way. And in full once it is near the view.
+    let soon: ReturnType<typeof setTimeout> | undefined
+    const again = () => {
+      clearTimeout(soon)
+      soon = setTimeout(() => {
+        const { width, height } = sized()
+        if (paper.width !== width || paper.height !== height) paint()
+      }, REDRAWN_MS)
+    }
+    const watch = new ResizeObserver(again)
     watch.observe(paper)
-    return () => watch.disconnect()
+    const sight = new IntersectionObserver(
+      ([seen]) => {
+        near = seen.isIntersecting
+        again()
+      },
+      // (as far to either side of the view as the view is wide)
+      { rootMargin: "0px 100% 0px 100%" }
+    )
+    sight.observe(paper)
+    return () => {
+      clearTimeout(soon)
+      watch.disconnect()
+      sight.disconnect()
+    }
   }, [drawing, measures, labels])
   return <canvas ref={canvas} className="absolute inset-0 size-full" />
 }
@@ -427,6 +483,8 @@ function Sheet({
   measures,
   labels,
   stale,
+  open,
+  paged,
   onSave,
   onEnlarge,
 }: {
@@ -441,8 +499,15 @@ function Sheet({
   stale: boolean
   /** its place in the row, from the left: it comes in that much after the first */
   place: number
+  /** a sheet is to have the view to itself: what is over the sheets is put away */
+  open: boolean
+  /**
+   * The sheets are opened out: each is as big as the view, with all of the view for its
+   * paper and nothing over it, and they stand side by side with nothing between.
+   */
+  paged: boolean
   onSave: () => void
-  /** the paper was pressed: it is to be shown by itself */
+  /** the paper was pressed: the sheets are to open out, with this one in the view */
   onEnlarge: () => void
 }) {
   const paper = paperOf(drawing?.placing ?? { middle: [0, 0], by: 1 })
@@ -450,10 +515,23 @@ function Sheet({
     <section
       // The sheets come in one after another along the row as the blueprint comes up:
       // each out of nothing, and up a little into its place.
-      className="flex shrink-0 animate-in flex-col gap-2.5 duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] fill-mode-both fade-in slide-in-from-bottom-6 motion-reduce:animate-none"
+      className={cn(
+        "flex shrink-0 animate-in flex-col duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] fill-mode-both fade-in slide-in-from-bottom-6 motion-reduce:animate-none",
+        // (opened out, a sheet is at the place a page turns to)
+        paged && "snap-start"
+      )}
       style={{ animationDelay: `${place * AFTER_MS}ms` }}
     >
-      <header className="flex h-9 items-center justify-between">
+      {/* what it is of, and the way to take it away: put away while the sheets are
+          opened out, closing up to nothing over the paper */}
+      <header
+        inert={open}
+        className={cn(
+          "flex items-center justify-between overflow-hidden transition-opacity duration-200 motion-reduce:transition-none",
+          open && "opacity-0",
+          paged ? "h-0" : "mb-2.5 h-9"
+        )}
+      >
         <h2 className="text-base font-medium">{name} View</h2>
         <Tooltip disableHoverablePopup>
           <TooltipTrigger
@@ -481,28 +559,39 @@ function Sheet({
           </TooltipContent>
         </Tooltip>
       </header>
-      {/* four wide to five high: as tall as the window has room for, clear of what is
-          at its top and its foot, and no taller than it is at a pixel to the point.
-          Pressed, it is shown by itself, with all of the view for its paper */}
+      {/* Four wide to five high: as tall as the view has room for, clear of what is at
+          its top and its foot, and no taller than it is at a pixel to the point.
+          Pressed, the sheets come up to the view as they are (see Blueprint), and
+          once there are opened out, each to the size of the view: its paper is all of
+          the view then, and its corners square. */}
       <button
         type="button"
         data-paper
-        aria-label={`Enlarge the ${name} view`}
+        aria-label={open ? `${name} view` : `Enlarge the ${name} view`}
         disabled={!drawing}
-        onClick={onEnlarge}
-        className="relative aspect-[4/5] h-[min(744px,calc(100svh-180px))] cursor-pointer overflow-hidden rounded-[18px] bg-white ring-1 ring-foreground/10 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default dark:bg-[#f5f6ec] dark:ring-0 dark:focus-visible:ring-[3px]"
+        onClick={open ? undefined : onEnlarge}
+        className={cn(
+          "relative overflow-hidden bg-white ring-foreground/10 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-[#f5f6ec] dark:focus-visible:ring-[3px]",
+          paged
+            ? "h-[100cqh] w-[100cqw] cursor-[inherit] rounded-none ring-0"
+            : "h-[min(744px,calc(100cqh-180px))] w-[calc(min(744px,100cqh-180px)*0.8)] cursor-pointer rounded-[18px] ring-1 disabled:cursor-default dark:ring-0"
+        )}
       >
-        {/* a drawing that is being done again waits faintly for the one to take its
-            place: but not at once, in case that is here before anyone could tell */}
+        {/* A drawing that is being done again waits faintly for the one to take its
+            place: but not at once, in case that is here before anyone could tell.
+            Opened out, it keeps clear of what is over the view at its edges: the
+            button at its top right, and as much at the left for the drawing to be in
+            the middle; and the bars at its foot. */}
         <div
           className={cn(
-            "[container-type:size] absolute inset-3 flex items-center justify-center transition-opacity duration-200",
+            "[container-type:size] absolute flex items-center justify-center transition-opacity duration-200",
+            paged ? "top-6 right-15 bottom-21 left-15" : "inset-3",
             stale && "opacity-25 delay-200"
           )}
         >
-          {/* The drawing's own paper, all of it, as big as the sheet has room for: a
-              sheet in the row is the drawing seen small, what is written on it and all,
-              and is not that drawing set out again to be read at this size. */}
+          {/* The drawing's own paper, all of it, as big as the sheet has room for: in
+              the row that is the drawing seen small, what is written on it and all,
+              and opened out the same drawing at a size to be read. */}
           {drawing && (
             <div
               className="relative shrink-0"
@@ -522,91 +611,6 @@ function Sheet({
         )}
       </button>
     </section>
-  )
-}
-
-/** All that is on one sheet: its drawing, and what it says round it. */
-type Shown = {
-  drawing: Drawing
-  stale: boolean
-  measures: Dimension[] | null
-  labels: Label[] | null
-}
-
-/**
- * A sheet by itself, with all of the view for its paper. It is not the sheet made
- * bigger: the drawing is done again to fit the view, as big as that has room for, with
- * lines as thin and writing as small as on any sheet. Nothing else is over the view
- * the while, but what is at the foot of the sheets, to change what it shows, and at the
- * top right what puts it back among the others (see Tools).
- */
-function Alone({
-  name,
-  on,
-}: {
-  name: string
-  /** what it shows, on paper no bigger than this, in mm: nothing, until it is drawn */
-  on: (most: { width: number; height: number }) => Shown | null
-}) {
-  const within = React.useRef<HTMLDivElement>(null)
-  const [most, setMost] = React.useState<{
-    width: number
-    height: number
-  } | null>(null)
-  React.useLayoutEffect(() => {
-    const room = within.current
-    if (!room) return
-    const measure = () =>
-      setMost({
-        width: room.clientWidth / MM_PX,
-        height: room.clientHeight / MM_PX,
-      })
-    measure()
-    // done again at whatever size the view comes to be
-    const watch = new ResizeObserver(measure)
-    watch.observe(room)
-    return () => watch.disconnect()
-  }, [])
-  const shown = React.useMemo(() => (most ? on(most) : null), [most, on])
-  const paper = shown && paperOf(shown.drawing.placing)
-  return (
-    <div
-      role="img"
-      aria-label={`${name} view`}
-      className="absolute inset-0 animate-in bg-white duration-200 fade-in motion-reduce:animate-none dark:bg-[#f5f6ec]"
-    >
-      {/* clear of what is over the view at its edges: the button at its top right,
-          and as much at the left for the drawing to be in the middle; and the bars at
-          its foot */}
-      <div
-        ref={within}
-        className="absolute inset-x-15 top-6 bottom-21 flex items-center justify-center"
-      >
-        {shown && paper && (
-          <div
-            className={cn(
-              "relative shrink-0 transition-opacity duration-200",
-              shown.stale && "opacity-25 delay-200"
-            )}
-            style={{
-              width: paper.width * MM_PX,
-              height: paper.height * MM_PX,
-            }}
-          >
-            <Lines
-              drawing={shown.drawing}
-              measures={shown.measures}
-              labels={shown.labels}
-            />
-          </div>
-        )}
-      </div>
-      {(!shown || shown.stale) && (
-        <div className="absolute inset-0 flex animate-in items-center justify-center delay-300 duration-300 fill-mode-both fade-in">
-          <Spinner className="size-5 text-black/35" />
-        </div>
-      )}
-    </div>
   )
 }
 
@@ -641,22 +645,6 @@ export function Blueprint({
   /** the sheet that is shown by itself, with all of the view, by its place in the row */
   const alone = useStore((state) => state.view.sheet)
   const setView = useStore((state) => state.setView)
-  // While one is, the arrow keys go to the sheet before it in the row and the one after.
-  const one = alone !== null
-  React.useEffect(() => {
-    if (!one) return
-    const key = (event: KeyboardEvent) => {
-      const by =
-        event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0
-      if (!by || event.defaultPrevented || spokenFor(event.target)) return
-      const at = useStore.getState().view.sheet
-      if (at === null) return
-      event.preventDefault()
-      setView({ sheet: Math.min(SIDES.length - 1, Math.max(0, at + by)) })
-    }
-    window.addEventListener("keydown", key)
-    return () => window.removeEventListener("keydown", key)
-  }, [one, setView])
   // The row is gone along by taking hold of it anywhere and pulling: where the pointer
   // went down, and how far along the row was then; and once it has been pulled at all.
   const held = React.useRef<{
@@ -668,13 +656,201 @@ export function Blueprint({
   const [pulling, setPulling] = React.useState(false)
   /** it was pulled, and let go: the press that ends that is not one on a sheet */
   const pulled = React.useRef(false)
+  const open = alone !== null
+  /** the sheet that last had the view: the one the sheets come up about, and go back about */
+  const [last, setLast] = React.useState(alone ?? 0)
+  if (alone !== null && alone !== last) setLast(alone)
+  /** the sheets are on their way up to the view or back, and are not to be turned */
+  const moving = React.useRef(false)
+  /** they are opened out, each the size of the view: a sheet at a time, as pages are */
+  const [paged, setPaged] = React.useState(false)
+  // (and are in their row again as soon as the view is given back, to go back into it)
+  if (!open && paged) setPaged(false)
+
+  // A sheet that is pressed comes up to the view, and all the sheets with it: the row
+  // is made bigger as it is, about that sheet, until the sheet is as wide as the view,
+  // still the shape it was, and so taller than the view by then. Its drawing comes up
+  // less far, to the size it is to be read at, and goes to where it is to be in the
+  // view. Nothing else changes on the way: not the shape of a sheet, nor what is on
+  // it. Only then are the sheets opened out, each to the size of the view, which is
+  // what is by then seen: paper from edge to edge, and the drawing where it is. Going
+  // back is the same the other way round: the sheets are in their row again at once,
+  // made as big as was seen, and come down to their size.
+  const zoom = React.useRef<Animation[]>([])
+  const stood = React.useRef(open)
+  React.useLayoutEffect(() => {
+    const strip = row.current
+    // Only when a sheet takes the view, and gives it back: not as the blueprint comes
+    // up, which the sheets do in their own way. (By what was last seen, and not by
+    // this being the first time through: it is gone through twice as the app is
+    // worked on, and the second time would be taken for the view being given back.)
+    if (stood.current === open) return
+    stood.current = open
+    if (!strip) return
+    const [wide, high] = [strip.clientWidth, strip.clientHeight]
+    for (const going of zoom.current) going.cancel()
+    zoom.current = []
+    if (!open) {
+      // in their row again, with the sheet that had the view in the middle of it, as
+      // near as the ends of the row let it be
+      const sheet = Math.min(SMALL.tall, high - SMALL.clear) * SMALL.wide
+      const along = ROW.before + last * (sheet + ROW.between)
+      const all =
+        ROW.before +
+        SIDES.length * sheet +
+        (SIDES.length - 1) * ROW.between +
+        ROW.after
+      strip.scrollLeft = Math.min(
+        Math.max(0, all - wide),
+        Math.max(0, along - (wide - sheet) / 2)
+      )
+    }
+    const paper = strip.querySelectorAll<HTMLElement>("[data-paper]")[last]
+    if (!paper) return
+    const drawing = paper.querySelector("canvas")?.parentElement ?? null
+    // the sheet in the row, and its drawing: where each is from the row's own corner
+    const within = strip.getBoundingClientRect()
+    const middle = (of: Element) => {
+      const { left, top, width, height } = of.getBoundingClientRect()
+      return {
+        x: left + width / 2 - within.left,
+        y: top + height / 2 - within.top,
+        width,
+        height,
+      }
+    }
+    const sheet = middle(paper)
+    // The row is made bigger about its own corner until the sheet is as wide as the
+    // view (or as tall, of a view that is taller than a sheet is), and moved so that
+    // the sheet is in the middle of it.
+    const by = Math.max(wide / sheet.width, high / sheet.height)
+    const across = wide / 2 - by * sheet.x
+    const down = high / 2 - by * sheet.y
+    const up: Keyframe[][] = [
+      [
+        { transform: "translate(0px, 0px) scale(1)" },
+        { transform: `translate(${across}px, ${down}px) scale(${by})` },
+      ],
+    ]
+    // And the drawing is made as much smaller, on its sheet, as leaves it the size it
+    // is with the view to itself, and is moved on its sheet to where it is then: in
+    // the middle of what the view keeps clear for it.
+    if (drawing) {
+      const small = middle(drawing)
+      const room = {
+        width: wide - 2 * OPEN.side,
+        height: high - OPEN.top - OPEN.foot,
+      }
+      const big = Math.min(
+        room.width,
+        (room.height * small.width) / small.height
+      )
+      const less = big / (by * small.width)
+      const over = (OPEN.side + room.width / 2 - across) / by - small.x
+      const under = (OPEN.top + room.height / 2 - down) / by - small.y
+      up.push([
+        { transform: "translate(0px, 0px) scale(1)" },
+        { transform: `translate(${over}px, ${under}px) scale(${less})` },
+      ])
+    }
+    // (for anyone who has asked for less to move it is there at once)
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    moving.current = true
+    zoom.current = [strip, drawing].flatMap((part, index) =>
+      part && up[index]
+        ? [
+            part.animate(open ? up[index] : [...up[index]].reverse(), {
+              duration: still ? 0 : OPENS.ms,
+              easing: OPENS.easing,
+              // (it stays as it got to be until the sheets are opened out under it)
+              fill: open ? "forwards" : "none",
+            }),
+          ]
+        : []
+    )
+    const [going] = zoom.current
+    going.onfinish = () => {
+      // (opened out is when they are done with moving: see below)
+      if (open) setPaged(true)
+      else moving.current = false
+    }
+    going.oncancel = () => (moving.current = false)
+    // only as a sheet takes the view and gives it back: not at each page turned to
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+  // Opened out, the sheet that had come up to the view is the one in it: and the row
+  // is its own size again, the sheets being the size it was made to show them.
+  React.useLayoutEffect(() => {
+    const strip = row.current
+    if (!strip || !paged) return
+    for (const going of zoom.current) going.cancel()
+    zoom.current = []
+    moving.current = false
+    strip.scrollLeft = last * strip.clientWidth
+    // (only as they are opened out: after that the row is turned by hand)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paged])
+
+  /** the row is being brought to a sheet, and where it is on the way says nothing */
+  const turning = React.useRef(false)
+  /** Bring the row to a sheet, opened out: at once, or going along to it. */
+  const turnTo = React.useCallback((index: number, smooth = true) => {
+    const strip = row.current
+    if (!strip) return
+    const left = index * strip.clientWidth
+    if (smooth && Math.abs(strip.scrollLeft - left) > 1) turning.current = true
+    strip.scrollTo({ left, behavior: smooth ? "smooth" : "instant" })
+  }, [])
+  // Opened out, the sheet in the view is the one the row was last left at, where it
+  // was a hand that took it there (the keys, the wheel and a pull say which they are
+  // going to as they go); and the row stays at that sheet when the view comes to be
+  // another size.
+  React.useEffect(() => {
+    const strip = row.current
+    if (!strip || !paged) return
+    const settled = () => {
+      // (brought there: it is where it was being brought, which is known)
+      if (turning.current) return void (turning.current = false)
+      if (moving.current || held.current) return
+      const index = Math.round(strip.scrollLeft / strip.clientWidth)
+      if (index !== useStore.getState().view.sheet)
+        setView({ sheet: Math.min(SIDES.length - 1, Math.max(0, index)) })
+    }
+    strip.addEventListener("scrollend", settled)
+    const watch = new ResizeObserver(() => {
+      const index = useStore.getState().view.sheet
+      if (index !== null && !moving.current) turnTo(index, false)
+    })
+    watch.observe(strip)
+    return () => {
+      strip.removeEventListener("scrollend", settled)
+      watch.disconnect()
+    }
+  }, [paged, setView, turnTo])
+  // While they are, the arrow keys go to the sheet before and the one after.
+  React.useEffect(() => {
+    if (!open) return
+    const key = (event: KeyboardEvent) => {
+      const by =
+        event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0
+      if (!by || event.defaultPrevented || spokenFor(event.target)) return
+      const at = useStore.getState().view.sheet
+      if (at === null || moving.current) return
+      event.preventDefault()
+      const next = Math.min(SIDES.length - 1, Math.max(0, at + by))
+      setView({ sheet: next })
+      turnTo(next)
+    }
+    window.addEventListener("keydown", key)
+    return () => window.removeEventListener("keydown", key)
+  }, [open, setView, turnTo])
   const units = usePreferences((state) => state.units)
   /**
    * What is on each sheet: its drawing of the model as it is on show, or until that is
    * done the one of the model as it was (`stale`); and what it says of how big the
    * model is, and of which part is which, where the sheets say.
    */
-  const { sides, alone: aloneOn } = React.useMemo(() => {
+  const sides = React.useMemo(() => {
     // What is named: each part by what it is called. Or, with the model pulled apart
     // into its pieces, each piece, by what the piece goes by: its group, where it is
     // all of one, and the part itself where a piece is no more than that.
@@ -779,51 +955,12 @@ export function Blueprint({
           : null,
       }
     }
-    return {
-      sides: found.map((one, index) =>
-        one
-          ? said(index, setOut(one.of).at[index])
-          : { drawing: null, stale: false, measures: null, labels: null }
-      ),
-      /**
-       * One of them on paper that is not a sheet: as big as there is of it, with the
-       * drawing as big as that has room for, whatever scale that comes to. The paper is
-       * no wider than the drawing needs, with what is said round it: the names stand
-       * beside the drawing, and not off at the far edges of a wide view.
-       */
-      alone: (index: number, most: { width: number; height: number }) => {
-        const one = found[index]
-        if (!one) return null
-        const seen = taken(one.of, index)
-        const clear = {
-          x: one.names ? clearFor(one.names.column, dimensions) : MARGIN,
-          y: MARGIN,
-        }
-        const [wide, high] = [seen.x1 - seen.x0, seen.y1 - seen.y0]
-        // (a view too small for anything is still not no room at all)
-        const room = {
-          width: Math.max(most.width - 2 * clear.x, 10),
-          height: Math.max(most.height - 2 * clear.y, 10),
-        }
-        const by = Math.max(wide / room.width, high / room.height, 1e-6)
-        return said(index, {
-          middle: [(seen.x0 + seen.x1) / 2, (seen.y0 + seen.y1) / 2],
-          by,
-          paper: {
-            width: Math.min(most.width, wide / by + 2 * clear.x),
-            height: most.height,
-          },
-        })
-      },
-    }
+    return found.map((one, index) =>
+      one
+        ? said(index, setOut(one.of).at[index])
+        : { drawing: null, stale: false, measures: null, labels: null }
+    )
   }, [now, was, dimensions, labels, pieces, units, loaded])
-
-  /** The sheet that has the view to itself, as it is on paper of some size. */
-  const onPaper = React.useCallback(
-    (most: { width: number; height: number }) =>
-      alone === null ? null : aloneOn(alone, most),
-    [alone, aloneOn]
-  )
 
   /** A sheet as the file it is saved as: nothing, of one that is not drawn as the model now is. */
   const fileOf = React.useCallback(
@@ -878,22 +1015,43 @@ export function Blueprint({
     return () => useSaving.setState({ all: null })
   }, [whole, fileOf, name])
 
+  /** when the wheel last turned a page: it turns one at a time */
+  const turned = React.useRef(0)
   return (
-    <>
+    // what the row is kept within, as big as it is made on its way up to the view
+    <div className="absolute inset-0 overflow-hidden">
       <div
         // The sheets go off to the right, and are gone along sideways: a wheel that only
         // turns up and down goes along them too. The first starts clear of the projects'
         // cards, and the last can be brought clear of the buttons down the other edge.
+        // Opened out they stand side by side, each the size of the view, and the row
+        // goes from one to the next as pages are turned. (It is what their sizes are
+        // said as lengths of: see Sheet.)
         ref={row}
         className={cn(
-          "absolute inset-0 flex [scrollbar-width:none] items-center gap-10 overflow-x-auto overflow-y-hidden overscroll-x-contain pr-25 pl-68 select-none",
+          "[container-type:size] absolute inset-0 flex origin-top-left [scrollbar-width:none] items-center overflow-x-auto overflow-y-hidden overscroll-x-contain select-none",
+          paged ? "gap-0 pr-0 pl-0" : "gap-10 pr-25 pl-68",
+          // (a page at a time, once they are at rest: and not under a hand that pulls)
+          paged && !pulling && "snap-x snap-mandatory",
           // a hand over it, which closes on it while it is pulled: whatever it is over
           pulling ? "cursor-grabbing [&_*]:cursor-grabbing" : "cursor-grab"
         )}
         aria-busy={!whole}
         onWheel={(event) => {
-          if (Math.abs(event.deltaY) > Math.abs(event.deltaX))
-            event.currentTarget.scrollLeft += event.deltaY
+          if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return
+          if (!open)
+            return void (event.currentTarget.scrollLeft += event.deltaY)
+          // opened out, a turn of the wheel turns one page, however far it is turned
+          const at = useStore.getState().view.sheet
+          if (at === null || moving.current) return
+          if (event.timeStamp - turned.current < 450) return
+          turned.current = event.timeStamp
+          const next = Math.min(
+            SIDES.length - 1,
+            Math.max(0, at + Math.sign(event.deltaY))
+          )
+          setView({ sheet: next })
+          turnTo(next)
         }}
         onPointerDown={(event) => {
           pulled.current = false
@@ -920,10 +1078,22 @@ export function Blueprint({
           }
           event.currentTarget.scrollLeft = from.left - moved
         }}
-        onPointerUp={() => {
-          pulled.current = held.current?.pulled ?? false
+        onPointerUp={(event) => {
+          const from = held.current
+          pulled.current = from?.pulled ?? false
           held.current = null
           setPulling(false)
+          // let go of opened out, the row goes on to the page it was pulled towards
+          const at = useStore.getState().view.sheet
+          if (!from?.pulled || at === null) return
+          const strip = event.currentTarget
+          const far = (strip.scrollLeft - from.left) / strip.clientWidth
+          const next = Math.min(
+            SIDES.length - 1,
+            Math.max(0, at + (Math.abs(far) > 0.12 ? Math.sign(far) : 0))
+          )
+          setView({ sheet: next })
+          turnTo(next)
         }}
         onPointerCancel={() => {
           held.current = null
@@ -945,12 +1115,13 @@ export function Blueprint({
             measures={sides[index].measures}
             labels={sides[index].labels}
             stale={sides[index].stale}
+            open={open}
+            paged={paged}
             onSave={() => save(index)}
             onEnlarge={() => setView({ sheet: index })}
           />
         ))}
       </div>
-      {alone !== null && <Alone name={SIDES[alone].name} on={onPaper} />}
-    </>
+    </div>
   )
 }

@@ -18,15 +18,19 @@ and down goes along it too. So does the pointer: press anywhere on the row and p
 along. There is nothing on a sheet but the drawing, in the middle of it: no border and
 no title block.
 
-Click a sheet and it has the view to itself: the whole view is its paper, and the
-drawing is done again to fill it, to whatever scale that comes to, with its lines as
-thin and its writing as small as on any sheet. (What is saved is the drawing on
-its own paper, to its own scale, which looks much the same.) Everything else that is over the view is put away meanwhile: the
-project's card, the buttons down the right, the settings. The switches at the foot of
-the sheets are still there, to change what the sheet shows, and at the top right is a
-button that puts it back in the row. Esc does that too (after it has put the model
-together, if it is pulled apart), and the left and right arrow keys go to the sheet
-before it and the one after.
+Click a sheet and the sheets come up to the view, all of them together and each the
+shape it is, until the one that was clicked is as wide as the view, with its drawing at
+a size to be read in the middle of it. Then they are
+opened out, each to the size of the view: the one that was clicked fills it, with all of
+the view for its paper, and the others stand to either side of it, a page each. The
+drawing is the same one throughout, and is drawn again sharp once it is in place. Everything
+else that is over the view is put away meanwhile: the project's card, the buttons down
+the right, the settings. The switches at the foot of the sheets are still there, to
+change what the sheets show, and at the top right is a button that closes the sheets up
+into their row again, about the one that was in the view. Esc does that too (after it
+has put the model together, if it is pulled apart). The left and right arrow keys turn
+to the sheet before and the one after, and so do a turn of the wheel and a pull on the
+sheet.
 
 ## The lines
 
