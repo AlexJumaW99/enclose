@@ -158,6 +158,97 @@ export const SWITCHES = [
 
 export type SwitchId = (typeof SWITCHES)[number]['id']
 
+/**
+ * The list of parts: the groups the arm's parts are in, in the model's order, and of
+ * each the parts its row has room to begin with. The sizes are those of the files in
+ * examples/arm/build, a group's being all of its parts' together.
+ */
+export const PARTS = [
+  {
+    id: 'base',
+    label: 'Base',
+    size: '10.6 MB',
+    parts: [
+      { id: 'base', label: 'Base', size: '629 kB' },
+      { id: 'base-motor-holder', label: 'Base motor holder', size: '239 kB' },
+      { id: 'board-mount', label: 'Board mount', size: '41 kB' },
+    ],
+  },
+  {
+    id: 'shoulder',
+    label: 'Shoulder',
+    size: '2.8 MB',
+    parts: [
+      { id: 'shoulder', label: 'Shoulder', size: '407 kB' },
+      { id: 'shoulder-motor-holder', label: 'Shoulder motor holder', size: '246 kB' },
+      { id: 'servo-2-case', label: 'Servo 2 case', size: '80 kB' },
+    ],
+  },
+  {
+    id: 'upper-arm',
+    label: 'Upper arm',
+    size: '2.7 MB',
+    parts: [
+      { id: 'upper-arm', label: 'Upper arm', size: '522 kB' },
+      { id: 'servo-3-case', label: 'Servo 3 case', size: '80 kB' },
+      { id: 'servo-3-top', label: 'Servo 3 top cover', size: '256 kB' },
+    ],
+  },
+  {
+    id: 'lower-arm',
+    label: 'Lower arm',
+    size: '3.0 MB',
+    parts: [
+      { id: 'lower-arm', label: 'Lower arm', size: '579 kB' },
+      { id: 'wrist-motor-holder', label: 'Wrist motor holder', size: '233 kB' },
+      { id: 'servo-4-case', label: 'Servo 4 case', size: '80 kB' },
+    ],
+  },
+  {
+    id: 'wrist',
+    label: 'Wrist',
+    size: '2.9 MB',
+    parts: [
+      { id: 'wrist', label: 'Wrist', size: '789 kB' },
+      { id: 'servo-5-case', label: 'Servo 5 case', size: '80 kB' },
+      { id: 'servo-5-top', label: 'Servo 5 top cover', size: '255 kB' },
+    ],
+  },
+  {
+    id: 'gripper',
+    label: 'Gripper',
+    size: '2.6 MB',
+    parts: [
+      { id: 'gripper', label: 'Gripper', size: '642 kB' },
+      { id: 'servo-6-case', label: 'Servo 6 case', size: '80 kB' },
+      { id: 'servo-6-top', label: 'Servo 6 top cover', size: '256 kB' },
+    ],
+  },
+  {
+    id: 'jaw',
+    label: 'Jaw',
+    size: '1.8 MB',
+    parts: [
+      { id: 'jaw', label: 'Jaw', size: '531 kB' },
+      { id: 'servo-6-shaft', label: 'Servo 6 shaft', size: '645 kB' },
+      { id: 'servo-6-horn', label: 'Servo 6 horn', size: '127 kB' },
+    ],
+  },
+  {
+    id: 'cables',
+    label: 'Cables',
+    size: '6.7 MB',
+    parts: [
+      { id: 'cable-1', label: 'Cable 1', size: '1.0 MB' },
+      { id: 'cable-2', label: 'Cable 2', size: '1.4 MB' },
+      { id: 'cable-3', label: 'Cable 3', size: '1.3 MB' },
+    ],
+  },
+] as const
+
+/** The group that is picked in the list as the page is scrolled, and shown on its own. */
+export const PICKED = 'gripper'
+
 /** What the arm mimes, in the order its routine goes through them. */
 export const ACTIVITIES = [
   'Waving',

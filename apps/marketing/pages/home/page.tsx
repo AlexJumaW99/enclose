@@ -78,6 +78,18 @@ export default function Home({ headline, description }: { headline: string; desc
         // the drawings are for later in the page: fetched once the model is there
         for (const sheet of document.querySelectorAll<HTMLImageElement>('.app__paper img[data-src]'))
           sheet.src = sheet.dataset.src!
+        // and so are the pictures in the list of parts, which are drawn of the model:
+        // once it has come round, so that drawing them does not hold it up
+        const pictures = [...document.querySelectorAll<HTMLImageElement>('.app__picture img')]
+        window.setTimeout(() => {
+          if (gone) return
+          void opened.pictures(
+            pictures.map((picture) => picture.dataset.part!),
+            (id, url) => {
+              for (const picture of pictures) if (picture.dataset.part === id) picture.src = url
+            },
+          )
+        }, 2400)
         window.addEventListener('resize', sharpen)
       })
       .catch(() => {})

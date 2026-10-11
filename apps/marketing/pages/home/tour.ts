@@ -7,18 +7,19 @@ import tokens from './motion'
 
 // The page's one long move. The app's window stays on the screen while the page is
 // scrolled, and the scroll takes it from stop to stop: to its project cards, to the
-// buttons down the edge of its view, to its conversation, to a project's own tools,
-// to its drawings. At each stop something goes on in the window, as far along as
+// list of its model's parts and the other buttons down the edge of its view, to its
+// conversation, to a project's own tools, to its drawings. At each stop something goes on in the window, as far along as
 // the scroll is: so it can be stopped anywhere, and run backwards.
 
 /** When each stop is reached and left, on the timeline: the gaps are the ways between. */
 const AT = {
   projects: [10, 24],
-  menu: [30, 48],
-  chat: [54, 72],
-  tools: [78, 94],
-  sheets: [100, 114],
-  outro: [122, 122],
+  parts: [30, 40],
+  menu: [43, 61],
+  chat: [67, 85],
+  tools: [91, 107],
+  sheets: [113, 127],
+  outro: [135, 135],
 } as const
 
 type Stop = keyof typeof AT
@@ -182,8 +183,10 @@ export function runTour({
     // sideways from each to the next on the way to its stop: see styles.scss.
     const band = wide < 768 ? one('.home__captions') : null
     const trail = one('.home__trail')
-    const caption = (index: number, name: Stop) => {
-      const [arrive, leave] = AT[name]
+    /** What is said of a stop, or of the stops from one to another, while it is there. */
+    const caption = (index: number, name: Stop, last: Stop = name) => {
+      const arrive = AT[name][0]
+      const leave = AT[last][1]
       if (band) {
         if (index === 0)
           tl.fromTo(
@@ -289,8 +292,45 @@ export function runTour({
     // the conversation is put away, which leaves the view the whole window
     press(talk, 0, AT.projects[1] + 0.5)
     tl.to(app, { '--shut': 1, duration: 4 }, AT.projects[1] + 1.5)
-    go('menu', AT.projects[1], { azimuth: -62, elevation: 30 })
-    caption(1, 'menu')
+    go('parts', AT.projects[1], { azimuth: -58, elevation: 30 })
+    caption(1, 'parts', 'menu')
+
+    // The first of them brings up the list of the model's parts, and the model is
+    // moved over to what the list leaves of the view.
+    const [listed, listedEnds] = AT.parts
+    const list = one('[data-app="parts"]')
+    const groups = one('[data-app="groups"]')
+    const picked = one('[data-app="picked"]')
+    press(button('parts'), 1, listed - 1.4)
+    tl.fromTo(
+      list,
+      { autoAlpha: 0, x: 14 },
+      { autoAlpha: 1, x: 0, duration: 1.6, ease: 'power2.out' },
+      listed - 0.4,
+    )
+    // The list is gone down, as far as has one of its groups in the middle of it,
+    tl.to(
+      groups,
+      {
+        y: -(picked.offsetTop - (list.clientHeight - picked.offsetHeight) / 2),
+        duration: 4.4,
+        ease: 'sine.inOut',
+      },
+      listed + 1.2,
+    )
+    // and that group is picked: it is shown on its own, and the eye goes in to it.
+    const alone = listed + 6
+    tl.to(picked, { '--lit': 1, duration: 0.4 }, alone)
+    tl.to(look, { others: 0, duration: 1, ease: 'power2.out' }, alone + 0.3)
+    tl.to(look, { alone: 1, distance: stops.parts.near, duration: 2.4 }, alone + 0.3)
+    tl.to(look, { azimuth: -34, duration: listedEnds - listed, ease: 'none' }, listed)
+    // A press on anything else puts the list away, and the rest of the model is back.
+    tl.to(picked, { '--lit': 0, duration: 0.4 }, listedEnds)
+    tl.to(look, { others: 1, duration: 2, ease: 'power2.in' }, listedEnds + 0.4)
+    tl.to(look, { alone: 0, duration: 2.4 }, listedEnds)
+    tl.to(list, { autoAlpha: 0, x: 14, duration: 1.2, ease: 'power2.in' }, listedEnds)
+    tl.to(button('parts'), { '--on': 0, duration: 0.5 }, listedEnds + 0.2)
+    go('menu', listedEnds, { azimuth: -62, elevation: 30 })
 
     const [menu, menuEnds] = AT.menu
     press(button('grid'), 1, menu)

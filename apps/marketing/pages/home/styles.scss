@@ -10,9 +10,9 @@
   position: relative;
   background: var(--bg);
 
-  // ten screens: nine of scroll, and the one that is looked at
+  // eleven screens: ten of scroll, and the one that is looked at
   &__tour {
-    height: 1000svh;
+    height: 1100svh;
   }
 
   &__stage {

@@ -22,6 +22,8 @@ import { drawMark, GIZMO, GIZMO_PARTS } from '../../shell/axes'
 import {
   ACTIVITIES,
   OPEN,
+  PARTS,
+  PICKED,
   PLACEHOLDER,
   PROJECTS,
   SHEETS,
@@ -324,6 +326,38 @@ export function Window() {
               data-app="gizmo"
               dangerouslySetInnerHTML={{ __html: drawMark(GIZMO, GIZMO_PARTS) }}
             />
+
+            {/* What the model is made of: a card for each group its parts are in, and in
+                it a row of the group's parts, each a picture with its name and how big
+                its file is. The pictures are drawn once the model is there (view.ts). */}
+            <div className="app__parts" data-app="parts">
+              <div className="app__groups" data-app="groups">
+                {PARTS.map((group) => (
+                  <section
+                    key={group.id}
+                    className="app__group"
+                    data-app={group.id === PICKED ? 'picked' : undefined}
+                  >
+                    <header>
+                      <h3>{group.label}</h3>
+                      <span>{group.size}</span>
+                      <DownloadIcon strokeWidth={1.25} />
+                    </header>
+                    <div className="app__pieces">
+                      {group.parts.map((part) => (
+                        <div key={part.id} className="app__piece">
+                          <span className="app__picture">
+                            <img alt="" data-part={part.id} />
+                          </span>
+                          <span>{part.label}</span>
+                          <span>{part.size}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            </div>
 
             {/* the tools made for this project's model, which are the project's own */}
             <div className="app__panel" data-app="panel">

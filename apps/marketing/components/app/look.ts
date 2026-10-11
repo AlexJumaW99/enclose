@@ -19,6 +19,13 @@ export type Look = {
   /** how much of the ground's grid shows, and of the cables, 0 to 1 */
   grid: number
   cables: number
+  /**
+   * The group that is picked in the list of parts, shown on its own: how much of the
+   * rest of the model is there, 1 to 0, and how far the eye has gone in to the group,
+   * 0 to 1.
+   */
+  others: number
+  alone: number
   /** the arm's joints, in degrees from how it is built (the jaw: from shut) */
   turn: number
   shoulder: number
@@ -41,6 +48,8 @@ export const REST: Look = {
   apart: 0,
   grid: 0,
   cables: 1,
+  others: 1,
+  alone: 0,
   turn: 0,
   shoulder: 0,
   elbow: 0,

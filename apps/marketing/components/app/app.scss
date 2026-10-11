@@ -376,6 +376,8 @@ $tool-line: oklch(from var(--axis-z) calc(l + 0.066) calc(c - 0.056) calc(h + 2)
     flex-direction: column;
     gap: 6px;
     transform: translateY(-50%);
+    // (a button's tip is over whatever the button brings up beside it)
+    z-index: 1;
   }
 
   // what a button is called and its key, beside it
@@ -413,6 +415,119 @@ $tool-line: oklch(from var(--axis-z) calc(l + 0.066) calc(c - 0.056) calc(h + 2)
     bottom: 12px;
     width: 88px;
     height: 88px;
+  }
+
+  // ── the list of parts ───────────────────────────────────────────────────
+  // Beside the buttons, in the middle of the view's height, and no taller than
+  // leaves the view some room over and under it: what does not fit is scrolled to.
+  &__parts {
+    position: absolute;
+    top: 10%;
+    right: 60px;
+    width: 430px;
+    height: 80%;
+    overflow: hidden;
+    border-radius: 28px;
+    background: rgb(10 10 10 / 0.7);
+    box-shadow:
+      0 10px 15px -3px rgb(0 0 0 / 0.1),
+      0 4px 6px -4px rgb(0 0 0 / 0.1),
+      0 0 0 1px rgb(250 250 250 / 0.1);
+    -webkit-backdrop-filter: blur(20px) saturate(1.3) brightness(0.55);
+    backdrop-filter: blur(20px) saturate(1.3) brightness(0.55);
+    opacity: 0;
+  }
+
+  &__groups {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px;
+  }
+
+  &__group {
+    // how far it is picked, 0 to 1
+    --lit: 0;
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 30px;
+    padding: 21px;
+    overflow: hidden;
+    border: 1px solid
+      color-mix(in oklab, rgb(250 250 250 / 0.6) calc(var(--lit) * 100%), $line);
+    border-radius: 16px;
+    background: rgb(250 250 250 / 0.03);
+
+    // (taller than its words, as it is in the app, where it is pressed: it gives
+    // back above and below what that takes)
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      height: 28px;
+      margin: -6px 0;
+    }
+
+    h3 {
+      margin: 0 auto 0 0;
+      @include type.style('ui-head');
+    }
+
+    header span {
+      color: var(--app-muted);
+      font-variant-numeric: tabular-nums;
+    }
+  }
+
+  // the row runs to the card's sides, where what does not fit is cut off
+  &__pieces {
+    display: flex;
+    gap: 20px;
+    margin: 0 -21px;
+    padding: 0 21px;
+  }
+
+  &__piece {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    width: 150px;
+    @include type.style('ui-tight');
+
+    span:nth-child(2) {
+      overflow: hidden;
+      font-weight: 500;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    span:nth-child(3) {
+      color: var(--app-muted);
+      font-variant-numeric: tabular-nums;
+    }
+  }
+
+  // a part's picture, on a square a little lighter than the card: an empty one
+  // until it has been drawn
+  &__picture {
+    display: block;
+    aspect-ratio: 1;
+    margin-bottom: 8px;
+    overflow: hidden;
+    border: 1px solid $line;
+    border-radius: 12px;
+    background: rgb(250 250 250 / 0.09);
+
+    img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      transition: opacity 0.4s;
+
+      &[src] { opacity: 1; }
+    }
   }
 
   // ── a project's own tools ───────────────────────────────────────────────
