@@ -32,15 +32,18 @@ still comes apart part by part, as do parts in no group and a model that is all 
 group.
 
 Such a model comes apart twice. E pulls it apart into those pieces; a second time, with
-the model still apart, it pulls the pieces apart too, every part by itself; and a third
-puts the model together. Beside the slider there is a button for the same: **2x** pulls
-the pieces apart into their parts, and **1x** puts them back as pieces. It never puts
-the model together, which E does, and Esc, and the Explode button. A model that says
-where its own parts go, or one with no piece of more than a part, has nothing further
-to come apart into: it has no such button, and E a second time puts it together.
+the model still apart, it pulls the pieces apart too, every part by itself; and from
+there E goes from the one to the other, turn about. Beside the slider there is a button
+for the same: **2x** pulls the pieces apart into their parts, and **1x** puts them back
+as pieces. Neither puts the model together: Esc does, and the Explode button. A model
+that says where its own parts go, or one with no piece of more than a part, has nothing
+further to come apart into: it has no such button, and E a second time puts it together.
 
 Pieces that would still be in one another are then moved clear, up and down where that
-is about as short a way as any. What was plainly over something in the model stays over
+is about as short a way as any. That is how far such a model can come apart, and to
+begin with it is pulled half of the way there: far enough to see what it is made of,
+and not yet all over the view. The slider takes it the rest of the way, and as far
+again. (A model that says where its own parts go is pulled apart to where it says.) What was plainly over something in the model stays over
 it: a face ends up above the works it covers, however far the works had to be lifted to
 come out of the case.
 

@@ -380,6 +380,17 @@ export async function loadModel(
 }
 
 /**
+ * How far a model that does not say how it comes apart is pulled apart to begin with, as
+ * a share of how far it takes for every piece to be clear of every other: half of that.
+ * Half way out the pieces are already seen to be what they are, and the model is not
+ * yet all over the view: the slider takes it the rest of the way, and as far again.
+ * (A model that says where its parts go is pulled apart to where it says.)
+ */
+const BEGUN = 0.5
+const begun = (ways: THREE.Vector3[]) =>
+  ways.map((way) => way.multiplyScalar(BEGUN))
+
+/**
  * Which piece of the model each part is of, going by the groups the parts are in: and,
  * for a model that does not say how it comes apart (`worked`), where each part goes
  * when it is pulled apart. And where each goes when every part goes by itself (`alone`),
@@ -431,18 +442,20 @@ function pieced(
     for (const whole of wholes.values())
       if (whole.area > 0) whole.centre.divideScalar(whole.area)
       else whole.box.getCenter(whole.centre)
-    const ways = waysOut([...wholes.values()], middle, across)
+    const ways = begun(waysOut([...wholes.values()], middle, across))
     const way = new Map([...wholes.keys()].map((piece, n) => [piece, ways[n]]))
     // every part by itself: each is a piece, clear of all the others
     const alone =
       wholes.size < parts.length
-        ? waysOut(
-            parts.map((part, index) => ({
-              box: boxes[index],
-              centre: surfaceOf(part).centre,
-            })),
-            middle,
-            across
+        ? begun(
+            waysOut(
+              parts.map((part, index) => ({
+                box: boxes[index],
+                centre: surfaceOf(part).centre,
+              })),
+              middle,
+              across
+            )
           )
         : null
     return {

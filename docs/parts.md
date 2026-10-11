@@ -18,12 +18,20 @@ sight.
 
 ## Saving STEP
 
-- **Download STEP**, at the top of the right-hand edge, saves the whole model as one
-  STEP file, with every part in its place; its tooltip says how big the file is.
+- **Download**, at the top of the right-hand edge, brings up the two ways there are to
+  have the whole model, each with how big its STEP is. **Full model** saves it as one
+  STEP file, with every part in its place. **Zip with parts** saves one zip archive with
+  a STEP file of each part in it; the size it gives is what those files come to, and the
+  archive is smaller. A model of a single part has only the first.
 - The arrow that comes up beside a part's name, in the list, saves that part as STEP.
 - The arrow beside a group's name saves the STEP files of all its parts, in a folder
   named after the group, inside one you choose. A group of one part saves that part's
   file, as the part's own arrow does.
+
+What is saved has the day it was saved before its name, the year, the month and the
+day: `2026_10_11_table-clock.step`. So do the folder a group's files go in, the zip
+archive, and a [blueprint](blueprints.md#saving)'s sheets; the files inside a folder or
+an archive keep their own names. The settings turn this off (General, Downloads).
 
 ## Changing the groups by hand
 

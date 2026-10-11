@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/tooltip"
 import { partFile, type Model } from "@/lib/model"
 import { MAC } from "@/lib/platform"
+import { savedAs } from "@/lib/saved"
 import { goesBy, useStore, type Note, type Selection } from "@/lib/store"
 import type { LoadedPart } from "./load"
 
@@ -414,7 +415,7 @@ export function PartMarks({
                 void window.cad.model.saveCopy(
                   projectId,
                   download.file,
-                  download.name
+                  savedAs(download.name)
                 )
               }
             >

@@ -23,6 +23,7 @@ import { pieceWith } from "@/components/viewport/apart"
 import type { LoadedModel, LoadedPart } from "@/components/viewport/load"
 import { spokenFor } from "@/lib/keys"
 import { usePreferences } from "@/lib/preferences"
+import { savedAs } from "@/lib/saved"
 import { useStore } from "@/lib/store"
 import { dimensionsOf, type Room } from "./dimensions"
 import { clearFor, columnFor, labelsOf } from "./labels"
@@ -831,7 +832,7 @@ export function Blueprint({
   )
   const save = (index: number) => {
     const file = fileOf(index)
-    if (file) void window.cad.model.saveDrawing(file.name, file.svg)
+    if (file) void window.cad.model.saveDrawing(savedAs(file.name), file.svg)
   }
 
   // All of them together, for the button at the foot: once every sheet is drawn, and
@@ -843,7 +844,7 @@ export function Blueprint({
       all: () => {
         const files = SIDES.flatMap((_, index) => fileOf(index) ?? [])
         void window.cad.model
-          .saveDrawings(`${fileName(name)}-blueprint`, files)
+          .saveDrawings(savedAs(`${fileName(name)}-blueprint`), files)
           .then((saved) => {
             if (saved) useStore.getState().say(`Saved ${files.length} SVGs`)
           })

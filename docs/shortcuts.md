@@ -24,7 +24,7 @@ is Ctrl off a Mac.
 | Shift+G | [Grid](section-explode-grid.md#grid) |
 | S | [Section](section-explode-grid.md#section) |
 | X, Y, Z | Which way the section cuts, while the model is cut open |
-| E | [Explode](section-explode-grid.md#explode): once into pieces, again into every part, and again to put it together |
+| E | [Explode](section-explode-grid.md#explode): into pieces, then into every part, and back and forth between the two (Esc puts the model together) |
 | Cmd+/ | [Reference scene](reference-scenes.md) |
 | I | Show what is picked out [on its own](selecting.md#on-its-own-close-to-out-of-sight) |
 | H | Put what is picked out out of sight, or bring everything back |

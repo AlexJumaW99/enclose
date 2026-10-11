@@ -49,6 +49,7 @@ import { Analytics, POSTHOG } from "./analytics"
 import { unpack, type Filed } from "./archive"
 import { Changes } from "./changes"
 import { Versions } from "./versions"
+import { zipOf } from "./zip"
 import { followRename, listCommands, lookAtClaude } from "./claude"
 import { lookAtCodex } from "./codex"
 import { readTools } from "./custom-tools"
@@ -988,6 +989,41 @@ function wire() {
       const into = makeFolder(picked.filePaths[0], called)
       for (const { source, name } of wanted)
         await fs.promises.copyFile(source, path.join(into, name))
+      analytics?.record("model saved", { as: "files", files: wanted.length })
+      return true
+    }
+  )
+  ipcMain.handle(
+    CHANNEL.modelSaveArchive,
+    async (_, id: string, files: unknown, name: unknown) => {
+      const manifest = projects.get(id)?.manifest
+      if (!win || !manifest || !Array.isArray(files)) return false
+      const from = path.dirname(manifest)
+      const wanted = (files as { file?: unknown; name?: unknown }[]).flatMap(
+        (entry) => {
+          const source = resolveInside(from, String(entry?.file))
+          return source && fs.existsSync(source)
+            ? [{ source, name: path.basename(String(entry?.name)) }]
+            : []
+        }
+      )
+      if (wanted.length === 0) return false
+      const picked = await dialog.showSaveDialog(win, {
+        defaultPath: path.join(
+          app.getPath("downloads"),
+          path.basename(String(name))
+        ),
+      })
+      if (picked.canceled || !picked.filePath) return false
+      const archive = zipOf(
+        await Promise.all(
+          wanted.map(async ({ source, name }) => ({
+            name,
+            data: await fs.promises.readFile(source),
+          }))
+        )
+      )
+      await fs.promises.writeFile(picked.filePath, archive)
       analytics?.record("model saved", { as: "files", files: wanted.length })
       return true
     }

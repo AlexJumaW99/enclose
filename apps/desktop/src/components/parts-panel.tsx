@@ -5,6 +5,7 @@ import { DownloadIcon, EyeOffIcon, SquareDashedIcon } from "lucide-react"
 import { LOOSE } from "@/lib/arrange"
 import { partFile, sizeOf, type Download } from "@/lib/model"
 import { NO_SWEEP, sweptTo, toggled, toggledAll } from "@/lib/several"
+import { savedAs } from "@/lib/saved"
 import { useStore, type Only } from "@/lib/store"
 import type { LoadedModel } from "./viewport/load"
 
@@ -248,7 +249,7 @@ export function PartsPanel({
     setView({ hidden: hidden.filter((id) => !ids.includes(id)) })
 
   const save = (file: Download) =>
-    void window.cad.model.saveCopy(projectId, file.file, file.name)
+    void window.cad.model.saveCopy(projectId, file.file, savedAs(file.name))
 
   React.useEffect(() => {
     const away = (event: PointerEvent) => {
@@ -385,7 +386,7 @@ export function PartsPanel({
                           : void window.cad.model.saveCopies(
                               projectId,
                               files.map(({ file, name }) => ({ file, name })),
-                              group.label
+                              savedAs(group.label)
                             )
                       }
                     />

@@ -44,7 +44,7 @@ export function Spread({ className }: { className?: string }) {
  * What goes before it, for a model that comes apart twice: pressed, the pieces the
  * model is pulled apart into come apart too, every part by itself, and pressed again
  * they are pieces once more. It says which of the two it goes to: 2x, with the model
- * apart the once. It never puts the model together, which the key does, and Esc.
+ * apart the once. The key does the same. Neither puts the model together: Esc does.
  */
 export function Twice() {
   const alone = useStore((state) => state.view.alone)

@@ -567,6 +567,15 @@ export type CadApi = {
       folder: string
     ): Promise<boolean>
     /**
+     * save several of its files together as one zip archive, somewhere the user picks:
+     * `name` is what the archive is called unless they call it something else
+     */
+    saveArchive(
+      projectId: string,
+      files: { file: string; name: string }[],
+      name: string
+    ): Promise<boolean>
+    /**
      * save a drawing the app has made of a model, an SVG, somewhere the user picks:
      * `name` is what the file is called unless they call it something else
      */
@@ -736,6 +745,7 @@ export const CHANNEL = {
   modelRead: "model:read",
   modelSaveCopy: "model:save-copy",
   modelSaveCopies: "model:save-copies",
+  modelSaveArchive: "model:save-archive",
   modelSaveDrawing: "model:save-drawing",
   modelSaveDrawings: "model:save-drawings",
   modelNameGroup: "model:name-group",

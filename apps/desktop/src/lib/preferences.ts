@@ -36,6 +36,8 @@ export type Preferences = Buttons & {
   settleDays: number
   /** what the lengths written on a blueprint are in */
   units: Unit
+  /** a file that is saved has the day before its name: 2026_10_11_table-clock.step */
+  datedFiles: boolean
 }
 
 export const TURN_SPEED = { min: 0.4, max: 2.5 }
@@ -50,6 +52,7 @@ const DEFAULTS: Preferences = {
   pivot: "view",
   settleDays: SETTLE_DAYS.initial,
   units: "mm",
+  datedFiles: true,
 }
 const KEY = "enclose:preferences"
 
@@ -93,6 +96,7 @@ function saved(): Preferences {
           : DEFAULTS.pivot,
       settleDays,
       units: read.units === "in" ? "in" : DEFAULTS.units,
+      datedFiles: read.datedFiles !== false,
     }
   } catch {
     return DEFAULTS

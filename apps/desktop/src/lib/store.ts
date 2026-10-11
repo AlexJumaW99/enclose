@@ -135,16 +135,17 @@ export type Only =
 export const SPREAD = { min: 1, max: 4 }
 
 /**
- * What Explode does to the view the next time it is asked for. A model put together is
- * pulled apart, into its pieces. One that is pulled apart, and comes apart again
- * (`further`: some piece of it is of more than one part), is pulled apart into its
- * parts, as far apart as it is. And then, or at once if it does not, it is put together.
+ * What the key for Explode does to the view the next time it is pressed. A model put
+ * together is pulled apart, into its pieces. One that is pulled apart, and comes apart
+ * again (`further`: some piece of it is of more than one part), goes from its pieces to
+ * its parts and back, turn about, as far apart as it is: the key goes round the ways it
+ * comes apart, and does not put it together, which is Esc's to do. A model that comes
+ * apart only the one way has nothing to go round, and the key puts it together.
  */
 export function exploding(view: View, further: boolean): Partial<View> {
   if (!view.exploded)
     return { exploded: true, alone: false, spread: SPREAD.min }
-  if (further && !view.alone) return { alone: true }
-  // (it goes back together the way it came apart: `alone` is as it was until next time)
+  if (further) return { alone: !view.alone }
   return { exploded: false }
 }
 

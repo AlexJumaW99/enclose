@@ -16,6 +16,13 @@ import {
 
 import { ReferenceIcon, SectionIcon } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Kbd } from "@/components/ui/kbd"
 import { Toggle } from "@/components/ui/toggle"
 import {
@@ -25,6 +32,7 @@ import {
 } from "@/components/ui/tooltip"
 import { oneFile, sizeOf } from "@/lib/model"
 import { MAC } from "@/lib/platform"
+import { savedAs } from "@/lib/saved"
 import { SPREAD, useStore } from "@/lib/store"
 import type { LoadedModel } from "./viewport/load"
 import { sectionFacing } from "./viewport/section-planes"
@@ -167,6 +175,97 @@ export function Switch({
 }
 
 /**
+ * The model as files, to take elsewhere: a button that brings up the ways there are to
+ * have it. All of it in one file, every part in its place; or its parts, each in a file
+ * of its own, in one archive. One part of it, or the parts of one group, are had from
+ * the list of parts. There is no button for a model that has no files to hand out.
+ */
+function Downloads({
+  loaded,
+  projectId,
+}: {
+  loaded: LoadedModel
+  projectId: string
+}) {
+  const [open, setOpen] = React.useState(false)
+  const say = useStore((state) => state.say)
+  const { downloads, title } = loaded.model
+  const whole = oneFile(downloads)
+  // (a model of one part is all there in that part's file: there is nothing to archive)
+  const parts = downloads.filter((file) => file.kind === "part")
+  const apart = parts.length > 1 ? parts : []
+  if (!whole && apart.length === 0) return null
+  // the archive goes by what the whole model's file does, or the model
+  const called =
+    whole?.name.replace(/\.[^.]+$/, "") ||
+    (title ?? "model").replace(/[^A-Za-z0-9]+/g, "-").toLowerCase()
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <Tooltip disableHoverablePopup>
+        <TooltipTrigger
+          render={
+            <DropdownMenuTrigger
+              render={<Button variant="ghost" size="icon" className={ROUND} />}
+            />
+          }
+        >
+          <DownloadIcon />
+          <span className="sr-only">Download</span>
+        </TooltipTrigger>
+        {!open && <TooltipContent side="left">Download</TooltipContent>}
+      </Tooltip>
+      {/* (wide enough for a name and a size on one line) */}
+      <DropdownMenuContent side="left" align="start" className="w-60">
+        <DropdownMenuGroup>
+          {whole && (
+            <DropdownMenuItem
+              onClick={() =>
+                void window.cad.model.saveCopy(
+                  projectId,
+                  whole.file,
+                  savedAs(whole.name)
+                )
+              }
+            >
+              Full model
+              <Size bytes={whole.bytes} />
+            </DropdownMenuItem>
+          )}
+          {apart.length > 0 && (
+            <DropdownMenuItem
+              onClick={() =>
+                void window.cad.model
+                  .saveArchive(
+                    projectId,
+                    apart.map(({ file, name }) => ({ file, name })),
+                    savedAs(`${called}-parts.zip`)
+                  )
+                  .then((saved) => {
+                    if (saved) say(`Saved ${apart.length} parts as a zip`)
+                  })
+              }
+            >
+              Zip with parts
+              {/* (what the files in it come to: the archive itself is smaller) */}
+              <Size bytes={apart.reduce((all, file) => all + file.bytes, 0)} />
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+/** What kind of file a way of having the model is, and how big: at the end of its row. */
+function Size({ bytes }: { bytes: number }) {
+  return (
+    <span className="ml-auto shrink-0 pl-4 text-xs whitespace-nowrap text-muted-foreground tabular-nums">
+      STEP {sizeOf(bytes)}
+    </span>
+  )
+}
+
+/**
  * The buttons down the right-hand edge. At the top, what leaves the view: the
  * conversation, and the model as a file. In the middle, how the model is looked at.
  *
@@ -203,8 +302,6 @@ export function Tools({
   const setToolsOpen = useStore((state) => state.setToolsOpen)
   const finding = useStore((state) => state.finding !== null)
   const find = useStore((state) => state.find)
-  const whole = loaded ? oneFile(loaded.model.downloads) : null
-
   // While one sheet of the blueprint has the view to itself there is none of them:
   // only, at the top, what puts the sheet back among the others.
   if (view.sheet !== null)
@@ -233,19 +330,7 @@ export function Tools({
         >
           <MessageSquareIcon />
         </Switch>
-        {/* the whole model in one file, saved at a press: one part of it, or the
-            parts of one group, are had from the list of parts */}
-        {whole && (
-          <Press
-            label="Download STEP"
-            detail={sizeOf(whole.bytes)}
-            onClick={() =>
-              void window.cad.model.saveCopy(projectId, whole.file, whole.name)
-            }
-          >
-            <DownloadIcon />
-          </Press>
-        )}
+        {loaded && <Downloads loaded={loaded} projectId={projectId} />}
       </Stack>
 
       {/* how the model is looked at */}

@@ -43,6 +43,7 @@ import {
 } from "@/lib/navigation"
 import { MAC } from "@/lib/platform"
 import { TURN_SPEED, usePreferences, ZOOM_SPEED } from "@/lib/preferences"
+import { dated } from "@/lib/saved"
 import { useStore } from "@/lib/store"
 
 const SECTIONS = [
@@ -159,6 +160,7 @@ function General() {
   const setAccess = useStore((state) => state.setAccess)
   const settleDays = usePreferences((state) => state.settleDays)
   const units = usePreferences((state) => state.units)
+  const datedFiles = usePreferences((state) => state.datedFiles)
   const change = usePreferences((state) => state.change)
   const [settings, setSettings] = React.useState<AppSettings | null>(null)
   React.useEffect(() => {
@@ -278,6 +280,18 @@ function General() {
               { value: "mm", label: "mm" },
               { value: "in", label: "in" },
             ]}
+          />
+        </Row>
+      </Group>
+      <Group title="Downloads">
+        <Row
+          title="Date in file names"
+          detail={`Starts the name of what you download with the day, as in ${dated("table-clock.step")}.`}
+        >
+          <Switch
+            aria-label="Start the names of downloaded files with the date"
+            checked={datedFiles}
+            onCheckedChange={(on) => change({ datedFiles: on })}
           />
         </Row>
       </Group>
