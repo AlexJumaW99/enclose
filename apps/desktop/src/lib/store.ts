@@ -98,8 +98,15 @@ export type View = {
    * it is drawn on, one to each side, in place of the view of it.
    */
   blueprint: boolean
+  /**
+   * The sheet of a blueprint that is shown by itself, with all of the view for its
+   * paper: its place in the row. Null while the sheets stand in their row.
+   */
+  sheet: number | null
   /** whether a blueprint says how big the model is: its width, height and depth */
   dimensions: boolean
+  /** and whether it says which part is which: the name of each, with a line to it */
+  labels: boolean
   /**
    * The reference scene the model is set in, by what it is known by: things of a known
    * real size drawn round it, so that how big it is can be seen (see lib/reference).
@@ -187,6 +194,7 @@ const each = <Value>(of: (provider: ProviderId) => Value) =>
 const MODE_KEY = "enclose:mode"
 const GRID_KEY = "enclose:grid"
 const DIMENSIONS_KEY = "enclose:dimensions"
+const LABELS_KEY = "enclose:labels"
 const THREAD_WIDTH_KEY = "enclose:thread-width"
 const CUTS_KEY = "enclose:cuts"
 const FINISHED_KEY = "enclose:finished"
@@ -399,7 +407,9 @@ const homeView = (): View => ({
   hidden: NONE,
   grid: saved(GRID_KEY) === "on",
   blueprint: false,
+  sheet: null,
   dimensions: saved(DIMENSIONS_KEY) === "on",
+  labels: saved(LABELS_KEY) === "on",
   reference: null,
   tools: false,
 })
@@ -931,6 +941,8 @@ export const useStore = create<State>()((set, get) => ({
       localStorage.setItem(GRID_KEY, patch.grid ? "on" : "off")
     if (patch.dimensions !== undefined)
       localStorage.setItem(DIMENSIONS_KEY, patch.dimensions ? "on" : "off")
+    if (patch.labels !== undefined)
+      localStorage.setItem(LABELS_KEY, patch.labels ? "on" : "off")
     // a cut is kept as it is left, for the next time its project is cut open
     const { activeId, cuts } = get()
     const kept =
@@ -939,10 +951,15 @@ export const useStore = create<State>()((set, get) => ({
     const before = get().entered
     set((state) => {
       const view = { ...state.view, ...patch }
+      // (a sheet is shown by itself only while it is the blueprint that is looked at)
+      if (!view.blueprint) view.sheet = null
       return {
         view,
         cuts: kept,
         entered: enteredNow(view, state.entered),
+        // a sheet that takes the view to itself has it clear: the list of parts is put away
+        ...(view.sheet !== null &&
+          state.view.sheet === null && { partsOpen: false }),
         // nothing is picked out of a blueprint: what was, in the view, is let go of,
         // and the list of scenes to set the model in is put away, with its tools
         ...(patch.blueprint &&
@@ -1348,10 +1365,21 @@ export const useStore = create<State>()((set, get) => ({
       set({ partsOpen: false, referenceOpen: false, toolsOpen: false })
       return true
     }
+    // A model that is pulled apart is put together first, whatever else was gone into
+    // and whenever: it is the one that is got out of at once.
+    if (get().view.exploded) {
+      setView({ exploded: false })
+      return true
+    }
+    // a sheet that has the view to itself goes back among the others, before anything
+    // else that was gone into is got out of
+    if (get().view.sheet !== null) {
+      setView({ sheet: null })
+      return true
+    }
     const last = entered.at(-1)
     if (!last) return false
     if (last === "section") setView({ section: null })
-    else if (last === "explode") setView({ exploded: false })
     else if (last === "hidden") setView({ hidden: NONE })
     else if (last === "blueprint") setView({ blueprint: false })
     else if (last === "reference") setView({ reference: null })

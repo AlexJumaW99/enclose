@@ -98,6 +98,12 @@ describe("reduction", () => {
     expect(reduction([{ width: 3000, height: 3000 }])).toBe(20)
   })
 
+  it("draws smaller what does not fit beside what a sheet keeps clear for names", () => {
+    // 150 mm across fits a sheet 210 wide: but not with 50 kept clear at either side
+    expect(reduction([{ width: 150, height: 100 }])).toBe(1)
+    expect(reduction([{ width: 150, height: 100 }], { x: 50, y: 15 })).toBe(2)
+  })
+
   it("goes by the largest of the drawings, which are all to one scale", () => {
     expect(
       reduction([
@@ -172,6 +178,48 @@ describe("svgOf", () => {
   it("gives everything a name of its own that a file can have", () => {
     const names = [...svg.matchAll(/<g id="([^"]+)">/g)].map((m) => m[1])
     expect(names).toEqual(["screws", "screws_2", "_4_nuts"])
+  })
+
+  it("has the names of the parts in a group of their own, each with its line and its dot", () => {
+    const labelled = svgOf({
+      title: "Box",
+      placing: { middle: [0, 0], by: 1 },
+      groups: [],
+      labels: [
+        {
+          said: "Lid & <hinge>",
+          line: [36.5, 100, 39.5, 100, 60, 110],
+          at: [60, 110],
+          text: { x: 35, y: 101, side: "left" },
+        },
+        {
+          said: "Base",
+          line: [173.5, 120, 170.5, 120, 150, 118],
+          at: [150, 118],
+          text: { x: 175, y: 121, side: "right" },
+        },
+      ],
+    })
+    expect(labelled).toContain('<g id="labels"')
+    // the line is of dots: no length to each, and round ends
+    expect(labelled).toContain(
+      '<path d="M36.5 100L39.5 100L60 110" stroke-dasharray="0 0.9"/>'
+    )
+    expect(labelled).toMatch(/<g id="labels"[^>]*stroke-linecap="round"/)
+    expect(labelled).toContain('<circle cx="60" cy="110"')
+    // a name at the left ends at the drawing's side, and one at the right begins there
+    expect(labelled).toMatch(
+      /<text x="35" y="101" text-anchor="end"[^>]*>Lid &#38; &#60;hinge&#62;</
+    )
+    expect(labelled).toMatch(
+      /<text x="175" y="121" text-anchor="start"[^>]*>Base</
+    )
+    // (half bold: it is small, and is read against the lines of the drawing)
+    expect(labelled).toMatch(/<text x="175"[^>]*font-weight="600"/)
+    // and a sheet without them has no such group
+    expect(
+      svgOf({ title: "Box", placing: { middle: [0, 0], by: 1 }, groups: [] })
+    ).not.toContain("labels")
   })
 
   it("says nothing a file cannot", () => {

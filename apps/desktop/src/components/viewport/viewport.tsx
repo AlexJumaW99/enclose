@@ -1407,6 +1407,8 @@ function Model({ project }: { project: Project }) {
           parts={drawn}
           apart={explode}
           dimensions={view.dimensions}
+          labels={view.labels}
+          pieces={view.exploded && !view.alone && real.further}
           name={real.model.title ?? project.name}
         />
       )}

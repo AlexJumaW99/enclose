@@ -9,7 +9,7 @@ The gear at the bottom left, or Cmd+,. Esc, or Back, returns to the model.
 | | How much Claude [may do without asking](working-with-claude.md#model-effort-and-access) |
 | | Whether each conversation has [a version of the project](working-with-claude.md#versions) of its own |
 | | After how many days a [conversation](working-with-claude.md#conversations) left alone goes under its project's card |
-| | What a [blueprint](blueprints.md#exploded-and-dimensions)'s dimensions are in, millimetres or inches |
+| | What a [blueprint](blueprints.md#exploded-dimensions-and-labels)'s dimensions are in, millimetres or inches |
 | | Whether the app sends [usage data](usage-data.md) |
 | Appearance | The theme: the system's, light or dark |
 | Navigation | How a scroll is read (automatic, trackpad or mouse), how fast the view turns and zooms, and whether a wheel zooms the other way round |

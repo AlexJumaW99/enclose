@@ -81,10 +81,12 @@ settings follows what they are set to.
 ## What Esc steps back through
 
 Esc puts the search away if it is up, and then the parts list, the list of reference
-scenes, or the project's tools. After that it gets back out of the section, the explode,
-the blueprint, the reference scene, the tools' hold on the model, whatever is showing on its own and
-whatever was put out of sight, one press each, starting with whichever you went into
-last.
+scenes, or the project's tools. After that it puts a model that is pulled apart back
+together, at once, whatever else was gone into and whenever; and then a blueprint's
+sheet that has the view to itself back among the others. Then it gets back out of the
+section, the blueprint, the reference scene, the tools' hold on the model, whatever is
+showing on its own and whatever was put out of sight, one press each, starting with
+whichever you went into last.
 
 ## When a key does nothing
 

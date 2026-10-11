@@ -10,7 +10,7 @@ import type { Looking, Stroke } from "./lines"
 /** A sheet, in mm: upright, as wide as A4, and four wide to five high. */
 export const SHEET = { width: 210, height: 262.5 }
 /** How much of the sheet is kept clear all round a drawing, at the least, in mm. */
-const MARGIN = 15
+export const MARGIN = 15
 /**
  * How wide a line is drawn, in mm: a point and a half, which on a sheet shown a pixel to
  * the point is a pixel and a half.
@@ -41,6 +41,30 @@ export const THIN = (0.75 * 25.4) / 72
 export const FIGURES = (9 * 25.4) / 72
 /** What measurements are drawn in: quieter than the drawing they are of. */
 export const PENCIL = "#5c5c5c"
+
+/**
+ * The name of one part as a sheet has it (see labels.ts), in mm of the sheet from its top
+ * left corner: written to one side of the drawing, with a line of dots from it to the part.
+ */
+export type Label = {
+  said: string
+  /** the line from the name to the part, x y for each place along it */
+  line: number[]
+  /** where the line ends, which is on the part: there is a dot there */
+  at: [x: number, y: number]
+  /**
+   * Where the name is written: the foot of the end of it that is nearer the drawing.
+   * It is written away from the drawing from there, on whichever side it is.
+   */
+  text: { x: number; y: number; side: "left" | "right" }
+}
+
+/** How big the names of parts are written, in mm: seven points, and half bold. */
+export const WRITING = (7 * 25.4) / 72
+/** How far across the dot is that a name's line ends in, in mm. */
+export const DOT = 0.9
+/** How far it is from one dot of a name's line to the next, in mm: the line is of dots. */
+export const DOTTED = 0.9
 
 /** How far down from straight above a corner of the model is looked at from, in radians. */
 const CORNER = Math.acos(1 / Math.sqrt(3))
@@ -110,13 +134,17 @@ const REDUCED = [1, 2, 5]
  * model are all to the one scale, so that a length on one sheet is that length on the
  * next; and so are its four corners, which take more room and are not for measuring.
  */
-export function reduction(sizes: { width: number; height: number }[]): number {
+export function reduction(
+  sizes: { width: number; height: number }[],
+  /** how much of the sheet is kept clear of a drawing, at either side and at top and foot */
+  clear: { x: number; y: number } = { x: MARGIN, y: MARGIN }
+): number {
   const most = Math.max(
     0,
     ...sizes.map(({ width, height }) =>
       Math.max(
-        width / (SHEET.width - 2 * MARGIN),
-        height / (SHEET.height - 2 * MARGIN)
+        width / (SHEET.width - 2 * clear.x),
+        height / (SHEET.height - 2 * clear.y)
       )
     )
   )
@@ -133,17 +161,56 @@ export type Placing = {
   middle: [x: number, y: number]
   /** how many times smaller than life it is drawn */
   by: number
+  /**
+   * The paper it is drawn on, where that is not a sheet: one shown by itself is drawn on
+   * paper the shape of the view, as big as there is of that (see Blueprint).
+   */
+  paper?: { width: number; height: number }
+}
+
+/** The paper a drawing is on, in mm: a sheet, unless it says otherwise. */
+export const paperOf = (placing: Placing) => placing.paper ?? SHEET
+
+/** The room a drawing takes up as one side sees it, in the model's own measure. */
+export type Seen = { x0: number; x1: number; y0: number; y1: number }
+
+/**
+ * Where the drawing of each side sits on its sheet, by the room each takes up, in the
+ * order of the sides: in the middle of the sheet, the sides to one scale and the
+ * corners to one. `clear` is how much of the sheet is kept clear of a drawing.
+ */
+export function placed(
+  seen: Seen[],
+  clear?: { x: number; y: number }
+): Placing[] {
+  const scales = [true, false].map((flat) =>
+    reduction(
+      seen
+        .filter((_, index) => SIDES[index].flat === flat)
+        .map((room) => ({
+          width: room.x1 - room.x0,
+          height: room.y1 - room.y0,
+        })),
+      clear
+    )
+  )
+  return seen.map((room, index) => ({
+    middle: [(room.x0 + room.x1) / 2, (room.y0 + room.y1) / 2],
+    by: scales[SIDES[index].flat ? 0 : 1],
+  }))
 }
 
 /** A point of a drawing as it falls on the sheet, in mm from its top left corner. */
 export function onSheet(
   x: number,
   y: number,
-  { middle, by }: Placing
+  placing: Placing
 ): [number, number] {
+  const { middle, by } = placing
+  const paper = paperOf(placing)
   return [
-    SHEET.width / 2 + (x - middle[0]) / by,
-    SHEET.height / 2 - (y - middle[1]) / by,
+    paper.width / 2 + (x - middle[0]) / by,
+    paper.height / 2 - (y - middle[1]) / by,
   ]
 }
 
@@ -186,6 +253,8 @@ export function svgOf(sheet: {
   groups: { id: string; label: string; parts: Drawn[] }[]
   /** what the sheet says of how big the model is, if it says */
   dimensions?: Dimension[]
+  /** the names of the parts, each beside the drawing with a line to its part, if they are there */
+  labels?: Label[]
 }): string {
   const name = named()
   const out = [
@@ -240,6 +309,27 @@ export function svgOf(sheet: {
         `<path d="${drawn}"/>`,
         `<path d="${heads}" fill="${PENCIL}" stroke="none"/>`,
         `<text x="${short(text.x)}" y="${short(text.y)}"${turned} text-anchor="middle" font-family="Inter, Helvetica, Arial, sans-serif" font-size="${short(FIGURES)}" fill="${PENCIL}" stroke="none">${escaped(text.said)}</text>`,
+        `</g>`
+      )
+    }
+    out.push(`</g>`)
+  }
+  // And the names of the parts, apart from both: each a line of dots that ends in a
+  // bigger one on its part, and the name as writing at the other end of it.
+  if (sheet.labels?.length) {
+    out.push(
+      `<g id="${name("labels")}" fill="none" stroke="${PENCIL}" stroke-width="${short(THIN)}" stroke-linecap="round" stroke-linejoin="round">`
+    )
+    for (const { said, line, at, text } of sheet.labels) {
+      let path = ""
+      for (let i = 0; i + 1 < line.length; i += 2)
+        path += `${i === 0 ? "M" : "L"}${short(line[i])} ${short(line[i + 1])}`
+      out.push(
+        `<g>`,
+        `<title>${escaped(said)}</title>`,
+        `<path d="${path}" stroke-dasharray="0 ${short(DOTTED)}"/>`,
+        `<circle cx="${short(at[0])}" cy="${short(at[1])}" r="${short(DOT / 2)}" fill="${PENCIL}" stroke="none"/>`,
+        `<text x="${short(text.x)}" y="${short(text.y)}" text-anchor="${text.side === "left" ? "end" : "start"}" font-family="Inter, Helvetica, Arial, sans-serif" font-size="${short(WRITING)}" font-weight="600" fill="${PENCIL}" stroke="none">${escaped(said)}</text>`,
         `</g>`
       )
     }

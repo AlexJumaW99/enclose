@@ -72,6 +72,7 @@ export function Options({
 }) {
   const exploded = useStore((state) => state.view.exploded)
   const dimensions = useStore((state) => state.view.dimensions)
+  const labels = useStore((state) => state.view.labels)
   const setView = useStore((state) => state.setView)
   const units = usePreferences((state) => state.units)
   const change = usePreferences((state) => state.change)
@@ -137,9 +138,8 @@ export function Options({
           </div>
         )}
       </With>
-      {/* (the two pairs are further from one another than a switch is from what goes
-          with it) */}
-      <label className={cn(SWITCH, "ml-5 gap-3")}>
+      {/* (every bar is as far from the next as a switch is from what goes with it) */}
+      <label className={cn(SWITCH, "ml-2 gap-3")}>
         Dimensions
         <Switch
           checked={dimensions}
@@ -174,6 +174,13 @@ export function Options({
           </ToggleGroup>
         )}
       </With>
+      <label className={cn(SWITCH, "ml-2 gap-3")}>
+        Labels
+        <Switch
+          checked={labels}
+          onCheckedChange={(labels) => setView({ labels })}
+        />
+      </label>
       {/* Every sheet at once, each a file, in a folder of their own: not while any of
           them is still being drawn. */}
       <Button
@@ -183,7 +190,7 @@ export function Options({
         className={cn(
           SWITCH,
           // under the pointer it lightens a little, and its edge with it
-          "ml-5 cursor-pointer gap-2 pr-5 pl-4 hover:bg-foreground/8 hover:ring-foreground/20 dark:hover:bg-foreground/8"
+          "ml-2 cursor-pointer gap-2 pr-5 pl-4 hover:bg-foreground/8 hover:ring-foreground/20 dark:hover:bg-foreground/8"
         )}
       >
         <DownloadIcon />

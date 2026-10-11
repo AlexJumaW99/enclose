@@ -526,6 +526,9 @@ export function Sidebar({ children }: { children: React.ReactNode }) {
   // card of the project they are of stays, at the top, and the rest are put away.
   const activeId = useStore((state) => state.activeId)
   const blueprint = useStore((state) => state.view.blueprint)
+  // And while one sheet has the view to itself that card is put away too, and what is
+  // at the foot with it: there is nothing over the sheet that is not the sheet's.
+  const alone = useStore((state) => state.view.sheet !== null)
   const addProject = useStore((state) => state.addProject)
   const createProject = useStore((state) => state.createProject)
   // an example is a while coming, and the list it was picked from has closed by then:
@@ -553,7 +556,10 @@ export function Sidebar({ children }: { children: React.ReactNode }) {
           just outside the card: it starts a little higher than the first card does */}
       <div className="-mt-1 flex min-h-0 grow [scrollbar-width:none] flex-col items-start gap-1.5 overflow-y-auto px-4.5 pt-1">
         {projects.map((project) => (
-          <Tucked key={project.id} away={blueprint && project.id !== activeId}>
+          <Tucked
+            key={project.id}
+            away={alone || (blueprint && project.id !== activeId)}
+          >
             <ProjectCard project={project} now={now} />
           </Tucked>
         ))}
@@ -621,7 +627,16 @@ export function Sidebar({ children }: { children: React.ReactNode }) {
               </DropdownMenuContent>
             </DropdownMenu>
           </Tucked>
-          <div className={cn("pointer-events-auto", FOOT)}>{children}</div>
+          <div
+            inert={alone}
+            className={cn(
+              "transition-opacity duration-200",
+              alone ? "opacity-0" : "pointer-events-auto",
+              FOOT
+            )}
+          >
+            {children}
+          </div>
         </div>
       </div>
     </aside>

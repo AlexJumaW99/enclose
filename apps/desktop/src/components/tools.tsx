@@ -11,6 +11,7 @@ import {
   RotateCcwIcon,
   SearchIcon,
   UnfoldVerticalIcon,
+  XIcon,
 } from "lucide-react"
 
 import { ReferenceIcon, SectionIcon } from "@/components/icons"
@@ -58,6 +59,7 @@ type Side = React.ComponentProps<typeof TooltipContent>["side"]
 function Press({
   label,
   detail,
+  shortcut,
   side = "left",
   onClick,
   className,
@@ -66,6 +68,8 @@ function Press({
   label: string
   /** something more about it, said more quietly beside the name */
   detail?: string
+  /** the key that does the same, shown beside the name */
+  shortcut?: string
   /** where the tooltip goes, when something else has the left */
   side?: Side
   onClick: () => void
@@ -87,9 +91,10 @@ function Press({
         {children}
         <span className="sr-only">{label}</span>
       </TooltipTrigger>
-      <TooltipContent side={side}>
+      <TooltipContent side={side} className="has-data-[slot=kbd]:pr-2.5">
         {label}
         {detail && <span className="tabular-nums opacity-60">{detail}</span>}
+        {shortcut && <Kbd>{shortcut}</Kbd>}
       </TooltipContent>
     </Tooltip>
   )
@@ -199,6 +204,23 @@ export function Tools({
   const finding = useStore((state) => state.finding !== null)
   const find = useStore((state) => state.find)
   const whole = loaded ? oneFile(loaded.model.downloads) : null
+
+  // While one sheet of the blueprint has the view to itself there is none of them:
+  // only, at the top, what puts the sheet back among the others.
+  if (view.sheet !== null)
+    return (
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-15">
+        <Stack className="absolute top-3 right-3">
+          <Press
+            label="Back to the sheets"
+            shortcut="Esc"
+            onClick={() => setView({ sheet: null })}
+          >
+            <XIcon />
+          </Press>
+        </Stack>
+      </div>
+    )
 
   return (
     <div className="pointer-events-none absolute inset-y-0 right-0 w-15">

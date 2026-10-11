@@ -1,6 +1,8 @@
 // The blueprint of a model: the model drawn flat, from each of its sides and from four of
 // its corners, each drawing on a sheet of its own. The sheets stand in a row where the view of the model was, to be
-// gone along; and each can be taken away as a file of its lines, an SVG.
+// gone along, by the wheel or by taking hold of the row and pulling it; a sheet that is
+// pressed is shown by itself, with all of the view for its paper; and each can be taken
+// away as a file of its lines, an SVG.
 //
 // What is drawn is what the view had on show: all of the model, or the parts that were
 // picked to be shown on their own, without the ones put out of sight; put together, or
@@ -17,25 +19,34 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { pieceWith } from "@/components/viewport/apart"
 import type { LoadedModel, LoadedPart } from "@/components/viewport/load"
+import { spokenFor } from "@/lib/keys"
 import { usePreferences } from "@/lib/preferences"
 import { useStore } from "@/lib/store"
 import { dimensionsOf, type Room } from "./dimensions"
-import { drawn, type Body, type Stroke } from "./lines"
+import { clearFor, columnFor, labelsOf } from "./labels"
+import { drawn, type Body, type Looking, type Stroke } from "./lines"
 import { useSaving } from "./saving"
 import {
+  DOT,
+  DOTTED,
   FIGURES,
   INK,
   LINE,
+  MARGIN,
+  paperOf,
   PENCIL,
-  reduction,
+  placed,
   scaleSaid,
-  SHEET,
   SIDES,
   svgOf,
   THIN,
+  WRITING,
   type Dimension,
+  type Label,
   type Placing,
+  type Seen,
 } from "./sheet"
 
 /** How long the drawing goes on at a time, in ms, before the window is let draw itself. */
@@ -53,9 +64,22 @@ const LINE_PX = (LINE * 72) / 25.4
 /** And the same of what a sheet says of the model's size: its lines, and its figures. */
 const THIN_PX = (THIN * 72) / 25.4
 const FIGURES_PX = (FIGURES * 72) / 25.4
+/** And of the names of the parts, where it has those. */
+const WRITING_PX = (WRITING * 72) / 25.4
+/**
+ * How many pixels a millimetre of paper is, of a sheet shown by itself: a pixel to the
+ * point, which is what a sheet in the row is at its full size.
+ */
+const MM_PX = 72 / 25.4
 
 /** How long after the sheet before it each sheet comes in, as the blueprint comes up, ms. */
 const AFTER_MS = 70
+
+/**
+ * How far the pointer has to go, held down on the row of sheets, before the row is being
+ * pulled along by it, in pixels: less, and it is a press on whatever is under it.
+ */
+const PULLED_PX = 4
 
 /** A moment for the window to draw itself in. */
 const breathe = () => new Promise((resolve) => setTimeout(resolve, 0))
@@ -71,6 +95,8 @@ type Sheets = {
   parts: string[]
   /** the room they take up between them, which is what a sheet gives the size of */
   room: Room
+  /** and the room they take up as each side sees them, which is what places its drawing */
+  seen: Seen[]
   sides: (Drawing | null)[]
 }
 
@@ -167,22 +193,29 @@ function laidOut(parts: LoadedPart[], apart: number) {
     })
     return parts.length > 0 ? room : { x0: 0, x1: 0, y0: 0, y1: 0 }
   })
-  // the sides to one scale, and the corners to one
-  const scales = [true, false].map((flat) =>
-    reduction(
-      rooms
-        .filter((_, index) => SIDES[index].flat === flat)
-        .map((room) => ({
-          width: room.x1 - room.x0,
-          height: room.y1 - room.y0,
-        }))
+  return { bodies, placings: placed(rooms), room, seen: rooms }
+}
+
+/**
+ * The room a side's drawing takes up, and with it the corners of the room the model
+ * takes up as a whole, which are where its size is said from. Seen from a corner of the
+ * model those can lie well outside the drawing, where no part is.
+ */
+function withCorners(seen: Seen, room: Room, looking: Looking): Seen {
+  const all = { ...seen }
+  for (let i = 0; i < 8; i++) {
+    const corner = [0, 1, 2].map((axis) =>
+      i & (1 << axis) ? room.max[axis] : room.min[axis]
     )
-  )
-  const placings = rooms.map((room, index): Placing => ({
-    middle: [(room.x0 + room.x1) / 2, (room.y0 + room.y1) / 2],
-    by: scales[SIDES[index].flat ? 0 : 1],
-  }))
-  return { bodies, placings, room }
+    const [x, y] = [looking.right, looking.up].map(
+      (way) => corner[0] * way[0] + corner[1] * way[1] + corner[2] * way[2]
+    )
+    all.x0 = Math.min(all.x0, x)
+    all.x1 = Math.max(all.x1, x)
+    all.y0 = Math.min(all.y0, y)
+    all.y1 = Math.max(all.y1, y)
+  }
+  return all
 }
 
 /** The sheets in the order they are drawn in: the ones in sight first, then the rest. */
@@ -226,11 +259,12 @@ function useSheets(
     if (keptOf(of)) return
     let stopped = false
     const draw = async () => {
-      const { bodies, placings, room } = laidOut(parts, apart)
+      const { bodies, placings, room, seen } = laidOut(parts, apart)
       const fresh: Sheets = {
         of,
         parts: parts.map((part) => part.part.id),
         room,
+        seen,
         sides: SIDES.map(() => null),
       }
       for (const index of inSightFirst(row.current)) {
@@ -279,14 +313,17 @@ const fileName = (called: string) =>
 
 /**
  * The lines of a drawing, on the paper: as they will be in the file, at the sheet's size.
- * And over them what the sheet says of how big the model is, where it says.
+ * And over them what the sheet says of how big the model is, and of which part is which,
+ * where it says.
  */
 function Lines({
   drawing,
   measures,
+  labels,
 }: {
   drawing: Drawing | null
   measures: Dimension[] | null
+  labels: Label[] | null
 }) {
   const canvas = React.useRef<HTMLCanvasElement>(null)
   React.useEffect(() => {
@@ -304,12 +341,13 @@ function Lines({
       if (!context) return
       context.clearRect(0, 0, width, height)
       if (!drawing) return
-      // pixels to the millimetre of sheet, and to the millimetre of model
-      const per = width / SHEET.width
+      // pixels to the millimetre of paper, and to the millimetre of model
+      const on = paperOf(drawing.placing)
+      const per = width / on.width
       const { middle, by } = drawing.placing
       const scale = per / by
-      const left = (SHEET.width / 2) * per - middle[0] * scale
-      const top = (SHEET.height / 2) * per + middle[1] * scale
+      const left = (on.width / 2) * per - middle[0] * scale
+      const top = (on.height / 2) * per + middle[1] * scale
       context.lineWidth = Math.max(LINE * per, LINE_PX * ratio)
       context.lineJoin = "round"
       context.lineCap = "round"
@@ -326,13 +364,33 @@ function Lines({
           if (closed) context.closePath()
         }
       context.stroke()
-      if (!measures) return
       context.lineWidth = Math.max(THIN * per, THIN_PX * ratio)
       context.strokeStyle = PENCIL
       context.fillStyle = PENCIL
+      context.textBaseline = "alphabetic"
+      // the names of the parts: a line from each to its part, a dot where it ends
+      if (labels) {
+        context.font = `600 ${Math.max(WRITING * per, WRITING_PX * ratio)}px "Inter Variable", sans-serif`
+        // (the line is of dots: no nearer one another than three of them would lie)
+        const dotted = [0, Math.max(DOTTED * per, context.lineWidth * 3)]
+        for (const { said, line, at, text } of labels) {
+          context.setLineDash(dotted)
+          context.beginPath()
+          context.moveTo(line[0] * per, line[1] * per)
+          for (let i = 2; i + 1 < line.length; i += 2)
+            context.lineTo(line[i] * per, line[i + 1] * per)
+          context.stroke()
+          context.setLineDash([])
+          context.beginPath()
+          context.arc(at[0] * per, at[1] * per, (DOT / 2) * per, 0, 2 * Math.PI)
+          context.fill()
+          context.textAlign = text.side === "left" ? "right" : "left"
+          context.fillText(said, text.x * per, text.y * per)
+        }
+      }
+      if (!measures) return
       context.font = `400 ${Math.max(FIGURES * per, FIGURES_PX * ratio)}px "Inter Variable", sans-serif`
       context.textAlign = "center"
-      context.textBaseline = "alphabetic"
       for (const { lines, arrows, text } of measures) {
         context.beginPath()
         for (const [x1, y1, x2, y2] of lines) {
@@ -360,7 +418,7 @@ function Lines({
     const watch = new ResizeObserver(paint)
     watch.observe(paper)
     return () => watch.disconnect()
-  }, [drawing, measures])
+  }, [drawing, measures, labels])
   return <canvas ref={canvas} className="absolute inset-0 size-full" />
 }
 
@@ -370,19 +428,25 @@ function Sheet({
   place,
   drawing,
   measures,
+  labels,
   stale,
   onSave,
+  onEnlarge,
 }: {
   name: string
   /** null until it has been drawn */
   drawing: Drawing | null
   /** what it says of how big the model is, if it says */
   measures: Dimension[] | null
+  /** and of which part is which, if it says */
+  labels: Label[] | null
   /** what is on it is of the model as it was, and is being drawn again */
   stale: boolean
   /** its place in the row, from the left: it comes in that much after the first */
   place: number
   onSave: () => void
+  /** the paper was pressed: it is to be shown by itself */
+  onEnlarge: () => void
 }) {
   return (
     <section
@@ -420,8 +484,16 @@ function Sheet({
         </Tooltip>
       </header>
       {/* four wide to five high: as tall as the window has room for, clear of what is
-          at its top and its foot, and no taller than it is at a pixel to the point */}
-      <div className="relative aspect-[4/5] h-[min(744px,calc(100svh-180px))] overflow-hidden rounded-[18px] bg-white ring-1 ring-foreground/10 dark:bg-[#f5f6ec] dark:ring-0">
+          at its top and its foot, and no taller than it is at a pixel to the point.
+          Pressed, it is shown by itself, with all of the view for its paper */}
+      <button
+        type="button"
+        data-paper
+        aria-label={`Enlarge the ${name} view`}
+        disabled={!drawing}
+        onClick={onEnlarge}
+        className="relative aspect-[4/5] h-[min(744px,calc(100svh-180px))] cursor-pointer overflow-hidden rounded-[18px] bg-white ring-1 ring-foreground/10 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default dark:bg-[#f5f6ec] dark:ring-0 dark:focus-visible:ring-[3px]"
+      >
         {/* a drawing that is being done again waits faintly for the one to take its
             place: but not at once, in case that is here before anyone could tell */}
         <div
@@ -430,15 +502,100 @@ function Sheet({
             stale && "opacity-25 delay-200"
           )}
         >
-          <Lines drawing={drawing} measures={measures} />
+          <Lines drawing={drawing} measures={measures} labels={labels} />
         </div>
         {(!drawing || stale) && (
           <div className="absolute inset-0 flex animate-in items-center justify-center delay-300 duration-300 fill-mode-both fade-in">
             <Spinner className="size-5 text-black/35" />
           </div>
         )}
-      </div>
+      </button>
     </section>
+  )
+}
+
+/** All that is on one sheet: its drawing, and what it says round it. */
+type Shown = {
+  drawing: Drawing
+  stale: boolean
+  measures: Dimension[] | null
+  labels: Label[] | null
+}
+
+/**
+ * A sheet by itself, with all of the view for its paper. It is not the sheet made
+ * bigger: the drawing is done again to fit the view, as big as that has room for, with
+ * lines as thin and writing as small as on any sheet. Nothing else is over the view
+ * the while, but what is at the foot of the sheets, to change what it shows, and at the
+ * top right what puts it back among the others (see Tools).
+ */
+function Alone({
+  name,
+  on,
+}: {
+  name: string
+  /** what it shows, on paper no bigger than this, in mm: nothing, until it is drawn */
+  on: (most: { width: number; height: number }) => Shown | null
+}) {
+  const within = React.useRef<HTMLDivElement>(null)
+  const [most, setMost] = React.useState<{
+    width: number
+    height: number
+  } | null>(null)
+  React.useLayoutEffect(() => {
+    const room = within.current
+    if (!room) return
+    const measure = () =>
+      setMost({
+        width: room.clientWidth / MM_PX,
+        height: room.clientHeight / MM_PX,
+      })
+    measure()
+    // done again at whatever size the view comes to be
+    const watch = new ResizeObserver(measure)
+    watch.observe(room)
+    return () => watch.disconnect()
+  }, [])
+  const shown = React.useMemo(() => (most ? on(most) : null), [most, on])
+  const paper = shown && paperOf(shown.drawing.placing)
+  return (
+    <div
+      role="img"
+      aria-label={`${name} view`}
+      className="absolute inset-0 animate-in bg-white duration-200 fade-in motion-reduce:animate-none dark:bg-[#f5f6ec]"
+    >
+      {/* clear of what is over the view at its edges: the button at its top right,
+          and as much at the left for the drawing to be in the middle; and the bars at
+          its foot */}
+      <div
+        ref={within}
+        className="absolute inset-x-15 top-6 bottom-21 flex items-center justify-center"
+      >
+        {shown && paper && (
+          <div
+            className={cn(
+              "relative shrink-0 transition-opacity duration-200",
+              shown.stale && "opacity-25 delay-200"
+            )}
+            style={{
+              width: paper.width * MM_PX,
+              height: paper.height * MM_PX,
+            }}
+          >
+            <Lines
+              drawing={shown.drawing}
+              measures={shown.measures}
+              labels={shown.labels}
+            />
+          </div>
+        )}
+      </div>
+      {(!shown || shown.stale) && (
+        <div className="absolute inset-0 flex animate-in items-center justify-center delay-300 duration-300 fill-mode-both fade-in">
+          <Spinner className="size-5 text-black/35" />
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -447,6 +604,8 @@ export function Blueprint({
   parts,
   apart,
   dimensions,
+  labels,
+  pieces,
   name,
 }: {
   loaded: LoadedModel
@@ -456,44 +615,194 @@ export function Blueprint({
   apart: number
   /** whether the sheets say how big the model is */
   dimensions: boolean
+  /** and whether they say which part is which */
+  labels: boolean
+  /**
+   * The model is pulled apart into its pieces, each of which may be of several parts:
+   * it is the pieces that are named then, and not the parts of them.
+   */
+  pieces: boolean
   /** what the model is called, for its files to go by */
   name: string
 }) {
   const row = React.useRef<HTMLDivElement>(null)
   const { now, was } = useSheets(parts, apart, row)
+  /** the sheet that is shown by itself, with all of the view, by its place in the row */
+  const alone = useStore((state) => state.view.sheet)
+  const setView = useStore((state) => state.setView)
+  // While one is, the arrow keys go to the sheet before it in the row and the one after.
+  const one = alone !== null
+  React.useEffect(() => {
+    if (!one) return
+    const key = (event: KeyboardEvent) => {
+      const by =
+        event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0
+      if (!by || event.defaultPrevented || spokenFor(event.target)) return
+      const at = useStore.getState().view.sheet
+      if (at === null) return
+      event.preventDefault()
+      setView({ sheet: Math.min(SIDES.length - 1, Math.max(0, at + by)) })
+    }
+    window.addEventListener("keydown", key)
+    return () => window.removeEventListener("keydown", key)
+  }, [one, setView])
+  // The row is gone along by taking hold of it anywhere and pulling: where the pointer
+  // went down, and how far along the row was then; and once it has been pulled at all.
+  const held = React.useRef<{
+    x: number
+    left: number
+    pulled: boolean
+  } | null>(null)
+  /** (for the hand that shows it: what is done about it goes by `held`, which is never behind) */
+  const [pulling, setPulling] = React.useState(false)
+  /** it was pulled, and let go: the press that ends that is not one on a sheet */
+  const pulled = React.useRef(false)
   const units = usePreferences((state) => state.units)
   /**
    * What is on each sheet: its drawing of the model as it is on show, or until that is
    * done the one of the model as it was (`stale`); and what it says of how big the
-   * model is, where the sheets say.
+   * model is, and of which part is which, where the sheets say.
    */
-  const sides = React.useMemo(
-    () =>
-      SIDES.map((side, index) => {
-        const of = now?.sides[index] ? now : was?.sides[index] ? was : null
-        const drawing = of?.sides[index] ?? null
-        return {
-          drawing,
-          stale: drawing !== null && of !== now,
-          measures:
-            of && drawing && dimensions
-              ? dimensionsOf(
-                  of.room,
-                  side.looking,
-                  side.flat,
-                  drawing.placing,
-                  units
-                )
-              : null,
+  const { sides, alone: aloneOn } = React.useMemo(() => {
+    // What is named: each part by what it is called. Or, with the model pulled apart
+    // into its pieces, each piece, by what the piece goes by: its group, where it is
+    // all of one, and the part itself where a piece is no more than that.
+    const listed = loaded.parts.map(({ part, piece, box }) => ({
+      id: part.id,
+      label: part.label,
+      group: part.group,
+      piece,
+      across: box.min.distanceTo(box.max),
+    }))
+    const known = new Map(listed.map((part) => [part.id, part]))
+    /** What a set of sheets has to name, each with a number that is its own on them all. */
+    const nameable = (of: Sheets) => {
+      const things = new Map<number, { label: string; parts: number[] }>()
+      of.parts.forEach((id, place) => {
+        const part = known.get(id)
+        // (a part the model no longer has is a thing by itself)
+        const key = pieces && part ? part.piece : -1 - place
+        const thing = things.get(key)
+        if (thing) thing.parts.push(place)
+        else
+          things.set(key, {
+            label:
+              (pieces && pieceWith(listed, loaded.model.groups, id)?.label) ||
+              (part?.label ?? id),
+            parts: [place],
+          })
+      })
+      return [...things.values()]
+    }
+    // The names stand at either side of a drawing, in columns as wide as the longest of
+    // them, and a sheet that has them keeps that much more of itself clear of its
+    // drawing: which may be to a smaller scale for it, as all the sheets then are.
+    /** The room a sheet has to find for its drawing: with what says its size, if that is said. */
+    const taken = (of: Sheets, index: number) =>
+      dimensions
+        ? withCorners(of.seen[index], of.room, SIDES[index].looking)
+        : of.seen[index]
+    const named = new Map<
+      Sheets,
+      { things: ReturnType<typeof nameable>; column: number; at: Placing[] }
+    >()
+    const namesOf = (of: Sheets) => {
+      let names = named.get(of)
+      if (!names) {
+        const things = nameable(of)
+        const column = columnFor(things.map((thing) => thing.label))
+        // (and clear of where the model's size is said, where the sheets say that too)
+        const at = placed(
+          of.seen.map((_, index) => taken(of, index)),
+          {
+            x: clearFor(column, dimensions),
+            y: MARGIN,
+          }
+        )
+        named.set(of, (names = { things, column, at }))
+      }
+      return names
+    }
+    // each sheet's drawing: of the model as it is on show, or of it as it was
+    const found = SIDES.map((_, index) => {
+      const of = now?.sides[index] ? now : was?.sides[index] ? was : null
+      const as = of?.sides[index] ?? null
+      return of && as
+        ? { of, as, names: labels ? namesOf(of) : null, stale: of !== now }
+        : null
+    })
+    /** All that is on a sheet, with its drawing placed so. */
+    const said = (index: number, placing: Placing) => {
+      const { of, as, names, stale } = found[index]!
+      const side = SIDES[index]
+      return {
+        drawing: { strokes: as.strokes, placing },
+        stale,
+        measures: dimensions
+          ? dimensionsOf(of.room, side.looking, side.flat, placing, units)
+          : null,
+        labels: names
+          ? labelsOf(
+              names.things.map(({ label, parts }) => ({
+                label,
+                strokes: parts.flatMap((part) => as.strokes[part]),
+              })),
+              placing,
+              names.column
+            )
+          : null,
+      }
+    }
+    return {
+      sides: found.map((one, index) =>
+        one
+          ? said(index, one.names?.at[index] ?? one.as.placing)
+          : { drawing: null, stale: false, measures: null, labels: null }
+      ),
+      /**
+       * One of them on paper that is not a sheet: as big as there is of it, with the
+       * drawing as big as that has room for, whatever scale that comes to. The paper is
+       * no wider than the drawing needs, with what is said round it: the names stand
+       * beside the drawing, and not off at the far edges of a wide view.
+       */
+      alone: (index: number, most: { width: number; height: number }) => {
+        const one = found[index]
+        if (!one) return null
+        const seen = taken(one.of, index)
+        const clear = {
+          x: one.names ? clearFor(one.names.column, dimensions) : MARGIN,
+          y: MARGIN,
         }
-      }),
-    [now, was, dimensions, units]
+        const [wide, high] = [seen.x1 - seen.x0, seen.y1 - seen.y0]
+        // (a view too small for anything is still not no room at all)
+        const room = {
+          width: Math.max(most.width - 2 * clear.x, 10),
+          height: Math.max(most.height - 2 * clear.y, 10),
+        }
+        const by = Math.max(wide / room.width, high / room.height, 1e-6)
+        return said(index, {
+          middle: [(seen.x0 + seen.x1) / 2, (seen.y0 + seen.y1) / 2],
+          by,
+          paper: {
+            width: Math.min(most.width, wide / by + 2 * clear.x),
+            height: most.height,
+          },
+        })
+      },
+    }
+  }, [now, was, dimensions, labels, pieces, units, loaded])
+
+  /** The sheet that has the view to itself, as it is on paper of some size. */
+  const onPaper = React.useCallback(
+    (most: { width: number; height: number }) =>
+      alone === null ? null : aloneOn(alone, most),
+    [alone, aloneOn]
   )
 
   /** A sheet as the file it is saved as: nothing, of one that is not drawn as the model now is. */
   const fileOf = React.useCallback(
     (index: number) => {
-      const { drawing, measures, stale } = sides[index]
+      const { drawing, measures, labels: names, stale } = sides[index]
       if (!now || !drawing || stale) return null
       const side = SIDES[index].name.toLowerCase()
       // each part's lines under its name, and under its group's as the model has it now
@@ -506,6 +815,7 @@ export function Blueprint({
         })`,
         placing: drawing.placing,
         dimensions: measures ?? undefined,
+        labels: names ?? undefined,
         groups: loaded.model.groups.map((group) => ({
           id: group.id,
           label: group.label,
@@ -543,29 +853,78 @@ export function Blueprint({
   }, [whole, fileOf, name])
 
   return (
-    <div
-      // The sheets go off to the right, and are gone along sideways: a wheel that only
-      // turns up and down goes along them too. The first starts clear of the projects'
-      // cards, and the last can be brought clear of the buttons down the other edge.
-      ref={row}
-      className="absolute inset-0 flex [scrollbar-width:none] items-center gap-10 overflow-x-auto overflow-y-hidden overscroll-x-contain pr-25 pl-68"
-      aria-busy={!whole}
-      onWheel={(event) => {
-        if (Math.abs(event.deltaY) > Math.abs(event.deltaX))
-          event.currentTarget.scrollLeft += event.deltaY
-      }}
-    >
-      {SIDES.map((side, index) => (
-        <Sheet
-          key={side.name}
-          name={side.name}
-          place={index}
-          drawing={sides[index].drawing}
-          measures={sides[index].measures}
-          stale={sides[index].stale}
-          onSave={() => save(index)}
-        />
-      ))}
-    </div>
+    <>
+      <div
+        // The sheets go off to the right, and are gone along sideways: a wheel that only
+        // turns up and down goes along them too. The first starts clear of the projects'
+        // cards, and the last can be brought clear of the buttons down the other edge.
+        ref={row}
+        className={cn(
+          "absolute inset-0 flex [scrollbar-width:none] items-center gap-10 overflow-x-auto overflow-y-hidden overscroll-x-contain pr-25 pl-68 select-none",
+          // a hand over it, which closes on it while it is pulled: whatever it is over
+          pulling ? "cursor-grabbing [&_*]:cursor-grabbing" : "cursor-grab"
+        )}
+        aria-busy={!whole}
+        onWheel={(event) => {
+          if (Math.abs(event.deltaY) > Math.abs(event.deltaX))
+            event.currentTarget.scrollLeft += event.deltaY
+        }}
+        onPointerDown={(event) => {
+          pulled.current = false
+          // by the mouse's own button: and not from a button that is for something else
+          const on = event.target as HTMLElement
+          if (event.button !== 0 || event.pointerType === "touch") return
+          if (on.closest("button:not([data-paper])")) return
+          held.current = {
+            x: event.clientX,
+            left: event.currentTarget.scrollLeft,
+            pulled: false,
+          }
+        }}
+        onPointerMove={(event) => {
+          const from = held.current
+          if (!from) return
+          const moved = event.clientX - from.x
+          if (!from.pulled && Math.abs(moved) < PULLED_PX) return
+          if (!from.pulled) {
+            // it has the pointer from here on, wherever that goes
+            from.pulled = true
+            event.currentTarget.setPointerCapture(event.pointerId)
+            setPulling(true)
+          }
+          event.currentTarget.scrollLeft = from.left - moved
+        }}
+        onPointerUp={() => {
+          pulled.current = held.current?.pulled ?? false
+          held.current = null
+          setPulling(false)
+        }}
+        onPointerCancel={() => {
+          held.current = null
+          setPulling(false)
+        }}
+        onClickCapture={(event) => {
+          if (!pulled.current) return
+          pulled.current = false
+          event.stopPropagation()
+          event.preventDefault()
+        }}
+      >
+        {SIDES.map((side, index) => (
+          <Sheet
+            key={side.name}
+            name={side.name}
+            place={index}
+            drawing={sides[index].drawing}
+            measures={sides[index].measures}
+            labels={sides[index].labels}
+            stale={sides[index].stale}
+            onSave={() => save(index)}
+            onEnlarge={() => setView({ sheet: index })}
+          />
+        ))}
+      </div>
+      {alone !== null && <Alone name={SIDES[alone].name} on={onPaper} />}
+    </>
   )
 }

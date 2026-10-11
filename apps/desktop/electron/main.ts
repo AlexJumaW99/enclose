@@ -1037,6 +1037,9 @@ function wire() {
       const into = makeFolder(picked.filePaths[0], called)
       for (const { name, svg } of wanted)
         await fs.promises.writeFile(path.join(into, name), svg, "utf8")
+      // the folder is opened, to show what was saved and where: it was made inside the
+      // one that was picked, which is not where anyone goes looking for it
+      void shell.openPath(into)
       analytics?.record("model saved", {
         as: "drawings",
         files: wanted.length,
