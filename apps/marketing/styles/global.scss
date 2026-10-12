@@ -139,6 +139,24 @@ html.lenis, html.lenis body { height: auto; }
     &:hover { text-decoration: underline; }
   }
 
+  // How many have starred the source, said quieter beside its name. The header is
+  // drawn in the difference, so less of it there is what greys it: this much comes
+  // out over the page as the foot's words do.
+  &__stars {
+    margin-left: 6px;
+    opacity: 0.55;
+
+    // the star before the count: small beside the figures, and filled in, so that it
+    // is still a star at that size
+    svg {
+      width: 0.8em;
+      height: 0.8em;
+      margin-right: 3px;
+      fill: currentColor;
+      vertical-align: -0.05em;
+    }
+  }
+
   @media (max-width: 767px) {
     &__mark { --top: 10px; --rest: 40px; --in: 12px; }
     &__source { top: 20px; right: 16px; }

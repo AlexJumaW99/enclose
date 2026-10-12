@@ -3,7 +3,7 @@ import { REPOSITORY } from '../../shell/Header'
 
 export default function Privacy() {
   return (
-    <Legal page="privacy" title="Privacy Policy" updated="10 October 2026">
+    <Legal page="privacy" title="Privacy Policy" updated="11 October 2026">
       <p>
         Enclose is an open-source project maintained by Glauber. This page says what the
         Enclose app and this website send anywhere, and what they do not. In short: the app
@@ -114,8 +114,9 @@ export default function Privacy() {
       </p>
       <p>
         To point its download button at the newest release, the page asks GitHub which one
-        that is, from your browser, and the download itself comes from GitHub. GitHub sees
-        those requests as it sees the app’s.
+        that is, from your browser, and the download itself comes from GitHub. It asks
+        GitHub the same way how many stars the project has. GitHub sees those requests as
+        it sees the app’s.
       </p>
 
       <h2>What is not done</h2>
