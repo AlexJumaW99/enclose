@@ -613,6 +613,16 @@ const SHIFT = MAC ? "⇧" : "Shift"
 /** Stands between two ways of doing the same thing: a word, where the rest are keys. */
 const OR = "or"
 /**
+ * Opening something as a project. A Mac's picker takes files and folders alike; no other
+ * system's does.
+ */
+const OPENS: [string, string[]][] = MAC
+  ? [["Open file or folder", [CMD, "O"]]]
+  : [
+      ["Open file", [CMD, "O"]],
+      ["Open folder", [SHIFT, CMD, "O"]],
+    ]
+/**
  * What is done, and with what. A third thing on a row says that there are drags with a
  * mouse's buttons that do it too: whichever have been set to, in the settings for those.
  */
@@ -652,6 +662,8 @@ const KEYS: { title: string; rows: [string, string[], Drag?][] }[] = [
   {
     title: "The app",
     rows: [
+      ["New project", [CMD, "N"]],
+      ...OPENS,
       ["Conversation", [CMD, "B"]],
       ["Settings", [CMD, ","]],
     ],

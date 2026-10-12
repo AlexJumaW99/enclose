@@ -39,9 +39,14 @@ is Ctrl off a Mac.
 
 | | |
 |---|---|
+| Cmd+N | [A new project](projects.md#new-projects) |
+| Cmd+O | Open a file or folder as [a project](projects.md) |
 | Cmd+B | The conversation |
 | Cmd+, | [Settings](settings.md) |
 | D | The light theme, or the dark |
+
+Off a Mac the picker takes files or a folder and not both: Ctrl+O asks for files, and
+Ctrl+Shift+O for a folder.
 
 ## Moving around
 
@@ -98,4 +103,4 @@ whichever you went into last.
   is a model. Cmd+B needs a project to be open.
 - In a reference scene there is no view from below, so Cmd+5 does nothing.
 - No key of the view works with Settings open, or while Claude looks over files that
-  were just opened.
+  were just opened. Cmd+N, Cmd+O and Cmd+B wait for Settings to be closed too.

@@ -1,8 +1,8 @@
 # Projects
 
 A project is a folder. Drop one on the window, or use the + under the project cards to
-open one or to start a new project. STEP files can be dropped and opened the same way:
-see [Starting from CAD files](#starting-from-cad-files).
+open one (Cmd+O) or to start a new project (Cmd+N). STEP files can be dropped and opened
+the same way: see [Starting from CAD files](#starting-from-cad-files).
 
 The cards are in the order the projects were added, the newest at the top. With more of
 them than the window has room for, the cards scroll and the + stays where it can be

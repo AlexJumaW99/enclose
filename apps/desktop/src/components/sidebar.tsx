@@ -26,6 +26,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Spinner } from "@/components/ui/spinner"
@@ -600,25 +601,37 @@ export function Sidebar({ children }: { children: React.ReactNode }) {
                   <TooltipContent side="right">New project</TooltipContent>
                 )}
               </Tooltip>
-              <DropdownMenuContent side="right" align="start">
+              <DropdownMenuContent side="right" align="start" className="w-56">
                 <DropdownMenuGroup>
                   <DropdownMenuItem onClick={() => void createProject()}>
                     New project
+                    <DropdownMenuShortcut className="pl-4">
+                      {MAC ? "⌘N" : "Ctrl N"}
+                    </DropdownMenuShortcut>
                   </DropdownMenuItem>
                   {/* a Mac's picker takes files and folders alike; no other system's does */}
                   {MAC ? (
                     <DropdownMenuItem onClick={() => void addProject()}>
                       Open file or folder…
+                      <DropdownMenuShortcut className="pl-4">
+                        ⌘O
+                      </DropdownMenuShortcut>
                     </DropdownMenuItem>
                   ) : (
                     <>
                       <DropdownMenuItem onClick={() => void addProject("file")}>
                         Open file…
+                        <DropdownMenuShortcut className="pl-4">
+                          Ctrl O
+                        </DropdownMenuShortcut>
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => void addProject("folder")}
                       >
                         Open folder…
+                        <DropdownMenuShortcut className="pl-4">
+                          Shift Ctrl O
+                        </DropdownMenuShortcut>
                       </DropdownMenuItem>
                     </>
                   )}

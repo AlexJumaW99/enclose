@@ -78,21 +78,37 @@ function useViewportRequests() {
 
 /**
  * Cmd+B shows the conversation, and puts it away again. Cmd+, does the same for the
- * settings, as it does in every Mac app.
+ * settings, as it does in every Mac app. Cmd+N makes a new project, and Cmd+O asks for
+ * a file or folder to open as one: what the + under the project cards does.
  */
 function useAppKeys() {
   React.useEffect(() => {
     const key = (event: KeyboardEvent) => {
       // Ctrl+B on a Mac is a key for moving through text: left to do that
       const held = MAC ? event.metaKey && !event.ctrlKey : event.ctrlKey
-      if (!held || event.altKey || event.shiftKey) return
+      if (!held || event.altKey) return
       const state = useStore.getState()
+      const letter = event.key.toLowerCase()
+      // A Mac's picker takes files and folders alike. No other system's does: there
+      // Ctrl+O asks for files, and with Shift, the one key here it goes with, a folder.
+      const folder = !MAC && event.shiftKey && letter === "o"
+      if (event.shiftKey && !folder) return
       if (event.key === ",") {
         event.preventDefault()
         state.setSettingsOpen(!state.settingsOpen)
         return
       }
-      if (event.key.toLowerCase() !== "b" || state.settingsOpen) return
+      // the rest are for what the settings are over
+      if (state.settingsOpen) return
+      if (letter === "n" || letter === "o") {
+        event.preventDefault()
+        // (held down, it would go on making projects)
+        if (event.repeat) return
+        if (letter === "n") void state.createProject()
+        else void state.addProject(MAC ? undefined : folder ? "folder" : "file")
+        return
+      }
+      if (letter !== "b") return
       const { activeId, threadOpen, setThreadOpen } = state
       if (!activeId) return
       event.preventDefault()
