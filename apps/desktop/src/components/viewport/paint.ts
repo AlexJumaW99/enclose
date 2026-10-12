@@ -21,8 +21,8 @@ const CLEAR = "#ffffff"
  * it is the colour of its metal.
  */
 export function skinColour(
-  { part, turn }: LoadedPart,
-  skin: Skin,
+  { part, turn }: Pick<LoadedPart, "part" | "turn">,
+  skin: Pick<Skin, "color">,
   dark: boolean,
   /** the colour the user has given the part, if they have given it one */
   chosen: string | null = null
@@ -41,7 +41,7 @@ export function skinColour(
 }
 
 /** How a part's surface takes the light. */
-export const finish = ({ part }: LoadedPart) => ({
+export const finish = ({ part }: Pick<LoadedPart, "part">) => ({
   metalness: part.metal ? 0.55 : 0.1,
   roughness: part.metal ? 0.45 : 0.62,
 })

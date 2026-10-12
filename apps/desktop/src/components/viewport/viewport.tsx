@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 
 import { OWN_SCENE, type PartRef, type Project } from "@shared/api"
+import { AskForGuide, Assembly } from "@/components/assembly/assembly"
 import { ToolsPanel } from "@/components/custom-tools/panel"
 import { runTools, stopTools, useTools } from "@/lib/custom-tools/host"
 import type { PartFact } from "@/lib/custom-tools/types"
@@ -479,11 +480,19 @@ function Waiting({
 }
 
 /**
- * At the foot of the view while Claude looks over the model of files just opened: how
- * long it has been at it, what it is at just now, as the conversation would say it, and
- * a way to have it leave off.
+ * At the foot of the view while Claude is at something the app asked of it, and not a
+ * message: looking over the model of files just opened, or writing an assembly guide.
+ * How long it has been at it, what it is at just now, as the conversation would say it,
+ * and a way to have it leave off. `meanwhile` is what it says until Claude has done
+ * anything to say.
  */
-function LookingOver({ project }: { project: Project }) {
+function AtWork({
+  project,
+  meanwhile,
+}: {
+  project: Project
+  meanwhile: string
+}) {
   const turn = project.conversations.find((c) => c.status !== "idle")
   const items = useStore((s) => (turn ? s.items[turn.id] : undefined))
   // Counted from when this came up, which is a moment before Claude is set to it; or
@@ -491,7 +500,7 @@ function LookingOver({ project }: { project: Project }) {
   const [shown] = React.useState(() => Date.now())
   const now = useNow(1000)
   const taken = now - Math.min(shown, turn?.since ?? Infinity)
-  const doing = (items && atWork(items)) ?? "Understanding the model"
+  const doing = (items && atWork(items)) ?? meanwhile
   return (
     // the button is as far from the end it is at as from the top and the bottom, and
     // the words have a good deal more room than that at theirs
@@ -813,6 +822,22 @@ function Model({ project }: { project: Project }) {
         : view,
     [view, toolLooks.hidden]
   )
+  // A guide to putting the model together that Claude has just written, at work in the
+  // project, is brought up with the rest of them: what was asked for is there to be
+  // opened, wherever it was asked for.
+  const guidesSeen = React.useRef<number | null | undefined>(undefined)
+  React.useEffect(() => {
+    const was = guidesSeen.current
+    guidesSeen.current = project.assembly
+    // (as they were found when the project was opened is not their having been written)
+    if (
+      was === undefined ||
+      project.assembly === null ||
+      project.assembly === was
+    )
+      return
+    if (atWorkHere) useStore.getState().setView({ assembly: true })
+  }, [project.assembly, atWorkHere])
   // Meanwhile the view is Claude's: the camera goes round the model by itself, and
   // nothing in the view answers the hand or the keys. When it is through, the camera
   // goes back to where a model opens, as Cmd+1 would take it.
@@ -824,8 +849,9 @@ function Model({ project }: { project: Project }) {
 
   // Parts and groups are looked for by name (Cmd+F): what goes by the name so far is lit
   // up in the view, through all the rest. There is nothing to look through in the cube
-  // that stands in for a model, or while the view is Claude's.
-  const searched = lookingOver ? null : real
+  // that stands in for a model, or while the view is Claude's, or is not the model's
+  // but its guides'.
+  const searched = lookingOver || view.assembly ? null : real
   const finds = React.useMemo(
     () =>
       searched && finding !== null ? lookFor(searched.model, finding) : null,
@@ -1118,7 +1144,8 @@ function Model({ project }: { project: Project }) {
 
   // Cmd+1 is the view the model opened with; Cmd+2 to 7 are the six flat ones. S cuts
   // the model open and E pulls it apart, both again to undo. B is the model's blueprint,
-  // in place of the view of it, and again is the view back. I shows what is picked
+  // in place of the view of it, and again is the view back; A is its assembly guides,
+  // likewise, and while they are up the other letters here wait. I shows what is picked
   // out, one part or several, on its own and close to, and again brings the rest back.
   // Space brings the camera to what is picked out and changes nothing else: the rest
   // stays on show, and the camera is not kept there. H is the other way about from I:
@@ -1180,8 +1207,10 @@ function Model({ project }: { project: Project }) {
         // (on some keyboards it is typed with Shift held, and it is no other key's)
         event.preventDefault()
         if (event.repeat) return
-        // the scene is the view's: a blueprint is of the model alone
-        if (!useStore.getState().view.blueprint) toggleReference()
+        // the scene is the view's: a blueprint is of the model alone, and the guides
+        // are no view of it
+        const { blueprint, assembly } = useStore.getState().view
+        if (!blueprint && !assembly) toggleReference()
         return
       }
       if (event.shiftKey) {
@@ -1190,8 +1219,8 @@ function Model({ project }: { project: Project }) {
         if (!loaded || !alone || event.key.toLowerCase() !== "g") return
         if (spokenFor(event.target)) return
         const { view, setView } = useStore.getState()
-        // (the ground is the view's: there is none under a blueprint)
-        if (view.blueprint) return
+        // (the ground is the view's: there is none under a blueprint, or the guides)
+        if (view.blueprint || view.assembly) return
         setView({ grid: !view.grid })
         event.preventDefault()
         return
@@ -1200,8 +1229,10 @@ function Model({ project }: { project: Project }) {
         const digit = /^Digit([1-7])$/.exec(event.code)?.[1]
         if (!digit) return
         event.preventDefault()
-        // the set views are the view's: a blueprint has a sheet for each of them
-        if (useStore.getState().view.blueprint) return
+        // the set views are the view's: a blueprint has a sheet for each of them, and
+        // the guides none
+        const { blueprint, assembly } = useStore.getState().view
+        if (blueprint || assembly) return
         const view = VIEWS[Number(digit) - 2]
         if (view) bridge.lookFrom?.(view.axis, view.sign)
         else goHome()
@@ -1224,6 +1255,14 @@ function Model({ project }: { project: Project }) {
         // there is no blueprint of the cube that stands in for a model
         if (loaded.standIn) return
         setView({ blueprint: !view.blueprint })
+      } else if (letter === "a") {
+        // nor any guide to putting it together
+        if (loaded.standIn) return
+        setView({ assembly: !view.assembly })
+      } else if (view.assembly) {
+        // every other key here is the view's, or the blueprint's: they wait until the
+        // guides are put away
+        return
       } else if (view.blueprint && "sxy".includes(letter)) {
         // the cut is the view's: a blueprint is of the model whole
         return
@@ -1307,6 +1346,8 @@ function Model({ project }: { project: Project }) {
   // and from its corners, as much of it as the view had on show and pulled apart as far. The view is still
   // there behind it, as it was left, for Claude to be shown and to come back to.
   const blueprint = view.blueprint && real !== null && !lookingOver
+  // And so do the model's assembly guides: their covers, to be opened and taken away.
+  const assembly = view.assembly && real !== null && !lookingOver
   const { only, hidden } = view
   const drawn = React.useMemo(
     () =>
@@ -1327,7 +1368,8 @@ function Model({ project }: { project: Project }) {
   // part that is not on show does not come into it.
   const { came, done: cameAndWent } = arrivals
   const coming = React.useMemo(() => {
-    if (!came || !loaded || view.blueprint || lookingOver) return null
+    if (!came || !loaded || view.blueprint || view.assembly || lookingOver)
+      return null
     const parts = loaded.parts
       .filter(
         (part) =>
@@ -1338,7 +1380,16 @@ function Model({ project }: { project: Project }) {
     if (!box) return null
     const arriving: Arriving = { parts, box, at: came.at }
     return { arriving, all: parts.length === loaded.parts.length }
-  }, [came, loaded, view.blueprint, lookingOver, only, hidden, explode])
+  }, [
+    came,
+    loaded,
+    view.blueprint,
+    view.assembly,
+    lookingOver,
+    only,
+    hidden,
+    explode,
+  ])
   // For whoever has asked for less to move they are there, and the camera goes.
   const still = React.useMemo(
     () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
@@ -1490,8 +1541,13 @@ function Model({ project }: { project: Project }) {
   return (
     <>
       {loaded && (
-        // (out of sight under a blueprint, and none of it there to be pressed)
-        <div className={cn("absolute inset-0", blueprint && "invisible")}>
+        // (out of sight under a blueprint or the guides, and none of it there to be pressed)
+        <div
+          className={cn(
+            "absolute inset-0",
+            (blueprint || assembly) && "invisible"
+          )}
+        >
           <Scene
             loaded={loaded}
             reference={reference}
@@ -1503,8 +1559,13 @@ function Model({ project }: { project: Project }) {
             selectedWith={selectedWith}
             several={several}
             // the stand-in is nothing Claude was asked to change
+            // (a guide to the whole of it is of every part, as looking it over is)
             changing={
-              loaded.standIn ? NO_PARTS : lookingOver ? every : changing
+              loaded.standIn
+                ? NO_PARTS
+                : lookingOver || (project.assembling && changing.length === 0)
+                  ? every
+                  : changing
             }
             arriving={still ? null : (coming?.arriving ?? null)}
             reading={lookingOver}
@@ -1536,6 +1597,9 @@ function Model({ project }: { project: Project }) {
           pieces={view.exploded && !view.alone && real.further}
           name={real.model.title ?? project.name}
         />
+      )}
+      {assembly && real && (
+        <Assembly project={project} loaded={real} listed={listed} />
       )}
 
       {waiting && <Waiting {...waiting} />}
@@ -1580,7 +1644,7 @@ function Model({ project }: { project: Project }) {
         locked={lookingOver}
         hasTools={hasTools}
       />
-      {loaded && partsOpen && !lookingOver && (
+      {loaded && partsOpen && !lookingOver && !assembly && (
         <PartsPanel
           loaded={loaded}
           projectId={project.id}
@@ -1596,44 +1660,65 @@ function Model({ project }: { project: Project }) {
           )}
         />
       )}
-      {real && scenes && referenceOpen && !lookingOver && !blueprint && (
-        <ReferencePanel
-          scenes={scenes}
-          shown={view.reference}
-          // where the list of parts goes, which is never up with it: a little
-          // further from the buttons, and further in while the section's other
-          // buttons stand where it would be
-          className={cn(
-            "absolute top-1/2 max-h-[80%] -translate-y-1/2 transition-[right]",
-            view.section ? "right-38.5" : "right-17.5"
-          )}
-        />
-      )}
-      {real && hasTools && toolsOpen && !lookingOver && !blueprint && (
-        <ToolsPanel
-          projectId={project.id}
-          // where the list of parts goes, which is never up with it
-          className={cn(
-            "absolute top-1/2 max-h-[80%] -translate-y-1/2 transition-[right]",
-            view.section
-              ? "right-36 max-w-[calc(100%-9.75rem)]"
-              : "right-15 max-w-[calc(100%-4.5rem)]"
-          )}
-        />
-      )}
+      {real &&
+        scenes &&
+        referenceOpen &&
+        !lookingOver &&
+        !blueprint &&
+        !assembly && (
+          <ReferencePanel
+            scenes={scenes}
+            shown={view.reference}
+            // where the list of parts goes, which is never up with it: a little
+            // further from the buttons, and further in while the section's other
+            // buttons stand where it would be
+            className={cn(
+              "absolute top-1/2 max-h-[80%] -translate-y-1/2 transition-[right]",
+              view.section ? "right-38.5" : "right-17.5"
+            )}
+          />
+        )}
+      {real &&
+        hasTools &&
+        toolsOpen &&
+        !lookingOver &&
+        !blueprint &&
+        !assembly && (
+          <ToolsPanel
+            projectId={project.id}
+            // where the list of parts goes, which is never up with it
+            className={cn(
+              "absolute top-1/2 max-h-[80%] -translate-y-1/2 transition-[right]",
+              view.section
+                ? "right-36 max-w-[calc(100%-9.75rem)]"
+                : "right-15 max-w-[calc(100%-4.5rem)]"
+            )}
+          />
+        )}
       {/* at the foot of the view, in the middle: what to do with the parts picked out
           together, and with the scene the model is set in, over how far apart the
           parts are pulled */}
       {loaded && (
         <div className="pointer-events-none absolute inset-x-0 bottom-5 flex flex-col items-center gap-2.5">
-          {lookingOver && <LookingOver project={project} />}
+          {lookingOver && (
+            <AtWork project={project} meanwhile="Understanding the model" />
+          )}
+          {project.assembling && !lookingOver && (
+            <AtWork
+              project={project}
+              // (short enough to be said whole: the words have only so much room)
+              meanwhile="Working out the steps"
+            />
+          )}
           <Saying />
-          <AddToChat
-            listed={listed}
-            groups={loaded.model.groups}
-            projectId={project.id}
-          />
-          {reference && !lookingOver && !blueprint && (
+          {!assembly && (
+            <AddToChat
+              listed={listed}
+              groups={loaded.model.groups}
+              projectId={project.id}
+            />
+          )}
+          {reference && !lookingOver && !blueprint && !assembly && (
             <div className="flex items-center gap-2">
               {reference.scene.figures.length > 0 && <ShowFigure />}
               <ImproveReference
@@ -1646,19 +1731,26 @@ function Model({ project }: { project: Project }) {
               bar, with the rest of how its sheets show the model */}
           {blueprint ? (
             <Options further={loaded.further} />
+          ) : assembly ? (
+            // and the guides have what asks for another of them
+            <AskForGuide
+              project={project}
+              listed={listed}
+              groups={loaded.model.groups}
+            />
           ) : (
             view.exploded && <ExplodeSlider further={loaded.further} />
           )}
         </div>
       )}
-      {loaded && middle && !lookingOver && !blueprint && (
+      {loaded && middle && !lookingOver && !blueprint && !assembly && (
         <div className="pointer-events-none absolute right-3 bottom-3 flex items-center gap-1">
           <SectionPlanes middle={middle} />
           <AxisGizmo />
         </div>
       )}
       <ShadingPie
-        enabled={loaded !== null && !lookingOver && !blueprint}
+        enabled={loaded !== null && !lookingOver && !blueprint && !assembly}
         tap={cutAcrossZ}
       />
     </>

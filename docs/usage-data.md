@@ -20,7 +20,11 @@ Each thing counted is an event: its name, and a few words and numbers that say w
 | `model looked over` | The agent, its model, the effort and the permissions |
 | `change turned back` | Whether it was undone or redone |
 | `model saved` | Whether as CAD files or as drawings, and how many |
-| `feature used` | Which of these the view was put into: a section, the exploded view, parts shown alone, parts hidden, the blueprint, a reference scene, or a project's own tools. Each is counted once for a run of the app |
+| `assembly guide asked for` | The agent, its model, the effort and the permissions; whether it was of the whole model |
+| `assembly guide written` | How many steps |
+| `assembly guide opened` | |
+| `assembly guide saved` | How many steps |
+| `feature used` | Which of these the view was put into: a section, the exploded view, parts shown alone, parts hidden, the blueprint, the assembly guides, a reference scene, or a project's own tools. Each is counted once for a run of the app |
 | `provider switched` | Which agent, and whether on or off |
 | `update fetched` | The version |
 

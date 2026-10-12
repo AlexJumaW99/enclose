@@ -25,6 +25,8 @@ import {
   PROVIDERS,
   SCENE_HOST,
   type GroupAsked,
+  type GuideSummary,
+  type Looks,
   type Manner,
   type Commands,
   type ModelSource,
@@ -47,6 +49,7 @@ import { archiveOf, EXAMPLES, EXAMPLES_URL } from "../shared/examples"
 import { PICTURE_TYPES } from "../shared/pictures"
 import { Analytics, POSTHOG } from "./analytics"
 import { unpack, type Filed } from "./archive"
+import { fileGuide, guideOf, guidesIn } from "./assembly"
 import { Changes } from "./changes"
 import { Versions } from "./versions"
 import { zipOf } from "./zip"
@@ -65,6 +68,7 @@ import {
   sortOpened,
 } from "./imports"
 import { fetched, startFrom } from "./examples"
+import { archived, archiveName, GuideServer } from "./guide-page"
 import { standInName } from "./names"
 import { groupNameOf } from "./naming"
 import { Pictures } from "./pictures"
@@ -167,6 +171,16 @@ let settings: SettingsStore
 let providers: Providers
 /** where the app's own tools answer, for an agent that cannot be handed them */
 const toolServer = new ToolServer()
+/**
+ * Where a project's assembly guides are served as pages, for a browser to open: each
+ * from the project's folder and its model as they then are.
+ */
+const guideServer = new GuideServer(path.join(HERE, "guide"), (id) => {
+  const project = projects.get(id)
+  return project?.manifest
+    ? { root: project.path, manifest: project.manifest }
+    : null
+})
 /** the app's newer versions: none are looked for when it is run from a checkout */
 let updates: Updates | null = null
 /** the count of how the app is used: none is kept when it is run from a checkout */
@@ -233,6 +247,7 @@ const list = (): Project[] =>
       const { undo, redo } = changes.last(project.id, whose(project.id))
       return {
         ...project,
+        assembling: threads.assembling(project.id),
         undo: undo && { what: undo.what, at: undo.at },
         redo: redo && { what: redo.what, at: redo.undoneAt ?? redo.at },
       }
@@ -670,7 +685,35 @@ function lookOver(id: string, seen: Seen, manner: Manner): string | null {
   }
 }
 
-/** How a message is to be answered, from what the window said of it. */
+/**
+ * How the view draws a project's parts, as the window gave it: what of that reads as a
+ * colour by name.
+ */
+function looksFrom(given: unknown): Looks {
+  const colours = (given as Partial<Looks> | null)?.colours
+  return {
+    colours: Object.fromEntries(
+      Object.entries(
+        colours && typeof colours === "object"
+          ? (colours as Record<string, unknown>)
+          : {}
+      ).filter(
+        (entry): entry is [string, string] =>
+          typeof entry[1] === "string" && /^[a-z]{1,20}$/.test(entry[1])
+      )
+    ),
+  }
+}
+
+/** A project's guide, by what it is known by, with its model's manifest: null if there is neither. */
+function guideFor(id: unknown, guideId: unknown) {
+  const project = projects.get(String(id))
+  if (!project?.manifest) return null
+  const guide = guideOf(project.path, String(guideId))
+  if (!guide) return null
+  return { project, guide, manifest: project.manifest }
+}
+
 /** The whole objects a message calls on, as the window gave them: those that read as one. */
 const objectsFrom = (given: unknown): ObjectRef[] =>
   (Array.isArray(given) ? given : []).flatMap(
@@ -957,6 +1000,86 @@ function wire() {
     const project = projects.get(String(id))
     return project ? readTools(project.path) : []
   })
+  ipcMain.handle(CHANNEL.assemblyRead, (_, id: string): GuideSummary[] => {
+    const project = projects.get(String(id))
+    return project ? guidesIn(project.path) : []
+  })
+  ipcMain.handle(
+    CHANNEL.assemblyMake,
+    (
+      _,
+      id: string,
+      conversationId: string | null,
+      of: unknown,
+      given: Partial<Manner> | null
+    ) => {
+      const project = projects.get(String(id))
+      // (there is nothing to write a guide to until there is a model)
+      if (!project?.manifest) return null
+      const manner = mannerFrom(given)
+      const [thing] = objectsFrom(of ? [of] : [])
+      const into = threads.assemble(
+        project.id,
+        conversationId === null ? null : String(conversationId),
+        thing && thing.parts.length > 0 ? thing : null,
+        manner
+      )
+      // the user has started on the project themselves, as by sending a message
+      if (into) projects.lookedOver(project.id)
+      if (into)
+        analytics?.record("assembly guide asked for", {
+          ...mannerSaid(manner),
+          whole: thing === undefined,
+        })
+      return into
+    }
+  )
+  ipcMain.handle(
+    CHANNEL.assemblyOpen,
+    async (_, id: string, guideId: string, looks: unknown) => {
+      if (!guideFor(id, guideId)) return false
+      const address = await guideServer.address(
+        String(id),
+        String(guideId),
+        looksFrom(looks)
+      )
+      // (a run with nobody at it has no browser to open one in: it says where it is)
+      if (CAPTURE) console.log(`[guide] ${address}`)
+      else await shell.openExternal(address)
+      analytics?.record("assembly guide opened")
+      return true
+    }
+  )
+  ipcMain.handle(
+    CHANNEL.assemblySave,
+    async (_, id: string, guideId: string, looks: unknown) => {
+      const found = guideFor(id, guideId)
+      if (!win || !found) return false
+      const { guide, manifest } = found
+      const picked = await dialog.showSaveDialog(win, {
+        defaultPath: path.join(
+          app.getPath("downloads"),
+          `${archiveName(guide)}.zip`
+        ),
+        filters: [{ name: "Zip archive", extensions: ["zip"] }],
+      })
+      if (picked.canceled || !picked.filePath) return false
+      // The parts are read from where the model's build left them, and go nowhere but
+      // into the archive: nothing of a guide is copied until it is taken away.
+      const files = await archived(
+        guide,
+        JSON.parse(await fs.promises.readFile(manifest, "utf8")),
+        path.dirname(manifest),
+        looksFrom(looks),
+        path.join(HERE, "guide")
+      )
+      await fs.promises.writeFile(picked.filePath, zipOf(files))
+      // shown where it is: it is something to send on, or to open
+      shell.showItemInFolder(picked.filePath)
+      analytics?.record("assembly guide saved", { steps: guide.steps.length })
+      return true
+    }
+  )
   ipcMain.handle(
     CHANNEL.modelSaveCopies,
     async (_, id: string, files: unknown, folder: string) => {
@@ -1373,6 +1496,27 @@ if (!app.requestSingleInstanceLock()) {
       tools: toolServer,
       kit: KIT,
       scenes: SCENES,
+      fileGuide: (id, given, replacing) => {
+        const project = projects.get(id)
+        if (!project?.manifest)
+          throw new Error(
+            "This project has no model built yet: there is nothing to write a guide to."
+          )
+        const filed = fileGuide(
+          project.path,
+          given,
+          partsOf(project.manifest).map((part) => part.id),
+          replacing,
+          Date.now()
+        )
+        // its cover is in the view as soon as it is written, and not when the turn ends
+        projects.refresh(id)
+        broadcast()
+        analytics?.record("assembly guide written", {
+          steps: given.steps.length,
+        })
+        return filed
+      },
       // (what Claude Code keeps of a folder is in its home, wherever the user has that)
       onRenamed: (from, to) =>
         followRename(
@@ -1478,6 +1622,7 @@ if (!app.requestSingleInstanceLock()) {
     for (const stop of builds.values()) stop()
     threads?.close()
     toolServer.close()
+    guideServer.close()
     projects?.close()
     updates?.close()
     analytics?.close()

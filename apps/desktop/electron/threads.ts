@@ -30,6 +30,7 @@ import type {
   ThreadItem,
   ViewportAsked,
 } from "../shared/api"
+import { ASSEMBLY_FOLDER, type GuideGiven } from "../shared/assembly-format"
 import { MANIFEST_FORMAT } from "../shared/manifest-format"
 import { TOOLS_FOLDER } from "../shared/tool-format"
 import { PALETTE_NAMES } from "../shared/palette"
@@ -53,6 +54,8 @@ import type { Shown } from "./pictures"
 import type { Launch } from "./providers"
 import type { AppScene } from "./reference"
 import {
+  ASSEMBLY,
+  assemblyTools,
   MODEL,
   modelTools,
   VIEWPORT,
@@ -77,6 +80,8 @@ type Run = {
   asked: Map<string, (answers: string[] | null) => void>
   /** the turn is the app's own asking, of files just opened: their model is looked over */
   lookOver: boolean
+  /** it was asked for from the view, and not written: an assembly guide is being made */
+  assembly: boolean
   /** what was asked for in it, in a line: what it goes by if what it does is taken back */
   what: string
   /** it was stopped to make way for what waits in its conversation, which is said at once */
@@ -87,6 +92,8 @@ type Run = {
 type Asked = {
   content: Content | ((told: Told, provider: ProviderId) => Content)
   arrange?: Arranging
+  /** it is the view's asking for an assembly guide, and nothing the user wrote */
+  assembly?: true
   /** what the reference scene the message is about goes by, if it is about one */
   reference?: string
   /** the pictures that go with the message */
@@ -141,6 +148,16 @@ export type ThreadsDeps = {
   kit: string
   /** the reference scenes the app has of its own, for a model to be seen in */
   scenes: AppScene[]
+  /**
+   * File an assembly guide an agent gives for a project (see assembly.ts), in place of
+   * one it wrote earlier in the same turn (`replacing`) if it did. Returns what the
+   * guide is known by and what to tell the agent of it; throws what is wrong with it.
+   */
+  fileGuide: (
+    projectId: string,
+    given: GuideGiven,
+    replacing: string | null
+  ) => { id: string; said: string }
   /** a project's folder was renamed, from this path to that */
   onRenamed: (from: string, to: string) => void
   /** ask the window something about the viewport it is showing */
@@ -153,6 +170,7 @@ export type ThreadsDeps = {
 /** What one of the app's own tools goes by here, whichever agent calls on it. */
 const toolName = (set: string, name: string) => `mcp__${set}__${name}`
 const ARRANGE_TOOL = toolName(MODEL, "arrange")
+const GUIDE_TOOL = toolName(ASSEMBLY, "guide")
 
 /**
  * What an agent itself knows such a tool as, which is what it is told to call: Claude
@@ -240,6 +258,8 @@ function describeTool(name: string, input: unknown, root: string) {
       }
     case ARRANGE_TOOL:
       return { name: "Name", detail: "and group the parts" }
+    case GUIDE_TOOL:
+      return { name: "Write", detail: "the assembly guide" }
   }
   const first = Object.values((input ?? {}) as Record<string, unknown>).find(
     (v) => typeof v === "string"
@@ -452,6 +472,25 @@ export function tooling(
   ]
 }
 
+/** The reference for assembly guides, beside the exporter in the app. */
+const ASSEMBLY_GUIDE = "assembly.md"
+
+/**
+ * What an agent is told of assembly guides: what one is, that it is written by giving
+ * it to the app and not as a file or a page, and that it is of the model as it is. How
+ * one is worked out is in a file it reads when it comes to write one, as with tools.
+ */
+export function assembling(
+  tool: (set: string, name: string) => string,
+  kit: string
+): string[] {
+  const reference = path.join(path.dirname(kit), ASSEMBLY_GUIDE)
+  return [
+    `- The user can have assembly guides for this model (the Assembly button beside the view): how the thing is put together, a step at a time, for whoever has its parts on the table. The app makes each into a page that shows the model's own parts going on, step by step, from a guide you write. When the user asks for one, or asks how the thing is assembled as something to keep or to hand on, write a guide: read "${reference}" first, which says how one is worked out, then give it to ${tool(ASSEMBLY, "guide")}. That checks it against the model, files it in ${ASSEMBLY_FOLDER}/ at the top of the project and shows its cover in the Assembly view. Write no such file by hand and no HTML: the page is the app's.`,
+    `- A guide is of the model as it is: writing one changes nothing in the model's files. Where the thing cannot be put together as it is drawn (a part with no way in, nothing that holds a part where it sits), say so in the short reply, and write the guide for what there is. You cannot see the page, so check a guide against the parts themselves, their sizes and places (${tool(VIEWPORT, "parts")}), before you give it. When the user wants a guide changed, give the whole of it again with the change in: it is filed as the next version, and the ones before are kept.`,
+  ]
+}
+
 /** What an agent is told about where it is, on top of its own instructions. */
 function guide(
   provider: ProviderId,
@@ -503,6 +542,8 @@ function guide(
     `- Colour is the app's job. It draws every part in one of its own colours (${PALETTE_NAMES.join(", ")}), and a part given no colour takes the one that falls to its group, so parts that belong together match and groups differ. Leave colour out unless the user asks for one or parts within a group need telling apart; then name one of those. Any other colour is drawn as the nearest of them, unless it is a grey, white or black, which is drawn as it is.`,
     ...referring(tool, kit, scenes),
     ...(trying ? tooling(tool, kit) : []),
+    // (there is nothing to write a guide to until there is a model)
+    ...(trying && manifest ? assembling(tool, kit) : []),
     ...SIZES,
     ...(canAsk ? QUESTIONS : []),
     ...fastening(kit, canAsk),
@@ -765,6 +806,28 @@ export function lookOverAsked(
   ]
 }
 
+/** What the view's asking for an assembly guide reads as, in the conversation. */
+const ASSEMBLE = "Make an assembly guide"
+
+/**
+ * What an agent is asked when an assembly guide is asked for from the view: of all of
+ * the model, or of the one thing that was picked out of it, which the message then
+ * names as its object.
+ */
+export function assemblyAsked(
+  of: ObjectRef | null,
+  kit: string,
+  tool: (set: string, name: string) => string = toolName
+): string {
+  const reference = path.join(path.dirname(kit), ASSEMBLY_GUIDE)
+  return [
+    of
+      ? `Make an assembly guide for one thing in this model, and not for all of it: ${of.label}, which the message names as its object. It is a guide to putting that together and, where it goes on to something else, to fitting it there: whatever it is fitted to is there to begin with (already), and is not put together in this guide.`
+      : "Make an assembly guide for this model: how all of it is put together, from the first part to the last.",
+    `This was asked for from the app's Assembly view, where the user is waiting for the guide's cover. Read "${reference}" and go by it, then give the guide to ${tool(ASSEMBLY, "guide")}. Change nothing in the model for it. When it is written, say in a sentence or two that it is there, and what in it you were not sure of: the order of two steps, a tool you took to be needed.`,
+  ].join("\n\n")
+}
+
 /** What a command printed, as words to show: without the colours a terminal is sent. */
 const printed = (text: string) =>
   // eslint-disable-next-line no-control-regex
@@ -840,6 +903,7 @@ function saidOf(
         }
       : {}),
     ...(asked.arrange ? { lookOver: true as const } : {}),
+    ...(asked.assembly ? { assembly: true as const } : {}),
   }
 }
 
@@ -1133,6 +1197,61 @@ export class Threads {
       reference: reference?.name,
       pictures,
     }
+    return this.say(
+      projectId,
+      conversationId,
+      text,
+      notes,
+      objects,
+      manner,
+      asked
+    )
+  }
+
+  /**
+   * Have an assembly guide made for a project, as it is asked for from the view: of all
+   * of its model, or of the one thing picked out of it (`of`). It is asked in a
+   * conversation as a message would be, and waits its turn there as one would. Returns
+   * the conversation, or null if it could not be asked.
+   */
+  assemble(
+    projectId: string,
+    conversationId: string | null,
+    of: ObjectRef | null,
+    manner: Manner
+  ): string | null {
+    if (!this.deps.launch(manner.provider)) return null
+    const objects = of ? [of] : []
+    return this.say(projectId, conversationId, ASSEMBLE, [], objects, manner, {
+      content: (told, provider) =>
+        withNotes(
+          assemblyAsked(of, this.deps.kit, knownAs(provider)),
+          [],
+          objects,
+          told
+        ),
+      assembly: true,
+    })
+  }
+
+  /** Whether an assembly guide is being made for a project, asked for from the view. */
+  assembling(projectId: string): boolean {
+    return this.books.get(projectId)?.run?.assembly === true
+  }
+
+  /**
+   * Say something in a conversation, or begin one with it: at once, or, said in the
+   * conversation Claude is at work in, once that turn is over.
+   */
+  private say(
+    projectId: string,
+    conversationId: string | null,
+    text: string,
+    notes: PartNote[],
+    objects: ObjectRef[],
+    manner: Manner,
+    asked: Asked
+  ): string | null {
     const book = this.book(projectId)
     const conversation = book.run?.conversation
     if (!conversation || conversation.id !== conversationId)
@@ -1276,6 +1395,7 @@ export class Threads {
       pending: new Map(),
       asked: new Map(),
       lookOver: asked.arrange !== undefined,
+      assembly: asked.assembly === true,
       what: firstLine(wordsOf(said)),
       makingWay: false,
     }
@@ -1324,8 +1444,10 @@ export class Threads {
     const guided = createHash("sha1").update(told).digest("hex")
 
     // The app's own tools: what the agent sees the model with and, on a model's being
-    // looked over, the one thing it can change it with.
+    // looked over, the one thing it can change it with. At any other time it has what
+    // an assembly guide is written with: a guide given twice in a turn is one guide.
     const { arrange } = asked
+    let written: string | null = null
     const tools: Record<string, AppTool[]> = {
       [VIEWPORT]: viewportTools(
         (wanted) => this.deps.viewport(projectId, wanted),
@@ -1339,7 +1461,17 @@ export class Threads {
               this.deps.scenes.map((scene) => scene.id)
             ),
           }
-        : {}),
+        : {
+            [ASSEMBLY]: assemblyTools(async (given) => {
+              const { id, said } = this.deps.fileGuide(
+                projectId,
+                given,
+                written
+              )
+              written = id
+              return said
+            }),
+          }),
     }
 
     const turn: Turn = {

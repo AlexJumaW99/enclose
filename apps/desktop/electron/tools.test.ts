@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest"
 
-import { answerTo, modelTools, ToolServer, viewportTools } from "./tools"
+import {
+  answerTo,
+  assemblyTools,
+  modelTools,
+  ToolServer,
+  viewportTools,
+} from "./tools"
 
 const viewport = viewportTools(async ({ kind }) => {
   if (kind === "screenshot") return { data: "AAAA", mimeType: "image/png" }
@@ -143,6 +149,48 @@ describe("answerTo", () => {
     )
     expect(answer).toMatchObject({ result: { isError: true } })
     expect(arranged).toEqual([])
+  })
+
+  it("takes an assembly guide as it is given, and says what came of filing it", async () => {
+    const given: unknown[] = []
+    const assembly = assemblyTools(async (guide) => {
+      given.push(guide)
+      if (guide.title === "Nothing")
+        throw new Error("The guide was not written.")
+      return "Written as assembly/desk-lamp-v1.json"
+    })
+    const call = (guide: unknown) =>
+      answerTo("assembly", assembly, {
+        id: 1,
+        method: "tools/call",
+        params: { name: "guide", arguments: guide },
+      })
+    const step = { title: "Fit", text: "Push it on.", parts: ["base"] }
+    expect(
+      await call({
+        title: "Desk lamp",
+        steps: [{ ...step, from: [0, 0, 60], view: [1, -1, 0.8] }],
+      })
+    ).toMatchObject({
+      result: {
+        content: [
+          { type: "text", text: "Written as assembly/desk-lamp-v1.json" },
+        ],
+      },
+    })
+    expect(given).toHaveLength(1)
+    // what is wrong with a guide is said to whoever gave it, to be put right
+    expect(await call({ title: "Nothing", steps: [step] })).toMatchObject({
+      result: {
+        isError: true,
+        content: [{ type: "text", text: "The guide was not written." }],
+      },
+    })
+    // and what is no guide at all is not passed on: a way that is not three numbers
+    expect(
+      await call({ title: "Desk lamp", steps: [{ ...step, from: [0, 60] }] })
+    ).toMatchObject({ result: { isError: true } })
+    expect(given).toHaveLength(2)
   })
 
   it("has no answer to what wants none, and an error for what it does not know", async () => {

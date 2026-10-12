@@ -100,6 +100,17 @@ export type Project = {
    * one of them is written, so the window knows to load them again.
    */
   tools: number | null
+  /**
+   * Whether it has assembly guides, in its folder (see shared/assembly-format.ts): null
+   * if not, and otherwise a number that goes up each time one of them is written, so the
+   * window knows to read them again.
+   */
+  assembly: number | null
+  /**
+   * An assembly guide is being made for it, because the user asked for one from the
+   * view: the turn Claude is on in it is that.
+   */
+  assembling: boolean
   /** the latest thing Claude did to its files that can be taken back, and put back */
   undo: Undoable | null
   redo: Undoable | null
@@ -196,6 +207,8 @@ export type ThreadItem =
        * look their model over.
        */
       lookOver?: true
+      /** Asked from the view, and not written: that an assembly guide be made. */
+      assembly?: true
     }
   | {
       kind: "assistant"
@@ -417,6 +430,36 @@ export type ReferenceSource = {
   baseUrl: string
 }
 
+/**
+ * One of a project's assembly guides, in as much as its cover says: how the thing is put
+ * together, a step at a time (see shared/assembly-format.ts).
+ */
+export type GuideSummary = {
+  /** what it is known by: what its file is called, without the ending */
+  id: string
+  /** what it is a guide to putting together: the thing, or the part of it */
+  title: string
+  /** which writing of the guide to that it is, counted from 1 */
+  version: number
+  /** when it was written (ms) */
+  made: number
+  /** how many steps it has */
+  steps: number
+  /** the parts it shows, by id: those there to begin with, and those its steps put on */
+  parts: string[]
+  /** why it cannot be opened, in a line: its file does not read as a guide. Null of one that can */
+  trouble: string | null
+}
+
+/**
+ * How the view draws a model's parts, where that is more than its manifest says: what
+ * the user has done to it by hand in the app. A guide's page is told, to draw them so.
+ */
+export type Looks = {
+  /** the colour the user gave a part, by part: one of the app's, by name */
+  colours: Record<string, string>
+}
+
 /** What a project's own reference scene is known by, among the app's. */
 export const OWN_SCENE = "own"
 
@@ -478,6 +521,7 @@ export const FEATURES = [
   "only",
   "hidden",
   "blueprint",
+  "assembly",
   "reference",
   "tools",
 ] as const
@@ -600,6 +644,32 @@ export type CadApi = {
   tools: {
     /** A project's own tools, as they are written in its folder: none if it has none. */
     read(projectId: string): Promise<ToolSource[]>
+  }
+  assembly: {
+    /** A project's assembly guides, the one written last first: none if it has none. */
+    read(projectId: string): Promise<GuideSummary[]>
+    /**
+     * Have a guide made: of the whole model, or of the one thing picked out of it
+     * (`of`). It is asked for in a conversation, as a message would be, or begins a new
+     * one (null). Resolves to the conversation, or to null if it could not be asked.
+     */
+    make(
+      projectId: string,
+      conversationId: string | null,
+      of: ObjectRef | null,
+      manner: Manner
+    ): Promise<string | null>
+    /**
+     * Open a guide in the browser, as a page of this machine's: the model's parts are
+     * shown from where they are, and nothing is copied. `looks` is how the view draws
+     * them, for the page to draw them the same.
+     */
+    open(projectId: string, guideId: string, looks: Looks): Promise<boolean>
+    /**
+     * Save a guide as one zip archive, somewhere the user picks, with the page and the
+     * parts it shows in it: something to send to someone, or to put on a site.
+     */
+    save(projectId: string, guideId: string, looks: Looks): Promise<boolean>
   }
   pictures: {
     /**
@@ -751,6 +821,10 @@ export const CHANNEL = {
   modelNameGroup: "model:name-group",
   referenceScenes: "reference:scenes",
   toolsRead: "tools:read",
+  assemblyRead: "assembly:read",
+  assemblyMake: "assembly:make",
+  assemblyOpen: "assembly:open",
+  assemblySave: "assembly:save",
   picturesAdd: "pictures:add",
   picturesDrop: "pictures:drop",
   threadItems: "thread:items",

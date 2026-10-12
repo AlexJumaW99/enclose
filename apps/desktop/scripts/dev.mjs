@@ -7,7 +7,7 @@ import { spawn } from "node:child_process"
 import { context } from "esbuild"
 import { createServer } from "vite"
 
-import { main, preload } from "./electron-build.mjs"
+import { guide, main, preload } from "./electron-build.mjs"
 import { namedElectron } from "./electron-name.mjs"
 
 const electron = namedElectron()
@@ -72,6 +72,10 @@ for (const options of [main, preload]) {
   const bundle = await context({ ...options, plugins: [relaunch] })
   await bundle.watch()
 }
+
+// The page of an assembly guide is read from disk each time one is opened: built again
+// on save, it is there the next time, and nothing has to be restarted for it.
+await (await context(guide)).watch()
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, () => {

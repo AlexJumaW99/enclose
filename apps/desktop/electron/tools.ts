@@ -9,6 +9,7 @@ import type { AddressInfo } from "node:net"
 import { z } from "zod"
 
 import type { ViewportAsked } from "../shared/api"
+import { ASSEMBLY_FOLDER, type GuideGiven } from "../shared/assembly-format"
 import type { Arrangement } from "./imports"
 
 /** What a tool gives back: words, or a picture. */
@@ -51,6 +52,7 @@ const told = (value: unknown) => words(JSON.stringify(value, null, 1))
 /** What each set of tools is called, as the server an agent finds them under. */
 export const VIEWPORT = "viewport"
 export const MODEL = "model"
+export const ASSEMBLY = "assembly"
 
 /**
  * The tools an agent sees what the user sees with. `ask` puts a question to the window.
@@ -193,6 +195,84 @@ export function modelTools(
           .describe("Every part of the model."),
       },
       async (given) => arrange(given).then(words, failed)
+    ),
+  ]
+}
+
+/**
+ * What an agent writes an assembly guide with (see shared/assembly-format.ts). `write`
+ * checks what it gives against the model and files it, and says in a line what came of
+ * it: or rejects, in words the guide can be mended by.
+ */
+export function assemblyTools(
+  write: (given: GuideGiven) => Promise<string>
+): AppTool[] {
+  const three = z.array(z.number()).length(3)
+  return [
+    appTool(
+      "guide",
+      `Write an assembly guide for the model: how the thing is put together, a step at a time. The app checks it against the model's parts, files it in ${ASSEMBLY_FOLDER}/ as the next version of the guide to that thing, and shows its cover in the Assembly view; the user opens it there as a page that shows the model's own parts going on step by step. Give the whole guide each time. Called again in the same turn, it takes the place of what the turn wrote before.`,
+      {
+        title: z
+          .string()
+          .describe(
+            'What the guide is to putting together: the thing, as the model is called ("Counter stool"), or for a guide to part of it, that part ("Footrest").'
+          ),
+        summary: z
+          .string()
+          .optional()
+          .describe(
+            "A line or two for the top of the guide: what is being put together, and anything to know before starting."
+          ),
+        needs: z
+          .array(z.string())
+          .optional()
+          .describe(
+            'What is needed that is no part of the model, each in a few words: "4 mm hex key", "Wood glue".'
+          ),
+        already: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "For a guide to part of the model: the ids of the parts that are there before the first step, which the guide's parts are fitted to. They are shown from the start, and no step puts them on."
+          ),
+        steps: z
+          .array(
+            z.object({
+              title: z
+                .string()
+                .describe('What is done, in a few words: "Fit the seat".'),
+              text: z
+                .string()
+                .describe(
+                  "How, said to the person doing it: which way round, what it goes into, what holds it, how tight. Two to four plain sentences."
+                ),
+              parts: z
+                .array(z.string())
+                .describe(
+                  "The ids of the parts that go on in this step. A part goes on in one step only; a step that only turns the thing over or checks it has none."
+                ),
+              from: three
+                .optional()
+                .describe(
+                  "Where these parts come from, as [x, y, z] in mm from where they end up, in the model's frame (Z up): [0, 0, 60] has them come down from 60 mm above. Give the way they really go on, clear of what is already there: it is the same for every part of the step. Leave it out only where the parts of a step go on from different sides, as four bolts through four legs do: each then comes in its own way from outside."
+                ),
+              view: three
+                .optional()
+                .describe(
+                  "Where the step is best seen from: the way from the model to the eye, [x, y, z] in the model's frame. [1, -1, 0.8] is from the front right, a little above; [0, 0, -1] from underneath. Left out, the view stays as it was."
+                ),
+              tip: z
+                .string()
+                .optional()
+                .describe(
+                  "Something to take care over in this step, in a sentence, where there is anything."
+                ),
+            })
+          )
+          .describe("In the order they are done."),
+      },
+      async (given) => write(given).then(words, failed)
     ),
   ]
 }

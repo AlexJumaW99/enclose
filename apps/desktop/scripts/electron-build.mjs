@@ -1,4 +1,5 @@
-// How the Electron side is bundled, shared by the dev loop and the production build.
+// How the Electron side is bundled, shared by the dev loop and the production build. And
+// with it the page an assembly guide is shown as, which the Electron side hands out.
 
 /** The app's own process. Packages stay external: they are loaded from node_modules. */
 export const main = {
@@ -23,5 +24,25 @@ export const preload = {
   bundle: true,
   external: ["electron"],
   sourcemap: true,
+  logLevel: "warning",
+}
+
+/**
+ * The page of an assembly guide (src/guide): one script and one sheet of styles, with
+ * everything they need in them. It is opened in a browser, from this machine or from a
+ * folder it was taken away in, where a script is loaded whole or not at all: so it is
+ * no module, and there is nothing for it to fetch.
+ */
+export const guide = {
+  entryPoints: { page: "src/guide/page.ts" },
+  outdir: "dist-electron/guide",
+  platform: "browser",
+  format: "iife",
+  target: "es2020",
+  bundle: true,
+  minify: true,
+  alias: { "@": "./src", "@shared": "./shared" },
+  // the typeface goes into the sheet itself
+  loader: { ".woff2": "dataurl" },
   logLevel: "warning",
 }

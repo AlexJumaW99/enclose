@@ -32,7 +32,8 @@ npm run format      # .ts and .tsx only
 apps/
   desktop/     the app
     electron/  its own process: window, project list, the line to Claude
-    src/       the window: project cards, 3D view and its tools, conversation
+    src/       the window: project cards, 3D view and its tools, conversation; and
+               the page an assembly guide is opened as (src/guide), built by itself
     shared/    types and the manifest format, used by both sides, and the list of
                examples
     scripts/   dev loop, production build, the installer, the icon's sizes, the
@@ -48,7 +49,8 @@ examples/      projects to open and try things on: a table clock, with a tool, a
 kit/           the exporter a project copies in to write its model (Python), the
                screws it can put in one, the app's own reference scenes, each drawn
                in code and kept as built, the figure of a person that stands in some
-               of them, and how a project's own tools are written
+               of them, and how a project's own tools and its assembly guides are
+               written
 spikes/        experiments kept for their measurements
 ```
 
@@ -230,4 +232,7 @@ usage-data.md with it.
 - The model manifest:
   [`shared/manifest-format.ts`](../apps/desktop/shared/manifest-format.ts).
 - A project's own tool: [`kit/tools.md`](../kit/tools.md).
+- An assembly guide:
+  [`shared/assembly-format.ts`](../apps/desktop/shared/assembly-format.ts), and
+  [`kit/assembly.md`](../kit/assembly.md) for how one is worked out.
 - The exporter a project copies in: [`kit/enclose.py`](../kit/enclose.py).

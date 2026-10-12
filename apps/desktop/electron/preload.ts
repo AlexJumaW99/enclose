@@ -52,6 +52,21 @@ const api: CadApi = {
   tools: {
     read: (projectId) => ipcRenderer.invoke(CHANNEL.toolsRead, projectId),
   },
+  assembly: {
+    read: (projectId) => ipcRenderer.invoke(CHANNEL.assemblyRead, projectId),
+    make: (projectId, conversationId, of, manner) =>
+      ipcRenderer.invoke(
+        CHANNEL.assemblyMake,
+        projectId,
+        conversationId,
+        of,
+        manner
+      ),
+    open: (projectId, guideId, looks) =>
+      ipcRenderer.invoke(CHANNEL.assemblyOpen, projectId, guideId, looks),
+    save: (projectId, guideId, looks) =>
+      ipcRenderer.invoke(CHANNEL.assemblySave, projectId, guideId, looks),
+  },
   pictures: {
     add: (projectId, picture) =>
       ipcRenderer.invoke(CHANNEL.picturesAdd, projectId, picture),

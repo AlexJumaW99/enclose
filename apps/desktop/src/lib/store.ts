@@ -108,6 +108,12 @@ export type View = {
   /** and whether it says which part is which: the name of each, with a line to it */
   labels: boolean
   /**
+   * Whether it is the model's assembly guides that are looked at, and not the model:
+   * their covers, in a row, in place of the view of it, as a blueprint's sheets are.
+   * Never with the blueprint: one or the other has the view's place.
+   */
+  assembly: boolean
+  /**
    * The reference scene the model is set in, by what it is known by: things of a known
    * real size drawn round it, so that how big it is can be seen (see lib/reference).
    * Null while it is set in none.
@@ -411,6 +417,7 @@ const homeView = (): View => ({
   sheet: null,
   dimensions: saved(DIMENSIONS_KEY) === "on",
   labels: saved(LABELS_KEY) === "on",
+  assembly: false,
   reference: null,
   tools: false,
 })
@@ -422,6 +429,7 @@ export type Entered =
   | "only"
   | "hidden"
   | "blueprint"
+  | "assembly"
   | "reference"
   | "tools"
 
@@ -433,6 +441,7 @@ function enteredNow(view: View, before: Entered[]): Entered[] {
     only: view.only !== null,
     hidden: view.hidden.length > 0,
     blueprint: view.blueprint,
+    assembly: view.assembly,
     reference: view.reference !== null,
     tools: view.tools,
   }
@@ -715,6 +724,12 @@ type State = {
    * shows of it: answered the way a message would be, as far as that is chosen.
    */
   lookOver(projectId: string, seen: Seen): Promise<void>
+  /**
+   * Have an assembly guide made for the open project: of all of its model, or of the
+   * one thing picked out of it. It is asked in the conversation the panel shows, the
+   * way a message would be, and answered so.
+   */
+  assemble(of: ObjectRef | null): void
 }
 
 /** How many things the app has had to say: what tells one from the next. */
@@ -952,6 +967,10 @@ export const useStore = create<State>()((set, get) => ({
     const before = get().entered
     set((state) => {
       const view = { ...state.view, ...patch }
+      // the blueprint and the guides have the view's place by turns: gone into, one
+      // puts the other away
+      if (patch.assembly) view.blueprint = false
+      else if (patch.blueprint) view.assembly = false
       // (a sheet is shown by itself only while it is the blueprint that is looked at)
       if (!view.blueprint) view.sheet = null
       return {
@@ -969,6 +988,18 @@ export const useStore = create<State>()((set, get) => ({
             toolsOpen: false,
             selection: null,
             several: NONE,
+            sweep: null,
+            hoveredId: null,
+            writing: null,
+          }),
+        // The guides are not of what is on show, and the lists are put away for them.
+        // What is picked out is kept: a guide can be asked for of that alone.
+        ...(view.assembly &&
+          !state.view.assembly && {
+            partsOpen: false,
+            referenceOpen: false,
+            toolsOpen: false,
+            finding: null,
             sweep: null,
             hoveredId: null,
             writing: null,
@@ -1366,6 +1397,12 @@ export const useStore = create<State>()((set, get) => ({
       set({ partsOpen: false, referenceOpen: false, toolsOpen: false })
       return true
     }
+    // The guides are over everything else of the view: they are got out of before
+    // anything that was gone into under them.
+    if (get().view.assembly) {
+      setView({ assembly: false })
+      return true
+    }
     // A model that is pulled apart is put together first, whatever else was gone into
     // and whenever: it is the one that is got out of at once.
     if (get().view.exploded) {
@@ -1383,6 +1420,7 @@ export const useStore = create<State>()((set, get) => ({
     if (last === "section") setView({ section: null })
     else if (last === "hidden") setView({ hidden: NONE })
     else if (last === "blueprint") setView({ blueprint: false })
+    else if (last === "assembly") setView({ assembly: false })
     else if (last === "reference") setView({ reference: null })
     else if (last === "tools") setView({ tools: false })
     else setView({ only: null })
@@ -1479,6 +1517,26 @@ export const useStore = create<State>()((set, get) => ({
     )
     // what comes of it is what the conversation panel shows, when it is brought up
     if (id) set((state) => ({ picked: { ...state.picked, [projectId]: id } }))
+  },
+
+  assemble(of) {
+    const { activeId, projects, picked } = get()
+    const project = projects.find((p) => p.id === activeId)
+    if (!project) return
+    const { open } = stackOf(
+      project.conversations,
+      picked[project.id],
+      usePreferences.getState().settleDays,
+      Date.now()
+    )
+    void window.cad.assembly
+      .make(project.id, open?.id ?? null, of, mannerIn(get(), open))
+      .then((id) => {
+        // stay with the conversation it was asked in, as with one a message began
+        if (id)
+          set((state) => ({ picked: { ...state.picked, [project.id]: id } }))
+        else get().say("The guide could not be asked for just now")
+      })
   },
 }))
 

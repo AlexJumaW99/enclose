@@ -652,6 +652,7 @@ const KEYS: { title: string; rows: [string, string[], Drag?][] }[] = [
       ["Isolate the selection", ["I"]],
       ["Hide the selection, or show everything", ["H"]],
       ["Blueprint", ["B"]],
+      ["Assembly", ["A"]],
       ["Search", [CMD, "F"]],
       ["Tools", ["T"]],
       ["Undo", [CMD, "Z"]],

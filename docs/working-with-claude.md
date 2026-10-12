@@ -22,7 +22,9 @@ screenshot of the view as you see it, the list of parts with their groups and si
 your current selection. It has two more for a project's own tools, the ones it makes for
 you to work the model with: how they stand, with the error of one that did not load, and
 a hand on one of their controls, so that it can try what it made and look at the model
-before it says it is done.
+before it says it is done. And it has one that an [assembly guide](#assembly-guides) is
+written with: Claude gives the guide, and the app checks it against the model and files
+it.
 
 ## What Claude has just made
 
@@ -38,6 +40,61 @@ come back when [a change is taken back](#taking-a-change-back) or another conver
 is turned to. If the window was out of sight, it waits until the window is back. Under a
 blueprint, and for a part that is not on show, nothing happens; and if your system is
 set for less motion, the camera goes and nothing else.
+
+## Assembly guides
+
+**Assembly** (A) puts the model's assembly guides where the view was, as
+[Blueprint](blueprints.md) puts its sheets there: A again, the button or Esc brings the
+view back. A guide says how the thing is put together, a step at a time, for whoever has
+its parts on the table. Claude writes it, and the app makes it a page.
+
+### Asking for one
+
+At the foot of the guides is **New assembly guide**, and where a model has no guide yet
+the empty sheet in the middle of the view asks for one too. Claude looks at the parts, their
+sizes and places, and at how the model is built, works out an order they can go on in,
+and writes the steps: what is done in each, which parts it puts on and where they come
+from, and what is needed to hand. With something picked out of the model before the
+guides are turned to, the button offers a guide to that alone, how it is put together
+and fitted, with **Whole model** beside it.
+
+It is asked in the conversation, as a message would be. It can be asked for there in
+words too, and changed the same way ("split step 3 in two"). While Claude is at it, the
+foot of the view says how long it has been and what it is doing, with a button that
+stops it. Writing a guide changes nothing in the model.
+
+### The covers
+
+Each guide has a cover, the one written last first: what it is a guide to, the day it
+was written and which version it is, over a drawing of the parts it shows. A guide
+written again is the next version, and the ones before are kept.
+
+Click a cover and the guide opens in your browser. The arrow over it saves it as a zip.
+
+### The page
+
+A guide is a page: the steps down the left, and the model beside them, drawn as the app
+draws it. Going down the page goes through the steps. The parts of each come in and go
+on, lit, over the ones that are on already, and going back up takes the thing apart
+again. The camera comes up to small parts, and a part that goes on behind something
+shows through it faintly. The arrow keys go a step at a time. The model is turned by
+pulling it, and brought nearer with a pinch.
+
+Opened from the app, the page is served from your own machine and shows the model as it
+is now: nothing is copied for it, and it is there for as long as the app is open. The
+zip is what to send to someone or to put on a site: a folder with the page and the
+parts it shows in it, which opens from its `index.html` with nothing else needed. It
+has the model as it was when the zip was saved.
+
+### Where they are kept
+
+In `assembly/` at the top of the project, a small file to a guide
+(`assembly/counter-stool-v1.json`), which names the model's parts and holds no copy of
+them. So a guide follows the model: a part that has been changed is shown as it now is,
+and one the model no longer has is left out, which the cover says. The files are the
+project's own, so [each conversation has its own](#versions), and a turn that wrote one
+can be [taken back](#taking-a-change-back). [`kit/assembly.md`](../kit/assembly.md)
+says how a guide is written, and is what Claude reads before it writes one.
 
 ## Conversations
 

@@ -29,6 +29,7 @@ is Ctrl off a Mac.
 | I | Show what is picked out [on its own](selecting.md#on-its-own-close-to-out-of-sight) |
 | H | Put what is picked out out of sight, or bring everything back |
 | B | [Blueprint](blueprints.md) |
+| A | [Assembly guides](working-with-claude.md#assembly-guides) |
 | Cmd+F | [Search](parts.md#search) |
 | T | [Tools of the project's own](project-tools.md) |
 | Cmd+Z | [Take back](working-with-claude.md#taking-a-change-back) the last change to the model |

@@ -7,6 +7,8 @@ import type { BringingIn, ConversationSummary, Project } from "../shared/api"
 import { CONFIG_NAMES, MANIFEST_NAMES } from "../shared/manifest-format"
 import { findReference } from "./reference"
 import { findTools } from "./custom-tools"
+import { findGuides } from "./assembly"
+import { ASSEMBLY_FOLDER } from "../shared/assembly-format"
 import { TOOLS_FOLDER } from "../shared/tool-format"
 
 type Saved = {
@@ -270,6 +272,12 @@ export class Projects {
   private toolsWatched = new Map<string, string>()
   private toolWatchers = new Map<string, fs.FSWatcher[]>()
   private toolTimers = new Map<string, NodeJS.Timeout>()
+  /** And the assembly guides each has, kept the same way: all by project. */
+  private guides = new Map<string, string>()
+  private guideRevisions = new Map<string, number>()
+  private guidesWatched = new Map<string, string>()
+  private guideWatchers = new Map<string, fs.FSWatcher[]>()
+  private guideTimers = new Map<string, NodeJS.Timeout>()
   private watchers = new Map<string, fs.FSWatcher>()
   private timers = new Map<string, NodeJS.Timeout>()
   /** how far the making of a model from files opened into a project has got */
@@ -303,6 +311,7 @@ export class Projects {
   private locate(project: Saved) {
     this.locateScene(project)
     this.locateTools(project)
+    this.locateGuides(project)
     const found = findModel(project.path)
     const before = this.found.get(project.id)?.manifest ?? null
     this.found.set(project.id, found)
@@ -440,6 +449,58 @@ export class Projects {
     return true
   }
 
+  /**
+   * Find the assembly guides a project has, and watch for them, as its tools are found
+   * and watched for: the folder they are in, for one being written, and the project's,
+   * for that folder coming or going. True if they are not as they were last found.
+   */
+  private locateGuides(project: Saved): boolean {
+    const { id } = project
+    const dir = path.join(project.path, ASSEMBLY_FOLDER)
+    const found = findGuides(project.path)
+      .map((name) => {
+        try {
+          const { mtimeMs, size } = fs.statSync(path.join(dir, name))
+          return `${name}:${mtimeMs}:${size}`
+        } catch {
+          return name
+        }
+      })
+      .join("|")
+    const there = fs.existsSync(dir)
+    const watched = `${project.path}|${there}`
+    if (this.guidesWatched.get(id) !== watched) {
+      this.guidesWatched.set(id, watched)
+      for (const watcher of this.guideWatchers.get(id) ?? []) watcher.close()
+      const again = () => {
+        clearTimeout(this.guideTimers.get(id))
+        this.guideTimers.set(
+          id,
+          setTimeout(() => {
+            if (this.locateGuides(project)) this.onChange()
+          }, 300)
+        )
+      }
+      const watchers: fs.FSWatcher[] = []
+      try {
+        watchers.push(
+          fs.watch(project.path, { persistent: false }, (_, changed) => {
+            if (changed === ASSEMBLY_FOLDER) again()
+          })
+        )
+        if (there) watchers.push(fs.watch(dir, { persistent: false }, again))
+      } catch {
+        // unwatchable: the guides are still read, they just won't be read again by themselves
+      }
+      this.guideWatchers.set(id, watchers)
+    }
+    if (found === (this.guides.get(id) ?? "")) return false
+    if (found) this.guides.set(id, found)
+    else this.guides.delete(id)
+    this.guideRevisions.set(id, (this.guideRevisions.get(id) ?? 0) + 1)
+    return true
+  }
+
   /** The projects, the one added last first: they are kept in the order they came. */
   list(conversations: (id: string) => ConversationSummary[]): Project[] {
     return [...this.saved].reverse().map((p) => {
@@ -460,6 +521,11 @@ export class Projects {
         tools: this.tools.has(p.id)
           ? (this.toolRevisions.get(p.id) ?? 0)
           : null,
+        assembly: this.guides.has(p.id)
+          ? (this.guideRevisions.get(p.id) ?? 0)
+          : null,
+        // whether one is being made is known to whoever has the conversations
+        assembling: false,
         // what can be taken back is kept elsewhere (changes.ts), and said by whoever
         // has both
         undo: null,
@@ -560,6 +626,13 @@ export class Projects {
     this.tools.delete(id)
     this.toolRevisions.delete(id)
     this.toolsWatched.delete(id)
+    for (const watcher of this.guideWatchers.get(id) ?? []) watcher.close()
+    this.guideWatchers.delete(id)
+    clearTimeout(this.guideTimers.get(id))
+    this.guideTimers.delete(id)
+    this.guides.delete(id)
+    this.guideRevisions.delete(id)
+    this.guidesWatched.delete(id)
     this.bringing.delete(id)
     this.saved = this.saved.filter((p) => p !== project)
     // projects made before `made` was kept are known by having a name of their own
@@ -614,9 +687,10 @@ export class Projects {
         build: this.found.get(id)?.build ?? null,
       })
       this.watch(project)
-      // and so is its reference scene, if it has one of its own, and its tools
+      // and so is its reference scene, if it has one of its own, and its tools and guides
       this.locateScene(project)
       this.locateTools(project)
+      this.locateGuides(project)
       moved(from, to)
     }
     this.save()
@@ -695,5 +769,8 @@ export class Projects {
     for (const watchers of this.toolWatchers.values())
       for (const watcher of watchers) watcher.close()
     for (const timer of this.toolTimers.values()) clearTimeout(timer)
+    for (const watchers of this.guideWatchers.values())
+      for (const watcher of watchers) watcher.close()
+    for (const timer of this.guideTimers.values()) clearTimeout(timer)
   }
 }

@@ -8,6 +8,8 @@ import type { Seen } from "../shared/api"
 import { fakeAgent, until } from "./testing"
 import {
   answersTo,
+  assemblyAsked,
+  assembling,
   fastening,
   keeping,
   tooling,
@@ -427,6 +429,48 @@ describe("tooling", () => {
   })
 })
 
+describe("assembling", () => {
+  const claude = (set: string, name: string) => `mcp__${set}__${name}`
+
+  it("says what a guide is given to, and where how one is worked out is said", () => {
+    const told = assembling(claude, "/app/kit/enclose.py").join("\n")
+    expect(told).toContain('read "/app/kit/assembly.md" first')
+    expect(told).toContain("give it to mcp__assembly__guide")
+    expect(told).toContain("files it in assembly/")
+    const grok = assembling((set, name) => `${set}__${name}`, "/k/enclose.py")
+    expect(grok.join("\n")).toContain("give it to assembly__guide")
+  })
+
+  it("has a guide written of the model as it is, and no page written at all", () => {
+    const told = assembling(claude, "/app/kit/enclose.py").join("\n")
+    expect(told).toContain("changes nothing in the model's files")
+    expect(told).toContain("no HTML")
+  })
+})
+
+describe("assemblyAsked", () => {
+  it("asks for a guide to all of the model, where nothing was picked out", () => {
+    const asked = assemblyAsked(null, "/app/kit/enclose.py")
+    expect(asked).toContain("how all of it is put together")
+    expect(asked).toContain('Read "/app/kit/assembly.md"')
+    expect(asked).toContain("mcp__assembly__guide")
+    expect(asked).toContain("Change nothing in the model")
+  })
+
+  it("asks for a guide to the one thing that was, with what it goes on to there already", () => {
+    const asked = assemblyAsked(
+      { label: "Footrest", parts: ["ring", "bolt"] },
+      "/app/kit/enclose.py",
+      (set, name) => `${set}__${name}`
+    )
+    expect(asked).toContain("for one thing in this model")
+    expect(asked).toContain("Footrest")
+    expect(asked).toContain("there to begin with (already)")
+    expect(asked).toContain("assembly__guide")
+    expect(asked).not.toContain("how all of it")
+  })
+})
+
 describe("keeping", () => {
   it("says where the app is, and that nothing there is to be changed", () => {
     const told = keeping("/Applications/Enclose/kit/enclose.py").join("\n")
@@ -510,6 +554,7 @@ on("turn/interrupt", () => {
       } as unknown as ThreadsDeps["tools"],
       kit: dir,
       scenes: [],
+      fileGuide: () => ({ id: "box-v1", said: "Written." }),
       onRenamed: () => {},
       viewport: async () => null,
       onItem: () => {},

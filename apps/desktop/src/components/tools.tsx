@@ -2,6 +2,7 @@ import * as React from "react"
 import { cn } from "cn"
 import {
   FlipHorizontal2Icon,
+  BookOpenIcon,
   BoxesIcon,
   DownloadIcon,
   DraftingCompassIcon,
@@ -271,7 +272,9 @@ function Size({ bytes }: { bytes: number }) {
  *
  * While it is the model's blueprint that is looked at, the ones that are only for the
  * view of the model itself, the cut, the ground and what the model is set in, are there
- * and not to be pressed.
+ * and not to be pressed. While it is its assembly guides, none of them is but the
+ * blueprint's and the guides' own: a guide is of the model as it is built, whatever of
+ * it is on show.
  */
 export function Tools({
   loaded,
@@ -287,9 +290,11 @@ export function Tools({
   hasTools?: boolean
 }) {
   const view = useStore((state) => state.view)
-  const { blueprint } = view
+  const { blueprint, assembly } = view
+  /** it is not the model itself that is looked at: what is only for that waits */
+  const away = blueprint || assembly
   // a blueprint is of the model whole: the cut is the view's, and comes back with it
-  const section = blueprint ? null : view.section
+  const section = away ? null : view.section
   const setView = useStore((state) => state.setView)
   const cutOpen = useStore((state) => state.cutOpen)
   const threadOpen = useStore((state) => state.threadOpen)
@@ -344,6 +349,7 @@ export function Tools({
             shortcut="P"
             opens="parts"
             on={partsOpen || view.only !== null || view.hidden.length > 0}
+            disabled={assembly}
             onChange={() => setPartsOpen(!partsOpen)}
           >
             <BoxesIcon />
@@ -353,7 +359,7 @@ export function Tools({
             label="Grid"
             shortcut={MAC ? "⇧G" : "Shift G"}
             on={view.grid}
-            disabled={blueprint}
+            disabled={away}
             onChange={(grid) => setView({ grid })}
           >
             <Grid3x3Icon />
@@ -391,7 +397,7 @@ export function Tools({
               // its neighbours have the left: its name is on the far side of them
               away={section ? BESIDE : undefined}
               on={section !== null}
-              disabled={blueprint}
+              disabled={away}
               // cut open again, it is as it was left
               onChange={(on) =>
                 on
@@ -406,6 +412,7 @@ export function Tools({
             label="Explode"
             shortcut="E"
             on={view.exploded}
+            disabled={assembly}
             // (pulled apart afresh, it is into its pieces, by the model's own distances)
             onChange={(exploded) =>
               setView({
@@ -426,8 +433,8 @@ export function Tools({
               label="Reference"
               shortcut={MAC ? "⌘/" : "Ctrl /"}
               opens="reference"
-              on={referenceOpen || (view.reference !== null && !blueprint)}
-              disabled={blueprint}
+              on={referenceOpen || (view.reference !== null && !away)}
+              disabled={away}
               onChange={() => setReferenceOpen(!referenceOpen)}
             >
               <ReferenceIcon />
@@ -446,6 +453,18 @@ export function Tools({
               <DraftingCompassIcon />
             </Switch>
           )}
+          {/* how the thing is put together, a step at a time: the guides Claude has
+              written to that, on covers that take the view's place as the sheets do */}
+          {!loaded.standIn && (
+            <Switch
+              label="Assembly"
+              shortcut="A"
+              on={assembly}
+              onChange={(assembly) => setView({ assembly })}
+            >
+              <BookOpenIcon />
+            </Switch>
+          )}
           {/* parts and groups looked for by name, in a box at the top of the view: not
               in the cube that stands in for a model, which has none to find */}
           {!loaded.standIn && (
@@ -453,6 +472,7 @@ export function Tools({
               label="Search"
               shortcut={MAC ? "⌘F" : "Ctrl F"}
               on={finding}
+              disabled={assembly}
               onChange={(on) => find(on ? "" : null)}
             >
               <SearchIcon />
@@ -468,8 +488,8 @@ export function Tools({
               label="Tools"
               shortcut="T"
               opens="tools"
-              on={toolsOpen && !blueprint}
-              disabled={blueprint}
+              on={toolsOpen && !away}
+              disabled={away}
               onChange={() => setToolsOpen(!toolsOpen)}
               className="bg-tool text-white ring-tool hover:bg-tool/85 hover:text-white aria-pressed:bg-tool aria-pressed:text-white aria-pressed:ring-2 aria-pressed:ring-white aria-pressed:hover:bg-tool/85 aria-pressed:hover:text-white"
             >

@@ -109,7 +109,7 @@ const breathe = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 /** One side of the model, drawn: the lines of each part. And where they sit on its paper. */
 type Drawn = { strokes: Stroke[][] }
-type Drawing = Drawn & { placing: Placing }
+export type Drawing = Drawn & { placing: Placing }
 
 /** The sheets of a model: its sides, as far as they have been drawn. */
 type Sheets = {
@@ -150,7 +150,7 @@ function numberOf(thing: object): number {
  * What a drawing depends on, in a word: which parts they are, as they were loaded, and
  * where each is. The same parts put in other groups are the same drawing.
  */
-function keyOf(parts: LoadedPart[], apart: number): string {
+export function keyOf(parts: LoadedPart[], apart: number): string {
   return parts
     .map(
       (part) =>
@@ -172,7 +172,7 @@ function placeOf(part: LoadedPart, apart: number): THREE.Matrix4 {
 }
 
 /** The parts as the drawing takes them, and the room they take up seen from each side. */
-function laidOut(parts: LoadedPart[], apart: number) {
+export function laidOut(parts: LoadedPart[], apart: number) {
   const places = parts.map((part) => placeOf(part, apart))
   const bodies = parts.map((part, index): Body => ({
     // (what is made of something clear hides nothing: it is drawn, and seen through)
@@ -337,7 +337,7 @@ const fileName = (called: string) =>
  * And over them what the sheet says of how big the model is, and of which part is which,
  * where it says.
  */
-function Lines({
+export function Lines({
   drawing,
   measures,
   labels,

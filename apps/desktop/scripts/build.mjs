@@ -3,7 +3,7 @@
 import { build as bundle } from "esbuild"
 import { build as buildWindow } from "vite"
 
-import { main, preload } from "./electron-build.mjs"
+import { guide, main, preload } from "./electron-build.mjs"
 
 await buildWindow()
-await Promise.all([bundle(main), bundle(preload)])
+await Promise.all([bundle(main), bundle(preload), bundle(guide)])
