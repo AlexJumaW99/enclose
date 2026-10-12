@@ -24,6 +24,21 @@ you to work the model with: how they stand, with the error of one that did not l
 a hand on one of their controls, so that it can try what it made and look at the model
 before it says it is done.
 
+## What Claude has just made
+
+Parts that Claude adds to a model are shown coming. When the model it built is on
+screen they are all light for a moment, where they stand; a light goes across them,
+once, and leaves them as they are; and then the camera goes to them, as
+[Space](selecting.md#on-its-own-close-to-out-of-sight) takes it to what is picked out.
+What of them is behind another part shows more faintly. The first model a project has
+comes like this all at once, and is framed whole as any model is when it opens.
+
+It is only what is new that comes so: not a part that was changed, and not parts that
+come back when [a change is taken back](#taking-a-change-back) or another conversation
+is turned to. If the window was out of sight, it waits until the window is back. Under a
+blueprint, and for a part that is not on show, nothing happens; and if your system is
+set for less motion, the camera goes and nothing else.
+
 ## Conversations
 
 A project can have any number of conversations, and none of them is deleted while the

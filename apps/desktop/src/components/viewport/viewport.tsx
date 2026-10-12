@@ -53,6 +53,7 @@ import {
   type Selection,
 } from "@/lib/store"
 import { objectsOf, pieceWith, wholeOf } from "./apart"
+import { ARRIVAL, newIn, type Arriving } from "./arriving"
 import { AxisGizmo } from "./axis-gizmo"
 import { bridge } from "./bridge"
 import { ExplodeSlider } from "./explode-slider"
@@ -138,6 +139,72 @@ function underList(): number {
   return list && within
     ? within.right - list.getBoundingClientRect().left + LIST_GAP
     : 0
+}
+
+/**
+ * How much longer than their coming is shown what came is kept, ms: the light sets off
+ * when the parts are first drawn, which can be a while after they came (see Arrival).
+ */
+const LATE = 1000
+
+/**
+ * What Claude has just made, to be shown coming (see arriving.ts): the parts a model
+ * has, loaded again for what was done while Claude was at work in the project, that it
+ * had none of when it was last looked at. Not the parts a model has as it is found when
+ * its project is opened, nor those that taking a change back brings back, or turning to
+ * another conversation: Claude made none of those just now. And nothing comes in a
+ * window that is not there to be seen, put away or wholly under another: it waits until
+ * the window is, and is then all that came meanwhile.
+ *
+ * `loading` is called as a model begins to be loaded, and what it gives back is told of
+ * the model once it is, before it is shown: what came is known of by the time the model
+ * is drawn, so that no part is seen before it is seen coming.
+ */
+function useArrivals(project: Project) {
+  const atWork = project.conversations.some((c) => c.status !== "idle")
+  const [came, setCame] = React.useState<{
+    parts: string[]
+    /** when, in ms, as `performance.now()` has it */
+    at: number
+  } | null>(null)
+  const working = React.useRef(atWork)
+  React.useEffect(() => {
+    working.current = atWork
+  }, [atWork])
+  // the model as it is, the parts it had when it was last looked at, and whether any of
+  // what it has been loaded for since then was Claude's doing
+  const model = React.useRef<LoadedModel | null>(null)
+  const had = React.useRef<Set<string> | null>(null)
+  const claudes = React.useRef(false)
+
+  const look = React.useCallback(() => {
+    const now = model.current
+    if (!now || document.hidden) return
+    const was = had.current
+    const made = claudes.current
+    const ids = now.parts.map((part) => part.part.id)
+    had.current = new Set(ids)
+    claudes.current = false
+    if (!was || !made || now.standIn) return
+    const parts = newIn(was, ids)
+    if (parts.length > 0) setCame({ parts, at: performance.now() })
+  }, [])
+  React.useEffect(() => {
+    document.addEventListener("visibilitychange", look)
+    return () => document.removeEventListener("visibilitychange", look)
+  }, [look])
+
+  const loading = React.useCallback(() => {
+    // what is built while Claude is at work in the project is taken for what it built
+    const made = working.current
+    return (loaded: LoadedModel) => {
+      model.current = loaded
+      if (made) claudes.current = true
+      look()
+    }
+  }, [look])
+  const done = React.useCallback(() => setCame(null), [])
+  return { came, loading, done }
 }
 
 /** A part as what a piece is made out from: see `listed`, in Model. */
@@ -468,7 +535,14 @@ type Loading =
  * While a rebuilt model is coming in, the previous one stays on screen, so a rebuild swaps
  * the picture rather than blanking it.
  */
-function useLoadedModel(project: Project) {
+function useLoadedModel(
+  project: Project,
+  /**
+   * Called as a model begins to be loaded: what it gives back is told of the model once
+   * it is, before it is shown.
+   */
+  loading: () => (loaded: LoadedModel) => void
+) {
   const blank = project.manifest === null
   // Files opened into it that are not a model yet. There is nothing of the project's to
   // show meanwhile, and a cube would be taken for what was opened.
@@ -482,13 +556,16 @@ function useLoadedModel(project: Project) {
 
   React.useEffect(() => {
     let cancelled = false
+    const taken = loading()
     const run = async () => {
       if (!blank) setState({ status: "loading", done: 0, total: 0 })
       // nothing made in the folder yet: there is a cube to look at meanwhile
       if (blank) {
         await Promise.resolve()
         if (cancelled) return
-        setLoaded(coming ? null : standInModel())
+        const cube = coming ? null : standInModel()
+        if (cube) taken(cube)
+        setLoaded(cube)
         setState({ status: "ready" })
         return
       }
@@ -504,6 +581,7 @@ function useLoadedModel(project: Project) {
         }
       )
       if (cancelled) return disposeModel(next)
+      taken(next)
       setLoaded(next)
       setState({ status: "ready" })
     }
@@ -517,7 +595,7 @@ function useLoadedModel(project: Project) {
     return () => {
       cancelled = true
     }
-  }, [project.id, project.revision, blank, coming])
+  }, [project.id, project.revision, blank, coming, loading])
 
   // free the previous model's meshes once it is off screen
   React.useEffect(
@@ -531,7 +609,8 @@ function useLoadedModel(project: Project) {
 }
 
 function Model({ project }: { project: Project }) {
-  const { loaded: base, state } = useLoadedModel(project)
+  const arrivals = useArrivals(project)
+  const { loaded: base, state } = useLoadedModel(project, arrivals.loading)
   // The model as the user has its parts in groups, where they have put them in others
   // than the model says, by hand (see lib/arrange): the same model, as it was loaded,
   // but for its groups and what follows from them.
@@ -1240,6 +1319,51 @@ function Model({ project }: { project: Project }) {
     bridge.focus?.(boxRound(loaded, near, explode), underList())
   }, [loaded, near, explode])
 
+  // What Claude has just made is shown coming (see useArrivals): for a moment its parts
+  // are light, where they stand, and then the camera goes to them, as Space takes it to
+  // what is picked out. The first model a project has is all of it such parts; but that
+  // is framed afresh as it is, and there is none of it to go to. The view is not the
+  // model's under a blueprint, nor the user's while Claude looks a model over; and a
+  // part that is not on show does not come into it.
+  const { came, done: cameAndWent } = arrivals
+  const coming = React.useMemo(() => {
+    if (!came || !loaded || view.blueprint || lookingOver) return null
+    const parts = loaded.parts
+      .filter(
+        (part) =>
+          came.parts.includes(part.part.id) && onShow(part, { only, hidden })
+      )
+      .map((part) => part.part.id)
+    const box = boxRound(loaded, parts, explode)
+    if (!box) return null
+    const arriving: Arriving = { parts, box, at: came.at }
+    return { arriving, all: parts.length === loaded.parts.length }
+  }, [came, loaded, view.blueprint, lookingOver, only, hidden, explode])
+  // For whoever has asked for less to move they are there, and the camera goes.
+  const still = React.useMemo(
+    () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    []
+  )
+  const comingNow = React.useRef(coming)
+  React.useEffect(() => {
+    comingNow.current = coming
+  }, [coming])
+  React.useEffect(() => {
+    if (!came) return
+    const go = setTimeout(
+      () => {
+        const now = comingNow.current
+        if (now && !now.all) bridge.goTo?.(now.arriving.box, underList())
+      },
+      still ? 0 : ARRIVAL.shown
+    )
+    const over = setTimeout(cameAndWent, ARRIVAL.lasts + LATE)
+    return () => {
+      clearTimeout(go)
+      clearTimeout(over)
+    }
+  }, [came, still, cameAndWent])
+
   // what the camera turns about, where it is to turn about what is picked out
   React.useEffect(() => {
     bridge.picked = () => boxRound(loaded, pickedOut(), explode)
@@ -1382,6 +1506,7 @@ function Model({ project }: { project: Project }) {
             changing={
               loaded.standIn ? NO_PARTS : lookingOver ? every : changing
             }
+            arriving={still ? null : (coming?.arriving ?? null)}
             reading={lookingOver}
             sweep={sweep}
             hoveredId={hoveredId}

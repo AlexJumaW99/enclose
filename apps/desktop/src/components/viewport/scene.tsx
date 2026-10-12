@@ -17,6 +17,7 @@ import type { Keepout } from "@/lib/model"
 import type { Turn } from "@/lib/orient"
 import { MAC } from "@/lib/platform"
 import type { Note, Section, Selection, View } from "@/lib/store"
+import { ARRIVAL, lightAt, wayAcross, type Arriving } from "./arriving"
 import { bridge } from "./bridge"
 import { FoundTags, namesOf, Place, type Named } from "./found-tags"
 import { Ground } from "./ground"
@@ -54,11 +55,12 @@ const ORDER = {
   glass: 2,
   glassEdges: 3,
   keepouts: 4,
-  // over all of the model: where the parts picked out together are, and where the ones
-  // Claude is at work on are; and then their own lines, which the hint of them is not to
-  // dim
+  // over all of the model: where the parts picked out together are, where the ones
+  // Claude is at work on are, and where the ones it has just made are; and then their
+  // own lines, which the hint of them is not to dim
   hint: 5,
   changing: 5.5,
+  arriving: 5.75,
   hinted: 6,
 }
 
@@ -89,6 +91,8 @@ const HINT = only(3)
 const CHANGING = only(4)
 /** In the picture a reference scene's lines are found in (see Reference). */
 const SCENE = only(5)
+/** In the picture of where the parts that have just come are (see Arrival). */
+const ARRIVING = only(6)
 /** Lights fall on whatever is being drawn. */
 const EVERY = new THREE.Layers()
 EVERY.enableAll()
@@ -148,6 +152,39 @@ const LINE_LIT = { away: 0.28, in: 1.25 }
  * second the view is drawn for it, when nothing else has it drawn.
  */
 const GLINT = { every: 2, lean: 20, apart: 640, rate: 30 }
+/**
+ * How the parts that have just come are shown coming (see arriving.ts). How much of
+ * what they are the light hides, where it has yet to go across them. How wide the front
+ * of it is, and how far behind the front the last of it goes out, as shares of the way
+ * across them. How strong the line round them is, and how wide, in pixels. And what
+ * glitters behind the front: how big a grain of it is, in pixels, how many of all the
+ * grains there could be are lit at once, and how many times a second it is others.
+ */
+const ARRIVED = {
+  veil: 0.85,
+  front: 0.07,
+  behind: 0.22,
+  line: 0.9,
+  width: 2,
+  grain: 2,
+  grains: 0.04,
+  rate: 24,
+}
+/**
+ * A part that is in front of ones that have just come, as it is drawn into the picture
+ * of where those are. It puts nothing of its own there; but what of them is behind it
+ * counts for only so much, and is shown coming that much more faintly. It is the least
+ * of the two that is kept, so that two such parts in front take no more than one does.
+ */
+const SHADING = {
+  transparent: true,
+  opacity: 0.3,
+  depthWrite: false,
+  blending: THREE.CustomBlending,
+  blendSrc: THREE.ZeroFactor,
+  blendDst: THREE.OneFactor,
+  blendEquationAlpha: THREE.MinEquation,
+}
 /**
  * What a part is drawn in where parts that are hinted at together are told apart: a
  * colour of its own, none of them near another, for as many as sixty-four of them.
@@ -529,6 +566,8 @@ const PartModel = React.memo(function PartModel({
   selected,
   hint,
   changing,
+  arriving,
+  shades,
   plain,
   explode,
   plane,
@@ -555,6 +594,10 @@ const PartModel = React.memo(function PartModel({
   hint: number | null
   /** Its place among the parts Claude is at work on, which are hinted at likewise. */
   changing: number | null
+  /** Its place among the parts that have just come, which are shown coming. */
+  arriving: number | null
+  /** it is not one of those, while there are some: in front of them, it shades them */
+  shades: boolean
   /** picked out, but to be seen in its own colour: one is being chosen for it */
   plain: boolean
   /** how far along its way out the part is: 0 assembled, 1 the model's own distance */
@@ -587,10 +630,11 @@ const PartModel = React.memo(function PartModel({
       [
         { occasion: HINT, place: hint },
         { occasion: CHANGING, place: changing },
+        { occasion: ARRIVING, place: arriving },
       ].flatMap(({ occasion, place }) =>
         place === null ? [] : [{ occasion, colour: tell(place) }]
       ),
-    [hint, changing]
+    [hint, changing, arriving]
   )
   const skinColors = React.useMemo(
     () =>
@@ -846,6 +890,20 @@ const PartModel = React.memo(function PartModel({
               />
             </mesh>
           )}
+          {/* (as glass, or by its lines alone, it hides nothing that is behind it) */}
+          {shades && !glass && look !== "outline" && (
+            <mesh
+              geometry={skin.geometry}
+              layers={ARRIVING}
+              raycast={NOT_PICKED}
+            >
+              <meshBasicMaterial
+                {...SHADING}
+                side={THREE.DoubleSide}
+                clippingPlanes={planes}
+              />
+            </mesh>
+          )}
           {told.map(({ occasion, colour }) => (
             <mesh
               key={occasion.mask}
@@ -997,6 +1055,43 @@ function Glass() {
   )
 }
 
+const cleared = new THREE.Color()
+
+/**
+ * Draws what is marked for an occasion into a picture that is not shown, as the camera
+ * sees it, on nothing; and leaves all else as it was found.
+ */
+function drawOn(
+  picture: THREE.WebGLRenderTarget,
+  occasion: THREE.Layers,
+  renderer: THREE.WebGLRenderer,
+  scene: THREE.Scene,
+  camera: THREE.Camera
+) {
+  const was = {
+    target: renderer.getRenderTarget(),
+    autoClear: renderer.autoClear,
+    alpha: renderer.getClearAlpha(),
+    background: scene.background,
+    occasions: camera.layers.mask,
+  }
+  renderer.getClearColor(cleared)
+  // it starts from nothing, which what was last drawn may have left it unable to do
+  renderer.state.buffers.depth.setMask(true)
+  renderer.state.buffers.color.setMask(true)
+  renderer.setClearColor(0x000000, 0)
+  renderer.autoClear = true
+  scene.background = null
+  camera.layers.mask = occasion.mask
+  renderer.setRenderTarget(picture)
+  renderer.render(scene, camera)
+  renderer.setRenderTarget(was.target)
+  camera.layers.mask = was.occasions
+  scene.background = was.background
+  renderer.autoClear = was.autoClear
+  renderer.setClearColor(cleared, was.alpha)
+}
+
 /**
  * A hint of some of the parts, laid over the view: where each of them is, whatever is in
  * front of it. It is how the parts picked out together are shown: a box takes in what is
@@ -1132,7 +1227,6 @@ function Hint({
   // whenever the view is drawn, by whoever draws it, the picture is drawn first
   const draw = React.useMemo(() => {
     const size = new THREE.Vector2()
-    const cleared = new THREE.Color()
     return (
       renderer: THREE.WebGLRenderer,
       scene: THREE.Scene,
@@ -1155,28 +1249,7 @@ function Hint({
         )
         if (shared) LIGHT.going.value.copy(material.uniforms.going.value)
       }
-      const was = {
-        target: renderer.getRenderTarget(),
-        autoClear: renderer.autoClear,
-        alpha: renderer.getClearAlpha(),
-        background: scene.background,
-        occasions: camera.layers.mask,
-      }
-      renderer.getClearColor(cleared)
-      // it starts from nothing, which what was last drawn may have left it unable to do
-      renderer.state.buffers.depth.setMask(true)
-      renderer.state.buffers.color.setMask(true)
-      renderer.setClearColor(0x000000, 0)
-      renderer.autoClear = true
-      scene.background = null
-      camera.layers.mask = occasion.mask
-      renderer.setRenderTarget(picture)
-      renderer.render(scene, camera)
-      renderer.setRenderTarget(was.target)
-      camera.layers.mask = was.occasions
-      scene.background = was.background
-      renderer.autoClear = was.autoClear
-      renderer.setClearColor(cleared, was.alpha)
+      drawOn(picture, occasion, renderer, scene, camera)
     }
   }, [picture, material, occasion, how, moving, shared])
 
@@ -1189,6 +1262,184 @@ function Hint({
       raycast={NOT_PICKED}
       // what goes across it is for whoever is at the view, not for a picture of it
       userData={{ passing: how.glint > 0 }}
+      onBeforeRender={draw}
+    />
+  )
+}
+
+/**
+ * The parts that have just come, shown coming: laid over the view as a hint of them is,
+ * from a picture of where each of them is. They are all light to begin with, with a
+ * line round each. Then a light goes across them, once, and behind it they are as they
+ * are, but for what of it glitters there a moment longer; and the line goes out.
+ */
+function Arrival({
+  arriving,
+  colors,
+  order,
+}: {
+  arriving: Arriving
+  colors: ThemeColors
+  /** where among all that is drawn it is laid over the view */
+  order: number
+}) {
+  const invalidate = useThree((state) => state.invalidate)
+  // The frame a model is first drawn in can be long in coming, with all of it to draw
+  // anew: the light sets off when they are first drawn, and no sooner.
+  const began = React.useRef<number | null>(null)
+  // the view is drawn only when something changes: and this does, for as long as it lasts
+  useFrame(() => {
+    if (
+      began.current === null ||
+      performance.now() - began.current < ARRIVAL.lasts
+    )
+      invalidate()
+  })
+
+  // where they stand, in the view's own frame: what the light has to get across
+  const corners = React.useMemo(() => {
+    const { min, max } = arriving.box
+    return [min.x, max.x].flatMap((x) =>
+      [min.y, max.y].flatMap((y) =>
+        [min.z, max.z].map((z) => toWorld(new THREE.Vector3(x, y, z)))
+      )
+    )
+  }, [arriving.box])
+  const picture = React.useMemo(
+    // as smooth at its edges as the view, which is what keeps the line smooth
+    () => new THREE.WebGLRenderTarget(1, 1, { samples: 4 }),
+    []
+  )
+  const material = React.useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        uniforms: {
+          picture: { value: picture.texture },
+          reach: { value: new THREE.Vector2() },
+          light: { value: new THREE.Color() },
+          // the line round them: light where the view is dark, and ink where it is not
+          rim: { value: new THREE.Color() },
+          // which way the light goes across them, and how far (see wayAcross)
+          going: { value: new THREE.Vector3() },
+          // How far across them its front has got, and how much of it all is left
+          // (see lightAt). Which lot of the grains are lit, another each time, and how
+          // big a grain is in the picture's own pixels.
+          now: { value: new THREE.Vector4(0, 1, 0, ARRIVED.grain) },
+        },
+        vertexShader: `
+          varying vec2 at;
+          void main() {
+            at = uv;
+            gl_Position = vec4(position.xy, 0.0, 1.0);
+          }`,
+        fragmentShader: `
+          uniform sampler2D picture;
+          uniform vec2 reach;
+          uniform vec3 light;
+          uniform vec3 rim;
+          uniform vec3 going;
+          uniform vec4 now;
+          varying vec2 at;
+          // the most there is of them at a place or next to it: less, behind another part
+          float most;
+          float unlike(vec4 here, vec2 by) {
+            vec4 there = texture2D(picture, at + by * reach);
+            most = max(most, there.a);
+            return distance(here, there);
+          }
+          // a number for a place, from none to 1, that is nothing like its neighbours'
+          float chance(vec2 place) {
+            return fract(sin(dot(place, vec2(127.1, 311.7))) * 43758.5453);
+          }
+          void main() {
+            float front = now.x;
+            float left = now.y;
+            float lot = now.z;
+            float grain = now.w;
+            vec4 here = texture2D(picture, at);
+            most = here.a;
+            // a line goes where a place is unlike what is round it, any way from it
+            float edge = max(
+              max(unlike(here, vec2(1.0, 0.0)), unlike(here, vec2(-1.0, 0.0))),
+              max(unlike(here, vec2(0.0, 1.0)), unlike(here, vec2(0.0, -1.0))));
+            edge = max(edge, max(
+              max(unlike(here, vec2(0.7, 0.7)), unlike(here, vec2(-0.7, 0.7))),
+              max(unlike(here, vec2(0.7, -0.7)), unlike(here, vec2(-0.7, -0.7)))));
+            // how far behind the front of the light this place is: ahead of it, less
+            // than nothing
+            float behind = front - (dot(gl_FragCoord.xy, going.xy) - going.z);
+            // ahead of the front the parts are all light, and behind it that goes out
+            float veil = ${ARRIVED.veil} * (behind < 0.0 ? 1.0 : exp(-behind / ${ARRIVED.behind}));
+            // the front itself is nothing but light
+            veil = mix(veil, 1.0, exp(-behind * behind / ${ARRIVED.front * ARRIVED.front}));
+            // and behind it, a little further than that, grains of it are lit: some
+            // of them more than others
+            float grains = smoothstep(${1 - ARRIVED.grains}, 1.0, chance(floor(gl_FragCoord.xy / grain) + lot * 17.0))
+              * step(0.0, behind) * exp(-behind / ${ARRIVED.behind * 1.6});
+            float line = smoothstep(0.02, 0.2, edge) * most * ${ARRIVED.line} * left;
+            float fill = here.a * max(veil, grains) * left * (1.0 - line);
+            float alpha = line + fill;
+            if (alpha < 0.002) discard;
+            gl_FragColor = vec4((rim * line + light * fill) / alpha, alpha);
+            #include <colorspace_fragment>
+          }`,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    [picture]
+  )
+  React.useEffect(() => {
+    material.uniforms.light.value.copy(colors.picked)
+    material.uniforms.rim.value.set(colors.dark ? colors.picked : EDGE)
+  }, [material, colors])
+  React.useEffect(
+    () => () => {
+      picture.dispose()
+      material.dispose()
+    },
+    [picture, material]
+  )
+
+  // whenever the view is drawn, by whoever draws it, the picture is drawn first
+  const draw = React.useMemo(() => {
+    const size = new THREE.Vector2()
+    const lean = THREE.MathUtils.degToRad(GLINT.lean)
+    return (
+      renderer: THREE.WebGLRenderer,
+      scene: THREE.Scene,
+      camera: THREE.Camera
+    ) => {
+      renderer.getDrawingBufferSize(size)
+      if (picture.width !== size.x || picture.height !== size.y)
+        picture.setSize(size.x, size.y)
+      const ratio = renderer.getPixelRatio()
+      // half the line's width either side of an edge, in the picture's own measure
+      const half = (ARRIVED.width * ratio) / 2
+      material.uniforms.reach.value.set(half / size.x, half / size.y)
+      began.current ??= performance.now()
+      const since = performance.now() - began.current
+      const { front, left } = lightAt(since / ARRIVAL.lasts)
+      material.uniforms.now.value.set(
+        front,
+        left,
+        Math.floor((since / 1000) * ARRIVED.rate),
+        ARRIVED.grain * ratio
+      )
+      wayAcross(corners, camera, size, lean, material.uniforms.going.value)
+      drawOn(picture, ARRIVING, renderer, scene, camera)
+    }
+  }, [picture, material, corners])
+
+  return (
+    <mesh
+      geometry={SCREEN}
+      material={material}
+      frustumCulled={false}
+      renderOrder={order}
+      raycast={NOT_PICKED}
+      // it is for whoever is at the view, not for a picture of it
+      userData={{ passing: true }}
       onBeforeRender={draw}
     />
   )
@@ -1667,6 +1918,7 @@ export function Scene({
   selectedWith,
   several,
   changing,
+  arriving = null,
   reading = false,
   sweep,
   hoveredId,
@@ -1707,6 +1959,11 @@ export function Scene({
   several: string[]
   /** the parts Claude is at work on: hinted at likewise, with a light going across them */
   changing: string[]
+  /**
+   * The parts Claude has just made, which the model had none of before: shown coming,
+   * for a moment (see arriving.ts). Null once they have, and while there are none.
+   */
+  arriving?: Arriving | null
   /**
    * They are the whole model, which Claude is looking over. The light is plainer to see,
    * the camera goes slowly round the model, and the view is not the hand's to move or
@@ -1817,6 +2074,12 @@ export function Scene({
   const anyChanged = loaded.parts.some(
     (part, index) => looks[index].shown && changed.includes(part.part.id)
   )
+  // And the parts it has just made are shown coming, those that are there to be seen.
+  const come =
+    arriving && !seeking && !sweeping && !finding ? arriving.parts : NOT_HINTED
+  const anyCome = loaded.parts.some(
+    (part, index) => looks[index].shown && come.includes(part.part.id)
+  )
   /** Picked out, and drawn in the selection's colour for it. */
   const filled = (id: string) =>
     lit.has(id) && !(plain && !sweeping && selectedWith.includes(id))
@@ -1879,6 +2142,15 @@ export function Scene({
           how={reading ? READ : CHANGED}
         />
       )}
+      {arriving && anyCome && (
+        <Arrival
+          // (others that come while these are coming begin again, from the beginning)
+          key={arriving.at}
+          arriving={arriving}
+          colors={colors}
+          order={ORDER.arriving}
+        />
+      )}
       <Rig
         box={stage}
         homeKey={homeKey}
@@ -1910,6 +2182,7 @@ export function Scene({
       <Posing />
       <Redraw on={view} />
       <Redraw on={changed} />
+      <Redraw on={arriving} />
       <Redraw on={found} />
       <Redraw on={reference} />
       <group ref={root} rotation={MODEL_TO_WORLD}>
@@ -1956,6 +2229,10 @@ export function Scene({
                   ? changed.indexOf(part.part.id)
                   : null
               }
+              arriving={
+                come.includes(part.part.id) ? come.indexOf(part.part.id) : null
+              }
+              shades={anyCome && !come.includes(part.part.id)}
               plain={
                 plain &&
                 !seeking &&
