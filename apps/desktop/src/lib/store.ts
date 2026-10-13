@@ -497,6 +497,12 @@ type State = {
   figure: boolean
   /** whether the settings are over the window */
   settingsOpen: boolean
+  /**
+   * Whether the view has the window to itself: the cards at its left, with what is at
+   * their foot, and the buttons down its right are put away. The conversation is not
+   * the view's, and stays as it is.
+   */
+  bare: boolean
   /** where the app is with a newer version of itself, as the app last said */
   update: Update
   access: Access
@@ -705,6 +711,7 @@ type State = {
   pickScene(sceneId: string): void
   setFigure(shown: boolean): void
   setSettingsOpen(open: boolean): void
+  setBare(bare: boolean): void
   /**
    * What Esc does: stop looking for parts by name, if they are being looked for; put the
    * parts list away, if it is up, or the list of reference scenes, or the project's
@@ -853,6 +860,7 @@ export const useStore = create<State>()((set, get) => ({
   sceneOf: savedScenes(),
   figure: saved(FIGURE_KEY) === "shown",
   settingsOpen: false,
+  bare: false,
   update: { state: "none" },
   access: savedAccess(saved(ACCESS_KEY)),
   providers: [],
@@ -1382,6 +1390,10 @@ export const useStore = create<State>()((set, get) => ({
 
   setSettingsOpen(settingsOpen) {
     set({ settingsOpen })
+  },
+
+  setBare(bare) {
+    set({ bare })
   },
 
   leave() {

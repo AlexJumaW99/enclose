@@ -536,8 +536,13 @@ export function Sidebar({ children }: { children: React.ReactNode }) {
   )
   // And while one sheet has the view to itself that card is gone too, and what is at
   // the foot with it: there is nothing over the sheet that is not the sheet's. They
-  // fade where they are, and come back the same way.
-  const alone = useStore((state) => state.view.sheet !== null)
+  // fade where they are, and come back the same way. So it is while the view has been
+  // given the window to itself (Cmd+.), which is of the project that is open: with
+  // none open there is no view, and the cards are what there is.
+  const alone = useStore(
+    (state) =>
+      state.view.sheet !== null || (state.bare && state.activeId !== null)
+  )
   const addProject = useStore((state) => state.addProject)
   const createProject = useStore((state) => state.createProject)
   // an example is a while coming, and the list it was picked from has closed by then:
@@ -578,7 +583,7 @@ export function Sidebar({ children }: { children: React.ReactNode }) {
             the two of them one over the other, and that stays at the foot of the list
             as the cards go by: over them, and over what shows from under a card. */}
         <div className="sticky bottom-0 z-20 flex shrink-0 grow flex-col justify-between gap-2 pb-4">
-          <Tucked away={sheets}>
+          <Tucked away={sheets} faded={alone}>
             <DropdownMenu open={adding} onOpenChange={setAdding}>
               <Tooltip>
                 <TooltipTrigger

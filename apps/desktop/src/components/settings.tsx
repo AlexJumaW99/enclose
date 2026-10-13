@@ -666,6 +666,7 @@ const KEYS: { title: string; rows: [string, string[], Drag?][] }[] = [
       ["New project", [CMD, "N"]],
       ...OPENS,
       ["Conversation", [CMD, "B"]],
+      ["Clear the view", [CMD, "."]],
       ["Settings", [CMD, ","]],
     ],
   },

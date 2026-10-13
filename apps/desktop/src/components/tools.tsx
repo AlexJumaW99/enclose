@@ -38,9 +38,16 @@ import { SPREAD, useStore } from "@/lib/store"
 import type { LoadedModel } from "./viewport/load"
 import { sectionFacing } from "./viewport/section-planes"
 
-/** What every button floating over the view is: a frosted circle of its own. */
+/**
+ * What every button floating over the view is: a frosted circle of its own. And it
+ * fades out where all of them are put away (see `Tools`), each by itself and not all as
+ * one: glass inside something that is fading has nothing behind it to be glass over.
+ */
 const ROUND =
-  "glass size-9 bg-background/60 px-0 shadow-sm ring-1 ring-foreground/10"
+  "glass size-9 bg-background/60 px-0 shadow-sm ring-1 ring-foreground/10 transition-[color,background-color,border-color,opacity] duration-200 group-data-[away]/tools:opacity-0!"
+
+/** The edge of the view the buttons are down. */
+const EDGE = "group/tools pointer-events-none absolute inset-y-0 right-0 w-15"
 
 /**
  * How far the two buttons that stand beside the Section's while the model is cut open
@@ -275,6 +282,10 @@ function Size({ bytes }: { bytes: number }) {
  * and not to be pressed. While it is its assembly guides, none of them is but the
  * blueprint's and the guides' own: a guide is of the model as it is built, whatever of
  * it is on show.
+ *
+ * And while the view has the window to itself (Cmd+.) they are all put away: there
+ * still, for whatever they bring up to know its button by, and not to be seen or
+ * pressed. Their keys do what they did.
  */
 export function Tools({
   loaded,
@@ -307,11 +318,12 @@ export function Tools({
   const setToolsOpen = useStore((state) => state.setToolsOpen)
   const finding = useStore((state) => state.finding !== null)
   const find = useStore((state) => state.find)
+  const bare = useStore((state) => state.bare)
   // While one sheet of the blueprint has the view to itself there is none of them:
   // only, at the top, what puts the sheet back among the others.
   if (view.sheet !== null)
     return (
-      <div className="pointer-events-none absolute inset-y-0 right-0 w-15">
+      <div className={EDGE} inert={bare} data-away={bare || undefined}>
         <Stack className="absolute top-3 right-3">
           <Press
             label="Back to the sheets"
@@ -325,7 +337,7 @@ export function Tools({
     )
 
   return (
-    <div className="pointer-events-none absolute inset-y-0 right-0 w-15">
+    <div className={EDGE} inert={bare} data-away={bare || undefined}>
       <Stack className="absolute top-3 right-3">
         <Switch
           label="Conversation"

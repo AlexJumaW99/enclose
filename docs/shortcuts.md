@@ -43,6 +43,7 @@ is Ctrl off a Mac.
 | Cmd+N | [A new project](projects.md#new-projects) |
 | Cmd+O | Open a file or folder as [a project](projects.md) |
 | Cmd+B | The conversation |
+| Cmd+. | Clear the view: the project cards and the buttons down the right are put away, and brought back |
 | Cmd+, | [Settings](settings.md) |
 | D | The light theme, or the dark |
 
@@ -94,6 +95,14 @@ section, the blueprint, the reference scene, the tools' hold on the model, whate
 showing on its own and whatever was put out of sight, one press each, starting with
 whichever you went into last.
 
+## With the view cleared
+
+Cmd+. leaves the model the window: the project cards, the settings button under them
+and the buttons down the right all go, and Cmd+. again brings them back. The
+conversation is not touched: open, it stays open. Nor is a list that is up, of parts or
+of reference scenes, nor the search. Every key still does what it did, so the parts
+list is still P and the settings still Cmd+,.
+
 ## When a key does nothing
 
 - While a box is being written in, the plain keys are the writing's: letters, Space,
@@ -101,7 +110,7 @@ whichever you went into last.
 - Under a blueprint the keys of the view wait until it is back: Cmd+1 to 7, Space, Z, S,
   X and Y, Shift+G, Cmd+/ and T.
 - T is there only in a project with tools of its own, and B and Cmd+F only once there
-  is a model. Cmd+B needs a project to be open.
+  is a model. Cmd+B and Cmd+. need a project to be open.
 - In a reference scene there is no view from below, so Cmd+5 does nothing.
 - No key of the view works with Settings open, or while Claude looks over files that
-  were just opened. Cmd+N, Cmd+O and Cmd+B wait for Settings to be closed too.
+  were just opened. Cmd+N, Cmd+O, Cmd+B and Cmd+. wait for Settings to be closed too.
