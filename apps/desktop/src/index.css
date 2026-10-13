@@ -216,6 +216,36 @@
   }
 }
 
+/* The conversation that a new version of the project is being made from: a light goes
+   across the ground of it in the same way, over and over, behind what is said in it,
+   until the new one is there. Fainter and slower than a card's, with so much further
+   to go. */
+.version-coming {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.version-coming::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 25%,
+    color-mix(in oklch, var(--foreground) 5%, transparent) 50%,
+    transparent 75%
+  );
+  animation: glancing 2.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .version-coming::after {
+    animation: none;
+    opacity: 0;
+  }
+}
+
 /* The chip of something just said of a part: a light goes across the ground of it,
    quickly, three times, so that it is seen on the message box. The words on it stay as
    they are. The light starts and ends clear of the chip, and clear of it is where it is

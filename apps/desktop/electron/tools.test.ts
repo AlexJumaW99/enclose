@@ -5,6 +5,7 @@ import {
   assemblyTools,
   modelTools,
   ToolServer,
+  versionTools,
   viewportTools,
 } from "./tools"
 
@@ -227,6 +228,36 @@ describe("answerTo", () => {
     ])
       expect(await call(not)).toMatchObject({ result: { isError: true } })
     expect(given).toHaveLength(2)
+  })
+
+  it("begins a new version with the brief it is given, or says why it cannot", async () => {
+    const briefs: string[] = []
+    const versions = versionTools(async (brief) => {
+      if (brief === "none") throw new Error("Versions are switched off.")
+      briefs.push(brief)
+      return "The new version is being begun."
+    })
+    const call = (given: unknown) =>
+      answerTo("versions", versions, {
+        id: 1,
+        method: "tools/call",
+        params: { name: "begin", arguments: given },
+      })
+    expect(await call({ brief: "Make the lid taller" })).toMatchObject({
+      result: {
+        content: [{ type: "text", text: "The new version is being begun." }],
+      },
+    })
+    expect(briefs).toEqual(["Make the lid taller"])
+    expect(await call({ brief: "none" })).toMatchObject({
+      result: {
+        isError: true,
+        content: [{ type: "text", text: "Versions are switched off." }],
+      },
+    })
+    // and with nothing to begin it with, it is not asked at all
+    expect(await call({})).toMatchObject({ result: { isError: true } })
+    expect(briefs).toHaveLength(1)
   })
 
   it("has no answer to what wants none, and an error for what it does not know", async () => {

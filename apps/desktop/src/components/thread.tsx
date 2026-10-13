@@ -5,6 +5,7 @@ import {
   BoxesIcon,
   BoxIcon,
   ClockIcon,
+  GitBranchPlusIcon,
   PanelRightCloseIcon,
   PlusIcon,
   TriangleAlertIcon,
@@ -148,6 +149,16 @@ function UserMessage({
         <Badge variant="outline" title={item.reference}>
           <ReferenceIcon data-icon="inline-start" />
           Reference scene
+        </Badge>
+      )}
+      {/* it began a new version of the project, with what was asked for in another */}
+      {item.version && (
+        <Badge
+          variant="outline"
+          title="What you asked for in another conversation, summed up by the agent"
+        >
+          <GitBranchPlusIcon data-icon="inline-start" />
+          New version
         </Badge>
       )}
       {/* the whole objects it is about, each by what it goes by */}
@@ -570,6 +581,8 @@ export function Thread({ project }: { project: Project }) {
 
   const blocks = React.useMemo(() => inBlocks(items ?? []), [items])
   const working = open?.status === "working"
+  // its turn ends in a new version of the project, which the app is about to begin
+  const versioning = working && open?.versioning === true
   // one thing at a time is done in a project's folder
   const elsewhere = project.conversations.some(
     (c) => c.status !== "idle" && c.id !== openId
@@ -577,7 +590,8 @@ export function Thread({ project }: { project: Project }) {
   // a stretch of steps says for itself that there is more to come
   const latest = blocks.at(-1)
   const quiet =
-    working && latest?.kind !== "assistant" && latest?.kind !== "steps"
+    versioning ||
+    (working && latest?.kind !== "assistant" && latest?.kind !== "steps")
 
   // follow the conversation as it grows, to the very end of it: past the room left under
   // the last thing said, and the word that it is being worked on, which comes a moment
@@ -591,7 +605,8 @@ export function Thread({ project }: { project: Project }) {
 
   return (
     <aside
-      className="relative flex shrink-0 flex-col border-l bg-background"
+      // (a ground of its own, for the light that goes across it to go behind the rest)
+      className="relative isolate flex shrink-0 flex-col border-l bg-background"
       // however wide it was dragged, the view keeps its share of a narrower window
       style={{
         width,
@@ -600,6 +615,8 @@ export function Thread({ project }: { project: Project }) {
       }}
     >
       <Edge />
+      {/* a faint light across its ground, for as long as the new version is on its way */}
+      {versioning && <div aria-hidden className="version-coming" />}
       <header className="drag flex h-12 shrink-0 items-center justify-between gap-2 pr-3 pl-8">
         <Name key={open?.id} projectId={project.id} conversation={open} />
         {/* quiet until the pointer is on them */}
@@ -651,7 +668,8 @@ export function Thread({ project }: { project: Project }) {
                   key={block.id}
                   steps={block.steps}
                   took={block.took}
-                  working={working && block === latest}
+                  // (what says so while a new version is made is the line below)
+                  working={working && !versioning && block === latest}
                 />
               ) : (
                 <Item key={block.id} item={block} project={project} />
@@ -660,7 +678,7 @@ export function Thread({ project }: { project: Project }) {
             {quiet && (
               <div className="flex h-5 items-center text-xs text-muted-foreground">
                 <span className="shimmer shimmer-color-foreground">
-                  Working
+                  {versioning ? "Creating a new version" : "Working"}
                 </span>
               </div>
             )}

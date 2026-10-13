@@ -195,8 +195,12 @@ What it does, a step at a time, which can also be done by hand:
 
    ```
    git tag v<version> && git push origin main v<version>
-   gh release create v<version> release/Enclose-arm64.dmg release/Enclose-x64.dmg release/Enclose-<version>-*.zip release/Enclose-<version>-*.zip.blockmap release/latest-mac.yml --title "Enclose <version>" --generate-notes --notes-start-tag v<the version before>
+   gh release create v<version> release/Enclose-arm64.dmg release/Enclose-x64.dmg release/Enclose-<version>-*.zip release/Enclose-<version>-*.zip.blockmap release/latest-mac.yml --title "Enclose <version>" --notes "$(git log --reverse --format='- %s (%h)' v<the version before>..v<version>^)"
    ```
+
+   What the release says has changed is the commits since the version before, a line to
+   each, without the one that only gave the app its version. (The script puts a link
+   under them to where the two versions are set side by side.)
 
 The disk images are named for the kind of Mac and not for the version
 (`Enclose-arm64.dmg`, `Enclose-x64.dmg`), so that the newest is always at one address:

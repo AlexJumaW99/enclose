@@ -36,6 +36,9 @@ type Saved = {
   closed?: boolean
 }
 
+/** The most letters a project's name can have. */
+const NAME_LENGTH = 80
+
 /** What a project's model.py was written from: the model's title, and the files it reads. */
 export type Written = { title: string; files: string[] }
 
@@ -637,6 +640,27 @@ export class Projects {
     this.saved = this.saved.filter((p) => p !== project)
     // projects made before `made` was kept are known by having a name of their own
     if (project.made ?? project.name !== undefined) removeIfEmpty(project.path)
+    this.save()
+    this.onChange()
+  }
+
+  /**
+   * Call a project something else, as the user asks. That is its name from then on: one
+   * that went by a stand-in is no longer waiting for its model to name it. Only the
+   * project is renamed: its folder is left as it is called. A name that says nothing
+   * changes nothing.
+   */
+  rename(id: string, name: string) {
+    const project = this.saved.find((p) => p.id === id)
+    const called = name.replace(/\s+/g, " ").trim().slice(0, NAME_LENGTH)
+    if (!project || !called) return
+    if (called === (project.name ?? path.basename(project.path))) return
+    // A folder the app did not make is known, where nothing says, by its project having
+    // no name of its own (see `remove`): it is said outright before it is given one.
+    if (project.made === undefined && project.name === undefined)
+      project.made = false
+    project.name = called
+    delete project.standIn
     this.save()
     this.onChange()
   }

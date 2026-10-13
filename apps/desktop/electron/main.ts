@@ -640,6 +640,8 @@ function lookOver(id: string, seen: Seen, manner: Manner): string | null {
     const read = partsOf(manifest)
     // the script as the app last wrote it: nothing but that is written over
     let ours = modelScript(written.title, written.files)
+    // and what the project was last called from here: after the files, to begin with
+    let named = written.title
     const arranging: Arranging = async (given, signal) => {
       const arranged = arrange(
         read,
@@ -650,7 +652,15 @@ function lookOver(id: string, seen: Seen, manner: Manner): string | null {
         throw new Error(
           `The project's ${SCRIPT} has been changed since the files were opened, so it is not written over. Tell the user the names and groups you would give the parts, and that they can ask you to put them in.`
         )
-      const next = modelScript(written.title, written.files, arranged)
+      // What the project is to be called is the model's title too. It takes the place of
+      // the name the project has from here, and of no other: one the user has given it
+      // meanwhile stands.
+      const called = projects.get(id)?.name
+      const title =
+        called !== undefined && called !== named
+          ? called
+          : (arranged.name ?? named)
+      const next = modelScript(title, written.files, arranged)
       fs.writeFileSync(script, next)
       const building = runBuild(project.path, build, cleanEnv(), () => {})
       signal.addEventListener("abort", building.stop, { once: true })
@@ -666,9 +676,12 @@ function lookOver(id: string, seen: Seen, manner: Manner): string | null {
         )
       }
       ours = next
+      // (the project alone is renamed: its folder is left as it is called)
+      named = title
+      projects.rename(id, title)
       projects.refresh(id)
       broadcast()
-      return `Done: ${arranged.parts.length} parts in ${arranged.groups.length} groups (${arranged.groups.map((group) => group.label).join(", ")}). The view shows the model so.`
+      return `Done: ${arranged.parts.length} parts in ${arranged.groups.length} groups (${arranged.groups.map((group) => group.label).join(", ")}).${title === called ? "" : ` The project is called "${title}" now.`} The view shows the model so.`
     }
     const into = threads.lookOver(id, seen, written.files, manner, arranging)
     if (into) analytics?.record("model looked over", mannerSaid(manner))
@@ -928,6 +941,9 @@ function wire() {
     projects.remove(project.id)
     analytics?.record("project removed")
   })
+  ipcMain.handle(CHANNEL.projectsRename, (_, id: string, name: string) =>
+    projects.rename(String(id), String(name))
+  )
   ipcMain.handle(CHANNEL.projectsReveal, (_, id: string) => {
     const project = projects.get(id)
     if (project) void shell.openPath(project.path)
@@ -1509,6 +1525,11 @@ if (!app.requestSingleInstanceLock()) {
       projects,
       changes,
       turnTo,
+      versioned: async (id) => {
+        const project = projects.get(id)
+        if (!project || !settings.get().versions) return "off"
+        return (await versions.fits(project.path)) ? "yes" : "big"
+      },
       launch: (id) => providers.launch(id),
       tools: toolServer,
       kit: KIT,
@@ -1546,6 +1567,11 @@ if (!app.requestSingleInstanceLock()) {
       viewport: askViewport,
       onItem: (projectId, conversationId, item) =>
         send(CHANNEL.threadItem, projectId, conversationId, item),
+      onVersion: (projectId, from, to, manner) => {
+        // the window turns to it, where it was showing the one it was asked for in
+        send(CHANNEL.versionsBegun, projectId, from, to)
+        analytics?.record("version begun", mannerSaid(manner))
+      },
       onSummary: () => {
         broadcast()
         // a turn may be over: the folder it was had in is free to be another's

@@ -192,6 +192,7 @@ describe("modelScript", () => {
   it("writes the names and groups Claude gave, each body by the id it is read under", () => {
     const script = modelScript("Clock", ["source/clock.step"], {
       what: 'a "wall" clock\\',
+      name: null,
       reference: null,
       groups: [
         { label: "Case", shell: true },
@@ -223,6 +224,7 @@ describe("modelScript", () => {
   it("has the model name the reference scene Claude said suits it", () => {
     const script = modelScript("Stool", ["source/stool.step"], {
       what: "a stool",
+      name: null,
       reference: "room",
       groups: [{ label: "Stool", shell: false }],
       parts: [{ from: "solid_1", id: "seat", label: "Seat", group: "Stool" }],
@@ -254,6 +256,17 @@ describe("arrange", () => {
     expect(arrange(read, given, scenes).reference).toBeNull()
   })
 
+  it("keeps what the project is to be called, on one line, where it was said", () => {
+    const given = {
+      what: "a clock",
+      groups: [{ name: "Clock" }],
+      parts: [{ id: "solid_1", name: "Dial", group: "Clock" }],
+    }
+    expect(arrange(read, { ...given, name: "  Cloque\n " }).name).toBe("Cloque")
+    expect(arrange(read, { ...given, name: "   " }).name).toBeNull()
+    expect(arrange(read, given).name).toBeNull()
+  })
+
   it("names and groups the parts as given, in the order the files have them", () => {
     expect(
       arrange(read, {
@@ -267,6 +280,7 @@ describe("arrange", () => {
       })
     ).toEqual({
       what: "a pill box",
+      name: null,
       reference: null,
       groups: [
         { label: "Case", shell: true },

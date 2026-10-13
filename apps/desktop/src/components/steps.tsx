@@ -7,6 +7,7 @@ import {
   EyeIcon,
   FilePlusIcon,
   FileTextIcon,
+  GitBranchPlusIcon,
   GlobeIcon,
   ListIcon,
   MousePointerClickIcon,
@@ -72,6 +73,7 @@ const ICONS: Record<string, LucideIcon> = {
   Look: EyeIcon,
   Check: MousePointerClickIcon,
   List: ListIcon,
+  Create: GitBranchPlusIcon,
 }
 
 /** A step in a line: a picture of the kind of thing it was, then what was done, in words. */

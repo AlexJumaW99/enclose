@@ -17,6 +17,14 @@ with dashes. Once something has been made in it and Claude has finished, the pro
 takes the name of its model and its folder is renamed to match:
 `2026-10-05-2336-pill-box`. A folder you opened yourself is never renamed.
 
+## Renaming a project
+
+Right-click a project's card for **Rename project**, and write over its name where it is
+on the card: Enter, or a click anywhere else, keeps what is written, and Esc leaves the
+name as it was. It is the project that is renamed, in the app: what its card says, and
+what Claude is told it is called. Its folder keeps the name it has. A project that still
+goes by its stand-in keeps the name you give it, and no longer takes its model's.
+
 ## Removing a project
 
 The × on a card removes the project from the app. Its folder stays, with everything in
@@ -93,10 +101,17 @@ the parts, keeping the names the files gave where they are good ones. That is a
 conversation of the project's, begun by the app, and it ends with what Claude made of
 the model and what it was unsure of.
 
+It names the project as well, which until then goes by what the file was called, or the
+folder the files were in. It keeps what in that is the thing's name and leaves out the
+rest: a project made of `cloque-v4.step` is called Cloque. Where the file's name says
+nothing of the thing, it is named for what it is. That is the model's title too. The
+folder keeps the name it was made under, and a name you gave the project yourself
+[meanwhile](#renaming-a-project) stands.
+
 For this one turn Claude has none of Claude Code's own tools: it can look at the view,
-and name and group the parts, which the app writes into `model.py` as a table and
-builds. It can change nothing else. It can be stopped, and the settings can turn it off
-(General, Opened files); with no agent on the machine it waits until there is one.
+and name the project and name and group the parts, which the app writes into `model.py`
+and builds. It can change nothing else. It can be stopped, and the settings can turn it
+off (General, Opened files); with no agent on the machine it waits until there is one.
 
 ## The model manifest
 

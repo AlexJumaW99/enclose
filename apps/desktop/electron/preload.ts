@@ -27,6 +27,7 @@ const api: CadApi = {
       on(CHANNEL.projectsExampleProgress, listener),
     pathOf: (file) => webUtils.getPathForFile(file),
     remove: (id) => ipcRenderer.invoke(CHANNEL.projectsRemove, id),
+    rename: (id, name) => ipcRenderer.invoke(CHANNEL.projectsRename, id, name),
     reveal: (id) => ipcRenderer.invoke(CHANNEL.projectsReveal, id),
     onChange: (listener) => on(CHANNEL.projectsChanged, listener),
   },
@@ -83,6 +84,7 @@ const api: CadApi = {
     show: (projectId, conversationId) =>
       ipcRenderer.send(CHANNEL.versionsShow, projectId, conversationId),
     onTurned: (listener) => on(CHANNEL.versionsTurned, listener),
+    onBegun: (listener) => on(CHANNEL.versionsBegun, listener),
   },
   thread: {
     items: (projectId, conversationId) =>

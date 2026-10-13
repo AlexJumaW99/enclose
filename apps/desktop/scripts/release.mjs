@@ -2,7 +2,8 @@
 // one command. It gives the app its new version and commits that, builds, signs and
 // notarizes the app for both kinds of Mac, sees that a Mac will take it, tags the commit,
 // pushes it, and publishes the release with what an installed app updates itself from.
-// It needs a Mac, and what notarizes the app: see scripts/dist.mjs.
+// What the release says has changed is the commits since the version before, a line to
+// each. It needs a Mac, and what notarizes the app: see scripts/dist.mjs.
 //   npm run release                the next version: 0.0.4 after 0.0.3
 //   npm run release -- 0.1.0       that version
 //   npm run release -- --dry       see that everything is ready, and change nothing
@@ -128,7 +129,7 @@ console.log(
 )
 if (dry) {
   console.log(
-    `[release] (dry) would test, see that a tool is shut in, ${resumed ? "" : `commit "chore: ${next}", `}build and notarize, tag ${tag}, push, and publish with notes since ${before}`
+    `[release] (dry) would test, see that a tool is shut in, ${resumed ? "" : `commit "chore: ${next}", `}build and notarize, tag ${tag}, push, and publish, listing the commits since ${before}`
   )
   process.exit(0)
 }
@@ -208,6 +209,30 @@ if (missing.length > 0)
     again
   )
 
+// What the release says has changed: the commits since the version before, a line to
+// each with what it is known by, the oldest first. The one that only gave the app its
+// version is not among them. Under them is where the two versions are set side by side.
+// (Worked out before anything is pushed, so that nothing can stop between the two.)
+const commits = must(
+  "git",
+  ["log", "--reverse", "--format=- %s (%h)", `${before}..HEAD`],
+  { quiet: true }
+)
+  .split("\n")
+  .filter((line) => line && !line.startsWith(`- chore: ${next} (`))
+const repository = must(
+  "gh",
+  ["repo", "view", "--json", "url", "--jq", ".url"],
+  {
+    quiet: true,
+  }
+)
+const notes = [
+  ...commits,
+  ...(commits.length > 0 ? [""] : []),
+  `**Full Changelog**: ${repository}/compare/${before}...${tag}`,
+].join("\n")
+
 step(`${tag}, pushed`)
 must("git", ["tag", tag])
 must("git", ["push", "origin", "main", tag])
@@ -220,9 +245,8 @@ must("gh", [
   ...files.map((file) => path.join("release", file)),
   "--title",
   `Enclose ${next}`,
-  "--generate-notes",
-  "--notes-start-tag",
-  before,
+  "--notes",
+  notes,
 ])
 
 console.log(`\n[release] Enclose ${next} is out.`)

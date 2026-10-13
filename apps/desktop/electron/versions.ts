@@ -125,6 +125,14 @@ export class Versions {
     return this.under.has(projectId)
   }
 
+  /**
+   * Whether a folder can be copied aside, for a conversation to have it its own way:
+   * there is not too much in it (see changes.ts).
+   */
+  async fits(folder: string): Promise<boolean> {
+    return (await filesOf(folder)) !== null
+  }
+
   /** Whether a conversation has a copy of the folder: it was left, with versions kept. */
   private has(projectId: string, conversationId: string): boolean {
     return fs.existsSync(path.join(this.root(projectId, conversationId), FILES))

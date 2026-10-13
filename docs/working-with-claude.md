@@ -22,9 +22,10 @@ screenshot of the view as you see it, the list of parts with their groups and si
 your current selection. It has two more for a project's own tools, the ones it makes for
 you to work the model with: how they stand, with the error of one that did not load, and
 a hand on one of their controls, so that it can try what it made and look at the model
-before it says it is done. And it has one that an [assembly guide](#assembly-guides) is
+before it says it is done. It has one that an [assembly guide](#assembly-guides) is
 written with: Claude gives the guide, and the app checks it against the model and files
-it.
+it. And it has one that begins [a new version](#asking-for-a-new-version) of the
+project, when you ask for one.
 
 ## What Claude has just made
 
@@ -161,6 +162,25 @@ than 20,000 files in it, or 4 GB, is not copied aside, and has the one version.
 The [settings](settings.md) switch this off (Versions). The conversations then all
 change the one model, and turning to one changes nothing. The versions kept until then
 stay as they were, for when it is switched on again.
+
+### Asking for a new version
+
+A new version can be asked for in words, in the conversation you are in: "try this as a
+new version, with the seat 15 mm thicker". Claude changes nothing there. It sums up what
+you asked for, and the foot of the conversation says **Creating a new version** while
+its turn comes to an end, with a faint light going across the conversation behind what
+is said in it. Then the app begins a new conversation, says in it what Claude
+summed up as your own message, marked **New version**, and turns to it, with Claude
+already at work. The pictures that came with your message go with it. Nothing else of
+the conversation you asked in is known in the new one, which is answered as that one
+was: by the same agent, with the same model, effort and access.
+
+The conversation you asked in keeps the model as it was, and says that a new version
+was created from there. What was waiting to be said in it waits to be sent by hand.
+
+Stop Claude while the new version is being created, and none is. Claude begins one only
+when asked. With versions switched off, or in a folder too big to have them, there is
+none to begin: Claude says so, and changes nothing.
 
 ## Replies
 

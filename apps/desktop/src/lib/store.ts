@@ -8,7 +8,7 @@ import {
   type Arrangement,
   type Named,
 } from "@/lib/arrange"
-import { finishedNow, stackOf, type Stack } from "@/lib/conversations"
+import { finishedNow, follows, stackOf, type Stack } from "@/lib/conversations"
 import { asideFor, carried } from "@/lib/versions"
 import { cutsOf, readCuts } from "@/lib/cuts"
 import { mannerOf, savedAccess } from "@/lib/manner"
@@ -1714,6 +1714,27 @@ function turned(projectId: string, how: Turned) {
 }
 
 /**
+ * The agent began a new version of a project, in a conversation of its own, as it was
+ * asked to in another: the panel goes on to the new one, where it was showing the one
+ * that was asked in (see lib/conversations.ts).
+ */
+function begun(projectId: string, from: string, to: string) {
+  const { projects, picked } = useStore.getState()
+  const project = projects.find((p) => p.id === projectId)
+  if (!project) return
+  const { open } = stackOf(
+    project.conversations,
+    picked[projectId],
+    usePreferences.getState().settleDays,
+    Date.now()
+  )
+  if (!follows(open, from, to)) return
+  useStore.setState((state) => ({
+    picked: { ...state.picked, [projectId]: to },
+  }))
+}
+
+/**
  * Bring the list of conversations finished and not yet seen up to date: with what has
  * just come to an end, given the projects as they were a moment ago, and without what
  * is now being looked at.
@@ -1774,6 +1795,7 @@ export function connect() {
       show()
   })
   cad.versions.onTurned(turned)
+  cad.versions.onBegun(begun)
   cad.thread.onItem((_projectId, conversationId, item) => {
     useStore.setState((state) => ({
       items: {

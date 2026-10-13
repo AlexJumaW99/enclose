@@ -49,6 +49,21 @@ export function stackOf(
 }
 
 /**
+ * Whether the panel goes on to the conversation the agent began a new version of the
+ * project in (`to`), as it was asked to in another (`from`): where the one it was asked
+ * in is what the panel shows, as it would had the user begun the new one themselves.
+ * Whoever has turned to something else meanwhile is left there.
+ */
+export function follows(
+  /** what the panel shows; null is a new one, with nothing said in it yet */
+  open: ConversationSummary | null,
+  from: string,
+  to: string
+): boolean {
+  return open?.id === from || open?.id === to
+}
+
+/**
  * The conversations Claude has got to the end of a turn in without anyone seeing it: what
  * a card says "Done" of. Given the ones that were so, the conversations as they were and
  * as they now are, and the one in front of the user (if any), which is seen as it happens.

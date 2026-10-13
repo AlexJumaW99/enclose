@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import type { ConversationSummary } from "@shared/api"
-import { finishedNow, stackOf } from "./conversations"
+import { finishedNow, follows, stackOf } from "./conversations"
 
 const DAY = 86_400_000
 const NOW = 100 * DAY
@@ -22,6 +22,7 @@ const left = (
   failed: false,
   updatedAt: NOW - days * DAY,
   queued: [],
+  versioning: false,
 })
 
 /** A layout by its ids: the card, what is under it, and what the panel shows. */
@@ -135,5 +136,19 @@ describe("finishedNow", () => {
     const finished = ["a"]
     const now = [idle("a"), busy("b")]
     expect(finishedNow(finished, now, now, null)).toBe(finished)
+  })
+})
+
+describe("follows", () => {
+  it("goes on to a new version from the conversation it was asked for in", () => {
+    expect(follows(left("a", 0), "a", "b")).toBe(true)
+    // and stays with the new one, where that is what is shown already
+    expect(follows(left("b", 0), "a", "b")).toBe(true)
+  })
+
+  it("leaves whoever has turned to something else where they are", () => {
+    expect(follows(left("c", 0), "a", "b")).toBe(false)
+    // a new one, with nothing said in it yet
+    expect(follows(null, "a", "b")).toBe(false)
   })
 })

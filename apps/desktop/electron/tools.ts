@@ -57,6 +57,7 @@ const told = (value: unknown) => words(JSON.stringify(value, null, 1))
 export const VIEWPORT = "viewport"
 export const MODEL = "model"
 export const ASSEMBLY = "assembly"
+export const VERSIONS = "versions"
 
 /**
  * The tools an agent sees what the user sees with. `ask` puts a question to the window.
@@ -168,6 +169,12 @@ export function modelTools(
           .string()
           .describe(
             'What the thing is, in a few plain words: "a planetary clock movement".'
+          ),
+        name: z
+          .string()
+          .optional()
+          .describe(
+            'What the project is to be called, which is the model\'s title too: the thing\'s name, in one to three plain words ("Cloque", "Planetary clock"). Left out, it keeps the name of the file it was opened from.'
           ),
         reference: z
           .string()
@@ -325,10 +332,35 @@ export function assemblyTools(
   ]
 }
 
+/**
+ * What an agent begins a new version of the project with (see versions.ts): a
+ * conversation of its own, which goes on from the model as it is and leaves the one it
+ * was asked for in as it was. `begin` is given what the user asked for, and says what
+ * the agent is to do now: or rejects, in words it can tell the user why by.
+ */
+export function versionTools(
+  begin: (brief: string) => Promise<string>
+): AppTool[] {
+  return [
+    appTool(
+      "begin",
+      "Begin a new version of the project, when the user asks for one: a new conversation, which starts from the model as it is now and goes its own way, while this conversation keeps the model as it is. Call it before you change anything, and once in a turn. When this turn ends, the app opens the new conversation, puts your brief there as the user's own message, takes the user to it, and you carry on from there. Called again in the same turn, it takes the place of the brief the turn gave before.",
+      {
+        brief: z
+          .string()
+          .describe(
+            'What the user wants done in the new version, written as they would have written it to you, in their voice ("Make the lid 10 mm taller and give it a hinge at the back"). It is all the new conversation knows of this one, so it has to stand by itself: every size, name and choice they gave that bears on it goes in, and a part is named by its id with @ (@lid). Say what is to be done, and not that a new version is wanted: that it is one is known there. Pictures that came with the message you are answering go with it by themselves.'
+          ),
+      },
+      async ({ brief }) => begin(brief).then(words, failed)
+    ),
+  ]
+}
+
 // --- the same tools, over HTTP --------------------------------------------------------
 
 /** The versions of MCP this answers to, the one it would sooner speak first. */
-const VERSIONS = ["2025-06-18", "2025-11-25", "2025-03-26", "2024-11-05"]
+const PROTOCOLS = ["2025-06-18", "2025-11-25", "2025-03-26", "2024-11-05"]
 /** The most that is read of one request, in bytes: far more than any call to these is. */
 const MOST = 4_000_000
 
@@ -374,7 +406,7 @@ export async function answerTo(
       const wanted = params?.protocolVersion
       return result({
         protocolVersion:
-          VERSIONS.find((version) => version === wanted) ?? VERSIONS[0],
+          PROTOCOLS.find((version) => version === wanted) ?? PROTOCOLS[0],
         capabilities: { tools: {} },
         serverInfo: { name, version: "0.1.0" },
       })

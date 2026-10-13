@@ -58,6 +58,8 @@ import {
   assemblyTools,
   MODEL,
   modelTools,
+  VERSIONS,
+  versionTools,
   VIEWPORT,
   viewportTools,
   type AppTool,
@@ -86,6 +88,17 @@ type Run = {
   what: string
   /** it was stopped to make way for what waits in its conversation, which is said at once */
   makingWay: boolean
+  /** how it is being answered: a new version it asks for is gone on with in the same way */
+  manner: Manner
+  /** the pictures that came with what was asked, which go with it to a new version */
+  pictures: Shown[]
+  /** its conversation began with it, as a new version of the project: it begins no other */
+  version: boolean
+  /**
+   * What the agent gave for a new version of the project to begin with, if it asked for
+   * one: when the turn is over, a conversation is begun with it (see `goOn`).
+   */
+  goesOn: string | null
 }
 
 /** What a turn is begun with, besides the words of what was said. */
@@ -98,6 +111,11 @@ type Asked = {
   reference?: string
   /** the pictures that go with the message */
   pictures?: Shown[]
+  /**
+   * It is what the user asked for in another conversation, as the agent summed it up
+   * there: the conversation it begins is a new version of the project
+   */
+  version?: true
 }
 
 /**
@@ -140,6 +158,12 @@ export type ThreadsDeps = {
    * (see versions.ts). Resolves to whether the folder is that conversation's alone.
    */
   turnTo: (projectId: string, conversationId: string) => Promise<boolean>
+  /**
+   * Whether a conversation begun now would have a project its own way (see versions.ts),
+   * or why it would not. off: versions are not kept, as the settings have it. big: there
+   * is too much in the project's folder for it to be copied aside.
+   */
+  versioned: (projectId: string) => Promise<"yes" | "off" | "big">
   /** what to start an agent with: null if it is switched off, or is not installed */
   launch: (provider: ProviderId) => Launch | null
   /** serves the app's own tools to an agent that cannot be handed them in-process */
@@ -163,6 +187,17 @@ export type ThreadsDeps = {
   /** ask the window something about the viewport it is showing */
   viewport: (projectId: string, asked: ViewportAsked) => Promise<unknown>
   onItem: (projectId: string, conversationId: string, item: ThreadItem) => void
+  /**
+   * A new version of a project was begun, as the agent was asked to in one of its
+   * conversations (`from`): the conversation begun for it is `to`, answered as `manner`
+   * has it.
+   */
+  onVersion: (
+    projectId: string,
+    from: string,
+    to: string,
+    manner: Manner
+  ) => void
   /** a conversation's status or last message changed: the sidebar needs redrawing */
   onSummary: () => void
 }
@@ -171,6 +206,7 @@ export type ThreadsDeps = {
 const toolName = (set: string, name: string) => `mcp__${set}__${name}`
 const ARRANGE_TOOL = toolName(MODEL, "arrange")
 const GUIDE_TOOL = toolName(ASSEMBLY, "guide")
+const BEGIN_TOOL = toolName(VERSIONS, "begin")
 
 /**
  * What an agent itself knows such a tool as, which is what it is told to call: Claude
@@ -260,6 +296,8 @@ function describeTool(name: string, input: unknown, root: string) {
       return { name: "Name", detail: "and group the parts" }
     case GUIDE_TOOL:
       return { name: "Write", detail: "the assembly guide" }
+    case BEGIN_TOOL:
+      return { name: "Create", detail: "a new version" }
   }
   const first = Object.values((input ?? {}) as Record<string, unknown>).find(
     (v) => typeof v === "string"
@@ -492,6 +530,48 @@ export function assembling(
   ]
 }
 
+/**
+ * What an agent is told of versions: that each conversation has the project its own
+ * way, and that a new version is nothing it makes by hand but a conversation the app
+ * begins, with what the user asked for said there as their own.
+ */
+export function versioning(
+  tool: (set: string, name: string) => string
+): string[] {
+  return [
+    `- The app keeps a version of this project for each conversation about it: a conversation begins from the model as it then is, and what is changed in it changes its version alone, while the others keep theirs. This conversation's version is what is in the folder and on screen. When the user asks for a new version of the project, in those words or in others that mean it (a variant to keep beside this one, a copy to try something on), never make one by hand: copy no folder and no file, and change nothing here. Call ${tool(VERSIONS, "begin")} before anything else, with a brief of what they want done in the new version. The app then begins a new conversation from the model as it is now, says your brief there as the user's own message and takes them to it, and you carry on from there, knowing nothing of this conversation but the brief.`,
+    "- Once that call has gone through, this turn is over: say in a few words that the work goes on in the new version, and do nothing more here. Where it did not go through, tell the user why, as it says. A change asked for with no word of a new version is made here, as always: never begin one unasked.",
+  ]
+}
+
+/**
+ * What an agent is asked in the conversation a new version of the project begins with:
+ * that this is one, and then what the user asked for in the conversation they asked for
+ * it in, as the agent summed it up there.
+ */
+export function versionAsked(brief: string): string {
+  return [
+    "<new-version>",
+    "This conversation is a new version of the project, which the user asked for in another of its conversations. The app began it from the model as that one had it, and what is changed here leaves that one as it was. What follows this block is what they asked for there, as you summed it up to begin this one with: take it as their message to you, and do it here. Nothing else that was said there is known here. Where it asks for nothing to be done yet, say that the new version is ready and ask what they want changed in it. This is the new version already: do not begin another for it.",
+    "</new-version>",
+    "",
+    brief,
+  ].join("\n")
+}
+
+/** What the conversation a new version was asked for in says of it, once it is begun. */
+const BEGUN = "A new version was created from here."
+
+/** What an agent is told when the new version it asked for is to be begun. */
+const BEGINNING =
+  "The new version is being begun. This turn is over: say in a few words that the work goes on in the new version, and do nothing more here. Change no file. When the turn ends the app opens the new conversation with your brief as the user's message, and you take it up there."
+
+/** What it is told where none can be begun, by why: what `versioned` gives. */
+const NO_VERSION = {
+  off: "No new version can be begun: versions are switched off in the app's settings, so every conversation changes the one model there is. Change nothing. Tell the user that, and that they can switch them on in Settings (Versions), or ask for the change to be made here instead.",
+  big: "No new version can be begun: there is too much in this project's folder for the app to keep versions of it (more than 20,000 files, or 4 GB), so every conversation changes the one model there is. Change nothing. Tell the user that, and ask whether the change is to be made here instead.",
+}
+
 /** What an agent is told about where it is, on top of its own instructions. */
 function guide(
   provider: ProviderId,
@@ -545,6 +625,7 @@ function guide(
     ...(trying ? tooling(tool, kit) : []),
     // (there is nothing to write a guide to until there is a model)
     ...(trying && manifest ? assembling(tool, kit) : []),
+    ...(trying ? versioning(tool) : []),
     ...SIZES,
     ...(canAsk ? QUESTIONS : []),
     ...fastening(kit, canAsk),
@@ -733,7 +814,9 @@ export function lookOverAsked(
   /** what the agent it is put to knows the app's tools as */
   tool: (set: string, name: string) => string = toolName,
   /** the reference scenes the app has, for it to say which the thing is best seen in */
-  scenes: Pick<AppScene, "id" | "suits">[] = []
+  scenes: Pick<AppScene, "id" | "suits">[] = [],
+  /** what the project goes by, which is only what the files or their folder were called */
+  called: string | null = null
 ): Content {
   const mm = (v: number[]) => v.map((n) => Math.round(n * 10) / 10).join(" × ")
   const at = (v: number[]) => v.map((n) => Math.round(n * 10) / 10).join(", ")
@@ -791,6 +874,11 @@ export function lookOverAsked(
         "",
         `Work out what the thing is, what each part is, and where a person would look for it. Then call ${tool(MODEL, "arrange")} once, with all of it:`,
         "- what: what the thing is, in a few plain words.",
+        ...(called
+          ? [
+              `- name: what the project is to be called, which is the model's title too. For now it goes by "${cell(called)}", which is only what the file was called, or the folder the files were in. Keep what in that is the thing's name, in sentence case, and leave out what is not: a version, a date, "final", "copy", "export", a number the system added ("cloque-v4" becomes "Cloque", "Desk_Lamp_final (2)" becomes "Desk lamp"). Where it says nothing of the thing ("Untitled", "assembly1", "Part 3"), name it for what it is, in one to three plain words ("Planetary clock").`,
+            ]
+          : []),
         ...(scenes.length > 0
           ? [
               `- reference: which of the app's reference scenes the thing is best seen in, which the user can have drawn round the model to judge its size by: ${scenes.map((scene) => `${scene.id} for ${scene.suits}`).join("; ")}. Go by where the thing is used, not by how big it is.`,
@@ -905,6 +993,7 @@ function saidOf(
       : {}),
     ...(asked.arrange ? { lookOver: true as const } : {}),
     ...(asked.assembly ? { assembly: true as const } : {}),
+    ...(asked.version ? { version: true as const } : {}),
   }
 }
 
@@ -1004,7 +1093,12 @@ export class Threads {
   summaries(projectId: string): ConversationSummary[] {
     const { conversations, run, waiting } = this.book(projectId)
     return [...conversations.values()]
-      .sort((a, b) => lastAt(b) - lastAt(a))
+      .sort(
+        (a, b) =>
+          lastAt(b) - lastAt(a) ||
+          // of two carried on in the same instant, the one being answered is the later
+          Number(b === run?.conversation) - Number(a === run?.conversation)
+      )
       .map((conversation) => {
         const { items } = conversation
         const running = run?.conversation === conversation ? run : null
@@ -1032,6 +1126,7 @@ export class Threads {
           queued: waiting
             .filter((one) => one.conversation === conversation)
             .map((one) => one.item),
+          versioning: running !== null && running.goesOn !== null,
         }
       })
   }
@@ -1313,7 +1408,8 @@ export class Threads {
         TAKES_PICTURES[manner.provider] ? seen : { ...seen, pictures: [] },
         files,
         knownAs(manner.provider),
-        this.deps.scenes
+        this.deps.scenes,
+        this.deps.projects.get(projectId)?.name ?? null
       ),
       arrange,
     })
@@ -1399,6 +1495,10 @@ export class Threads {
       assembly: asked.assembly === true,
       what: firstLine(wordsOf(said)),
       makingWay: false,
+      manner,
+      pictures,
+      version: asked.version === true,
+      goesOn: null,
     }
     book.run = run
     this.deps.onSummary()
@@ -1472,6 +1572,9 @@ export class Threads {
               written = id
               return said
             }),
+            [VERSIONS]: versionTools((brief) =>
+              this.wanted(projectId, run, brief)
+            ),
           }),
     }
 
@@ -1597,16 +1700,69 @@ export class Threads {
       // sent by hand: what was wanted next may no longer be.
       const latest = conversation.items.at(-1)
       const failed = latest?.kind === "notice" && latest.tone === "error"
+      // A turn that asked for a new version of the project ends in one, which is then
+      // what is carried on: unless it was stopped, which takes the asking back.
       const goesOn =
         this.books.get(projectId) === book &&
         book.run === null &&
-        (run.makingWay || !(abort.signal.aborted || failed)) &&
-        this.next(projectId, book, conversation)
+        ((!abort.signal.aborted && this.goOn(projectId, run)) ||
+          ((run.makingWay || !(abort.signal.aborted || failed)) &&
+            this.next(projectId, book, conversation)))
       // and with nothing at work in the folder any more, a project that has just been
       // given its shape can take its name
       if (!goesOn) this.deps.projects.christen(projectId, this.deps.onRenamed)
       this.deps.onSummary()
     }
+  }
+
+  /**
+   * The agent asks, in a turn, for a new version of the project to be begun, with what
+   * the user wants done in it. That is done when the turn is over (see `goOn`). Resolves
+   * to what the agent is told of it; rejects where none can be begun, in words that say
+   * why.
+   */
+  private async wanted(
+    projectId: string,
+    run: Run,
+    brief: string
+  ): Promise<string> {
+    const text = brief.trim()
+    if (!text)
+      throw new Error(
+        "Give a brief: what the user wants done in the new version."
+      )
+    if (run.version)
+      throw new Error(
+        "This conversation is the new version that was asked for: do the work here, and begin no other."
+      )
+    const versioned = await this.deps.versioned(projectId)
+    if (versioned !== "yes") throw new Error(NO_VERSION[versioned])
+    if (run.abort.signal.aborted) throw new Error("Stopped.")
+    run.goesOn = text
+    this.deps.onSummary()
+    return BEGINNING
+  }
+
+  /**
+   * Begin the new version of a project that a turn asked for, now that the turn is
+   * over: a conversation of its own, begun with what the agent gave as the user's own
+   * message, with the pictures that came with what was asked, and answered as that turn
+   * was. Whether one was begun: a turn that asked for none begins none.
+   */
+  private goOn(projectId: string, run: Run): boolean {
+    const { conversation: from, goesOn: brief, pictures, manner } = run
+    if (brief === null || !this.deps.projects.get(projectId)) return false
+    // (said first, so that the new one is the later of the two: the one on the card)
+    this.notice(projectId, from, "info", BEGUN)
+    const into = this.begin(projectId, null, brief, [], [], manner, {
+      content: (_, provider) =>
+        pictured(versionAsked(brief), pictures, TAKES_PICTURES[provider]),
+      pictures,
+      version: true,
+    })
+    if (into === null) return false
+    this.deps.onVersion(projectId, from.id, into, manner)
+    return true
   }
 
   /**

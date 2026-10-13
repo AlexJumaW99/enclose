@@ -289,6 +289,9 @@ function ProjectCard({ project, now }: { project: Project; now: number }) {
   const removeProject = useStore((state) => state.removeProject)
   const { cover, under, open } = useStack(project, now)
   const [spread, setSpread] = React.useState(false)
+  // its name is being written over, which is asked for from the card's menu
+  const [renaming, setRenaming] = React.useState(false)
+  const naming = React.useRef<HTMLInputElement>(null)
   // News of one of the conversations under the card, which the card itself has nothing
   // to say of: the edge under it does. Claude being in the middle of one comes first.
   const finished = useStore((state) => state.finished)
@@ -316,7 +319,11 @@ function ProjectCard({ project, now }: { project: Project; now: number }) {
           under.length > 0 && !spread && (newsUnder ? "mb-6.75" : "mb-2.75")
         )}
       >
-        <ProjectMenu project={project}>
+        <ProjectMenu
+          project={project}
+          naming={naming}
+          onRename={() => setRenaming(true)}
+        >
           <button
             type="button"
             aria-current={active}
@@ -325,9 +332,12 @@ function ProjectCard({ project, now }: { project: Project; now: number }) {
           />
           <Written conversation={cover}>
             <span className="flex items-baseline justify-between gap-2">
-              <span className={NAME}>{project.name}</span>
+              {/* (it keeps its room while it is written over: the card stays as tall) */}
+              <span className={cn(NAME, renaming && "invisible")}>
+                {project.name}
+              </span>
               {/* makes way for the close button while the pointer is on the card */}
-              {cover && (
+              {cover && !renaming && (
                 <span className="flex transition-opacity group-focus-within/card:opacity-0 group-hover/card:opacity-0">
                   <When conversation={cover} now={now} />
                 </span>
@@ -358,17 +368,27 @@ function ProjectCard({ project, now }: { project: Project; now: number }) {
             )}
           </Written>
         </ProjectMenu>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label={`Remove ${project.name}`}
-          title="Remove project"
-          // under the pointer it is a red disc with the cross in white: it takes away
-          className="pointer-events-auto absolute top-1.5 right-1.5 opacity-0 transition-[opacity,color,background-color] group-hover/card:opacity-100 hover:bg-red-600 hover:text-white focus-visible:opacity-100 dark:hover:bg-red-600"
-          onClick={() => void removeProject(project.id)}
-        >
-          <XIcon />
-        </Button>
+        {renaming ? (
+          <Naming
+            ref={naming}
+            project={project}
+            // (short of what the card says of its conversation, across its far end)
+            short={newsOf(cover, finished) !== null}
+            onDone={() => setRenaming(false)}
+          />
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label={`Remove ${project.name}`}
+            title="Remove project"
+            // under the pointer it is a red disc with the cross in white: it takes away
+            className="pointer-events-auto absolute top-1.5 right-1.5 opacity-0 transition-[opacity,color,background-color] group-hover/card:opacity-100 hover:bg-red-600 hover:text-white focus-visible:opacity-100 dark:hover:bg-red-600"
+            onClick={() => void removeProject(project.id)}
+          >
+            <XIcon />
+          </Button>
+        )}
         {under.length > 0 && !spread && (
           <Under
             count={under.length}
@@ -458,12 +478,74 @@ function Tucked({
   )
 }
 
+/**
+ * A project's name, being written over where it is on its card: Enter, or clicking
+ * away, keeps what is written, and Esc leaves the name as it was, as does nothing
+ * written at all. It lies over the card and is no part of it: the card is a button, and
+ * a box to write in cannot go in one.
+ */
+function Naming({
+  project,
+  short,
+  onDone,
+  ref,
+}: {
+  project: Project
+  /** the far end of the card is taken, and the box stops short of it */
+  short: boolean
+  onDone: () => void
+  ref: React.Ref<HTMLInputElement>
+}) {
+  const [written, setWritten] = React.useState(project.name)
+  const left = React.useRef(false)
+  // done with once, however it is left: Enter and Esc are both followed by the box
+  // losing the caret, which on its own would be clicking away
+  const leave = (keep: boolean) => {
+    if (left.current) return
+    left.current = true
+    onDone()
+    const name = written.replace(/\s+/g, " ").trim()
+    if (keep && name && name !== project.name)
+      void window.cad.projects.rename(project.id, name)
+  }
+  return (
+    <input
+      ref={ref}
+      autoFocus
+      aria-label="The project's name"
+      value={written}
+      onChange={(event) => setWritten(event.target.value)}
+      onFocus={(event) => event.target.select()}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") leave(true)
+        if (event.key !== "Escape") return
+        // not kept, and not taken for leaving anything else
+        event.stopPropagation()
+        leave(false)
+      }}
+      onBlur={() => leave(true)}
+      // over the name, its letters where the name's were
+      className={cn(
+        SMALL,
+        "pointer-events-auto absolute top-1.5 left-1.5 h-6 rounded-md bg-foreground/8 px-1.5 font-medium outline-none",
+        short ? "right-19" : "right-1.5"
+      )}
+    />
+  )
+}
+
 /** A card, with what else can be done with its project on a right-click. */
 function ProjectMenu({
   project,
+  naming,
+  onRename,
   children,
 }: {
   project: Project
+  /** where the project's name is written over, while it is */
+  naming: React.RefObject<HTMLInputElement | null>
+  /** have its name written over, on its card */
+  onRename: () => void
   /** the card's button, then what goes in it */
   children: [React.ReactElement, ...React.ReactNode[]]
 }) {
@@ -472,13 +554,15 @@ function ProjectMenu({
   return (
     <ContextMenu>
       <ContextMenuTrigger render={card}>{inside}</ContextMenuTrigger>
-      <ContextMenuContent>
+      {/* closed to have the name written, it leaves the caret in the name and not on the card */}
+      <ContextMenuContent finalFocus={() => naming.current ?? true}>
         <ContextMenuGroup>
           <ContextMenuItem
             onClick={() => void window.cad.projects.reveal(project.id)}
           >
             Open folder
           </ContextMenuItem>
+          <ContextMenuItem onClick={onRename}>Rename project</ContextMenuItem>
         </ContextMenuGroup>
         <ContextMenuSeparator />
         <ContextMenuGroup>

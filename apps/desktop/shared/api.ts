@@ -36,6 +36,12 @@ export type ConversationSummary = {
    * or did not get through, waits to be sent by hand.
    */
   queued: Said[]
+  /**
+   * The turn it is on ends in a new version of the project: the agent was asked for
+   * one, and when the turn is over the app begins a conversation for it, which is then
+   * the one carried on (see electron/versions.ts).
+   */
+  versioning: boolean
 }
 
 /**
@@ -209,6 +215,12 @@ export type ThreadItem =
       lookOver?: true
       /** Asked from the view, and not written: that an assembly guide be made. */
       assembly?: true
+      /**
+       * Not written by the user: what they asked for in another conversation, as the
+       * agent summed it up there, for this one to begin with as a new version of the
+       * project.
+       */
+      version?: true
     }
   | {
       kind: "assistant"
@@ -566,6 +578,13 @@ export type CadApi = {
     show(projectId: string, conversationId: string): void
     /** A project's folder became another conversation's. */
     onTurned(listener: (projectId: string, turned: Turned) => void): () => void
+    /**
+     * The agent began a new version of a project, as it was asked to in one of the
+     * project's conversations (`from`): the conversation begun for it is `to`.
+     */
+    onBegun(
+      listener: (projectId: string, from: string, to: string) => void
+    ): () => void
   }
   projects: {
     list(): Promise<Project[]>
@@ -595,6 +614,11 @@ export type CadApi = {
      * any. Its folder is kept, with everything in it.
      */
     remove(id: string): Promise<void>
+    /**
+     * Call the project something else. It is the project that is renamed, in the app:
+     * its folder is left as it is called.
+     */
+    rename(id: string, name: string): Promise<void>
     reveal(id: string): Promise<void>
     onChange(listener: (projects: Project[]) => void): () => void
   }
@@ -821,6 +845,7 @@ export const CHANNEL = {
   projectsExample: "projects:example",
   projectsExampleProgress: "projects:example-progress",
   projectsRemove: "projects:remove",
+  projectsRename: "projects:rename",
   projectsReveal: "projects:reveal",
   projectsChanged: "projects:changed",
   modelRead: "model:read",
@@ -853,6 +878,7 @@ export const CHANNEL = {
   changesRedo: "changes:redo",
   versionsShow: "versions:show",
   versionsTurned: "versions:turned",
+  versionsBegun: "versions:begun",
   providersList: "providers:list",
   providersChange: "providers:change",
   providersCheck: "providers:check",

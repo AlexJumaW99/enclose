@@ -147,12 +147,14 @@ export function sortOpened(
 }
 
 /**
- * What Claude makes of a model on looking it over: what the thing is, which of the app's
- * reference scenes it is best seen in, the groups its parts go in, and each part, by the
- * id it was read under, with the name it is to go by and its group.
+ * What Claude makes of a model on looking it over: what the thing is, what its project
+ * is to be called, which of the app's reference scenes it is best seen in, the groups
+ * its parts go in, and each part, by the id it was read under, with the name it is to go
+ * by and its group.
  */
 export type Arrangement = {
   what: string
+  name?: string
   reference?: string
   groups: { name: string; outside?: boolean }[]
   parts: { id: string; name: string; group: string }[]
@@ -161,6 +163,8 @@ export type Arrangement = {
 /** The same, made fit to write a model.py with. */
 export type Arranged = {
   what: string
+  /** what the project is to be called, where it was said: the model's title, then */
+  name: string | null
   /** the reference scene of the app's that suits the thing, where one was named */
   reference: string | null
   groups: { label: string; shell: boolean }[]
@@ -240,6 +244,7 @@ export function arrange(
   })
   return {
     what: named(given.what),
+    name: named(given.name) || null,
     reference: scenes.find((scene) => scene === given.reference) ?? null,
     // a group with nothing put in it is not listed
     groups: [...groups.values()].filter((group) =>

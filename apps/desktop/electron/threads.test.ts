@@ -18,9 +18,12 @@ import {
   picturing,
   questionsOf,
   Threads,
+  versionAsked,
+  versioning,
   withNotes,
   type ThreadsDeps,
 } from "./threads"
+import type { AppTool, ToolResult } from "./tools"
 
 const part = (id: string, label = id): Seen["parts"][number] => ({
   id,
@@ -69,6 +72,27 @@ describe("lookOverAsked", () => {
     expect(
       read({ pictures: [], parts: [part("solid_1")] }).words
     ).not.toContain("- reference:")
+  })
+
+  it("asks what the project is to be called, and says what it goes by for now", () => {
+    const content = lookOverAsked(
+      { pictures: [], parts: [part("solid_1")] },
+      ["source/cloque-v4.step"],
+      undefined,
+      [],
+      'cloque-v4\n"x"'
+    )
+    const words = (typeof content === "string" ? [] : content)
+      .flatMap((block) => (block.type === "text" ? [block.text] : []))
+      .join("\n")
+    // (in one line, as anything a file gave is)
+    expect(words).toContain("- name: what the project is to be called")
+    expect(words).toContain('For now it goes by "cloque-v4 "x""')
+    expect(words).toContain('"cloque-v4" becomes "Cloque"')
+    // and where it goes by nothing that is known, it is not asked
+    expect(
+      read({ pictures: [], parts: [part("solid_1")] }).words
+    ).not.toContain("- name:")
   })
 
   it("shows each picture under what it is, then lists the parts", () => {
@@ -499,33 +523,29 @@ describe("keeping", () => {
   })
 })
 
-describe("what is said while a conversation is being answered", () => {
-  let dir: string
-  beforeEach(() => {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), "enclose-threads-"))
-  })
-  afterEach(() => {
-    fs.rmSync(dir, { recursive: true, force: true })
-  })
+const manner = {
+  provider: "codex",
+  model: null,
+  effort: null,
+  access: "full",
+} as const
+const ID = "project"
 
-  const manner = {
-    provider: "codex",
-    model: null,
-    effort: null,
-    access: "full",
-  } as const
-  const ID = "project"
-
-  /**
-   * A project's conversations, had with a Codex that answers "Done." to whatever it is
-   * asked: but not before `go` is called, unless it is stopped.
-   */
-  function talking() {
-    const flag = path.join(dir, "go")
-    const file = fakeAgent(
-      dir,
-      false,
-      `
+/**
+ * A project's conversations, kept in `dir` and had with a Codex that answers "Done." to
+ * whatever it is asked: but not before `go` is called, unless it is stopped. With
+ * `each`, every turn waits for a `go` of its own. `versioned` is whether a conversation
+ * begun there would have the project its own way.
+ */
+function talking(
+  dir: string,
+  { each = false, versioned = "yes" as "yes" | "off" | "big" } = {}
+) {
+  const flag = path.join(dir, "go")
+  const file = fakeAgent(
+    dir,
+    false,
+    `
 import fs from "node:fs"
 let ticking = null
 on("initialize", () => ({}))
@@ -535,6 +555,7 @@ on("turn/start", () => {
   ticking = setInterval(() => {
     if (!fs.existsSync(${JSON.stringify(flag)})) return
     clearInterval(ticking)
+    if (${JSON.stringify(each)}) fs.rmSync(${JSON.stringify(flag)}, { force: true })
     tell("item/completed", { threadId: "thread-1", item: { type: "agentMessage", id: "m" + Date.now(), text: "Done." } })
     tell("turn/completed", { threadId: "thread-1", turn: { id: "turn-1", status: "completed" } })
   }, 5)
@@ -546,51 +567,79 @@ on("turn/interrupt", () => {
   return {}
 })
 `
-    )
-    const threads = new Threads({
-      dir: path.join(dir, "conversations"),
-      projects: {
-        get: () => ({ path: dir, manifest: null, build: null, name: "Box" }),
-        takeSession: () => null,
-        refresh: () => {},
-        christen: () => {},
-      } as unknown as ThreadsDeps["projects"],
-      changes: {
-        before: async () => null,
-        toTell: () => ({ undone: [], redone: [] }),
-      } as unknown as ThreadsDeps["changes"],
-      turnTo: async () => false,
-      launch: () => ({ path: file, args: [], env: process.env }),
-      tools: {
-        serve: async () => ({ urls: {}, stop: () => {} }),
-      } as unknown as ThreadsDeps["tools"],
-      kit: dir,
-      scenes: [],
-      fileGuide: () => ({ id: "box-v1", said: "Written." }),
-      onRenamed: () => {},
-      viewport: async () => null,
-      onItem: () => {},
-      onSummary: () => {},
-    })
-    const now = () => threads.summaries(ID)[0]
-    return {
-      threads,
-      now,
-      say: (text: string, into: string | null) =>
-        threads.send(ID, into, text, [], [], manner),
-      /** what was said in it by the user, and in what order */
-      said: (conversation: string) =>
-        threads
-          .items(ID, conversation)
-          .flatMap((item) => (item.kind === "user" ? [item.text] : [])),
-      go: () => fs.writeFileSync(flag, ""),
-      hold: () => fs.rmSync(flag, { force: true }),
-      idle: () => until(() => now().status === "idle"),
-    }
+  )
+  /** the app's tools as each turn was given them, the latest last */
+  const given: Record<string, AppTool[]>[] = []
+  /** the new versions that were begun: where each was asked for, and where it is */
+  const begun: { from: string; to: string }[] = []
+  const threads = new Threads({
+    dir: path.join(dir, "conversations"),
+    projects: {
+      get: () => ({ path: dir, manifest: null, build: null, name: "Box" }),
+      takeSession: () => null,
+      refresh: () => {},
+      christen: () => {},
+    } as unknown as ThreadsDeps["projects"],
+    changes: {
+      before: async () => null,
+      toTell: () => ({ undone: [], redone: [] }),
+    } as unknown as ThreadsDeps["changes"],
+    turnTo: async () => false,
+    versioned: async () => versioned,
+    launch: () => ({ path: file, args: [], env: process.env }),
+    tools: {
+      serve: async (sets: Record<string, AppTool[]>) => {
+        given.push(sets)
+        return { urls: {}, stop: () => {} }
+      },
+    } as unknown as ThreadsDeps["tools"],
+    kit: dir,
+    scenes: [],
+    fileGuide: () => ({ id: "box-v1", said: "Written." }),
+    onRenamed: () => {},
+    viewport: async () => null,
+    onItem: () => {},
+    onVersion: (_, from, to) => begun.push({ from, to }),
+    onSummary: () => {},
+  })
+  const now = () => threads.summaries(ID)[0]
+  return {
+    threads,
+    now,
+    begun,
+    say: (text: string, into: string | null) =>
+      threads.send(ID, into, text, [], [], manner),
+    /** what was said in it by the user, and in what order */
+    said: (conversation: string) =>
+      threads
+        .items(ID, conversation)
+        .flatMap((item) => (item.kind === "user" ? [item.text] : [])),
+    go: () => fs.writeFileSync(flag, ""),
+    hold: () => fs.rmSync(flag, { force: true }),
+    idle: () => until(() => now().status === "idle"),
+    /**
+     * The agent asks for a new version, with the tool that the turn under way was
+     * given (the `turn`th there has been): what it is told.
+     */
+    begin: async (brief: string, turn = 1): Promise<ToolResult> => {
+      await until(() => given.length >= turn)
+      const tool = given[turn - 1].versions.find((one) => one.name === "begin")
+      return tool!.run({ brief } as never)
+    },
   }
+}
+
+describe("what is said while a conversation is being answered", () => {
+  let dir: string
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "enclose-threads-"))
+  })
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
 
   it("waits its turn, and is said when the turn before it is over", async () => {
-    const { threads, now, say, said, go, idle } = talking()
+    const { threads, now, say, said, go, idle } = talking(dir)
     const into = say("Make a box", null) as string
     expect(say("And a lid", into)).toBe(into)
     expect(say("In red", into)).toBe(into)
@@ -616,7 +665,7 @@ on("turn/interrupt", () => {
   })
 
   it("is not said after a turn that was stopped, until it is sent by hand", async () => {
-    const { threads, now, say, said, go, idle } = talking()
+    const { threads, now, say, said, go, idle } = talking(dir)
     const into = say("Make a box", null) as string
     say("And a lid", into)
     threads.stop(ID)
@@ -638,7 +687,7 @@ on("turn/interrupt", () => {
   })
 
   it("stops what is under way for one that is to be said at once", async () => {
-    const { threads, now, say, said, go, idle } = talking()
+    const { threads, now, say, said, go, idle } = talking(dir)
     const into = say("Make a box", null) as string
     say("And a lid", into)
     say("No, a tray", into)
@@ -654,7 +703,7 @@ on("turn/interrupt", () => {
   })
 
   it("can be taken back before it is said", async () => {
-    const { threads, now, say, said, go, idle } = talking()
+    const { threads, now, say, said, go, idle } = talking(dir)
     const into = say("Make a box", null) as string
     say("And a lid", into)
     expect(threads.unqueue(ID, now().queued[0].id)).toEqual([])
@@ -665,11 +714,176 @@ on("turn/interrupt", () => {
   })
 
   it("does not wait on another conversation: that one cannot be said", async () => {
-    const { now, say, go, idle } = talking()
+    const { now, say, go, idle } = talking(dir)
     say("Make a box", null)
     expect(say("Something else", null)).toBeNull()
     expect(now().queued).toEqual([])
     go()
     await idle()
+  })
+})
+
+describe("versioning", () => {
+  const lines = versioning((set, name) => `${set}__${name}`).join("\n")
+
+  it("names the tool a new version is begun with as the agent knows it", () => {
+    expect(lines).toContain("Call versions__begin before anything else")
+  })
+
+  it("has none made by hand, and none begun unasked", () => {
+    expect(lines).toContain("copy no folder and no file")
+    expect(lines).toContain("never begin one unasked")
+  })
+})
+
+describe("versionAsked", () => {
+  it("leads with what the conversation is, and then gives what was asked for", () => {
+    const asked = versionAsked("Make the lid 10 mm taller")
+    expect(asked.startsWith("<new-version>\n")).toBe(true)
+    expect(asked.endsWith("</new-version>\n\nMake the lid 10 mm taller")).toBe(
+      true
+    )
+    expect(asked).toContain("do not begin another for it")
+  })
+})
+
+describe("a new version the agent is asked for", () => {
+  let dir: string
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "enclose-threads-"))
+  })
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  const text = (result: ToolResult) =>
+    result.content.flatMap((one) => (one.type === "text" ? [one.text] : []))[0]
+  const BEGUN = "A new version was created from here."
+
+  it("is begun when the turn is over, with what the agent gave as the user's own", async () => {
+    const { threads, begun, said, go, begin } = talking(dir, { each: true })
+    const sketch = {
+      id: "0123456789abcdef.png",
+      name: "sketch.png",
+      mimeType: "image/png",
+      bytes: 3,
+      number: 1,
+      data: "AAAA",
+    }
+    const from = threads.send(
+      ID,
+      null,
+      "A new version, with the lid as in the sketch",
+      [],
+      [],
+      manner,
+      null,
+      [sketch]
+    ) as string
+    const told = await begin("Make the lid as the sketch has it")
+    expect(told.isError).toBeUndefined()
+    expect(text(told)).toContain("This turn is over")
+    // it is said of the conversation meanwhile, and nothing is begun until its turn ends
+    expect(threads.summaries(ID)).toMatchObject([
+      { id: from, status: "working", versioning: true },
+    ])
+    go()
+    await until(() => threads.summaries(ID).length === 2)
+    const [{ to }] = begun
+    expect(begun).toEqual([{ from, to }])
+    // the new one is the one carried on: on the card, and being answered
+    expect(threads.summaries(ID)).toMatchObject([
+      { id: to, status: "working", versioning: false, provider: "codex" },
+      { id: from, status: "idle", versioning: false },
+    ])
+    expect(said(to)).toEqual(["Make the lid as the sketch has it"])
+    // with the pictures that came with what was asked, and as what it is
+    expect(threads.items(ID, to)[0]).toMatchObject({
+      kind: "user",
+      version: true,
+      pictures: [{ id: sketch.id, number: 1 }],
+    })
+    expect(threads.items(ID, from).at(-1)).toMatchObject({
+      kind: "notice",
+      tone: "info",
+      text: BEGUN,
+    })
+    go()
+    await until(() => threads.summaries(ID)[0].status === "idle")
+    expect(threads.items(ID, to).map((item) => item.kind)).toEqual([
+      "user",
+      "assistant",
+    ])
+  })
+
+  it("is not begun again from the conversation it began", async () => {
+    const { threads, begun, say, go, begin } = talking(dir, { each: true })
+    say("A new version, taller", null)
+    await begin("Make it taller")
+    go()
+    await until(() => threads.summaries(ID).length === 2)
+    const again = await begin("Make it taller", 2)
+    expect(again.isError).toBe(true)
+    expect(text(again)).toContain("This conversation is the new version")
+    go()
+    await until(() => threads.summaries(ID)[0].status === "idle")
+    expect(begun).toHaveLength(1)
+    expect(threads.summaries(ID)).toHaveLength(2)
+  })
+
+  it("is not begun where the turn that asked for it was stopped", async () => {
+    const { threads, now, begun, say, idle, begin } = talking(dir)
+    const from = say("A new version, taller", null) as string
+    await begin("Make it taller")
+    threads.stop(ID)
+    await idle()
+    expect(begun).toEqual([])
+    expect(threads.summaries(ID)).toHaveLength(1)
+    expect(now().versioning).toBe(false)
+    expect(
+      threads
+        .items(ID, from)
+        .flatMap((item) => (item.kind === "notice" ? [item.text] : []))
+    ).toEqual(["Stopped."])
+  })
+
+  it("is refused where a conversation would not have the project its own way", async () => {
+    for (const [versioned, why] of [
+      ["off", "switched off in the app's settings"],
+      ["big", "too much in this project's folder"],
+    ] as const) {
+      const { threads, now, begun, say, go, idle, begin } = talking(dir, {
+        versioned,
+      })
+      say("A new version, taller", null)
+      const told = await begin("Make it taller")
+      expect(told.isError).toBe(true)
+      expect(text(told)).toContain(why)
+      expect(now().versioning).toBe(false)
+      go()
+      await idle()
+      expect(begun).toEqual([])
+      expect(threads.summaries(ID)).toHaveLength(1)
+      fs.rmSync(path.join(dir, "go"), { force: true })
+      fs.rmSync(path.join(dir, "conversations"), { recursive: true })
+    }
+  })
+
+  it("leaves what waits in the conversation it was asked for in to be sent by hand", async () => {
+    const { threads, begun, say, said, go, begin } = talking(dir, {
+      each: true,
+    })
+    const from = say("A new version, taller", null) as string
+    say("And in red", from)
+    await begin("Make it taller")
+    go()
+    await until(() => threads.summaries(ID).length === 2)
+    expect(begun).toHaveLength(1)
+    expect(said(from)).toEqual(["A new version, taller"])
+    expect(
+      threads.summaries(ID).find((one) => one.id === from)?.queued
+    ).toMatchObject([{ text: "And in red" }])
+    go()
+    await until(() => threads.summaries(ID)[0].status === "idle")
   })
 })

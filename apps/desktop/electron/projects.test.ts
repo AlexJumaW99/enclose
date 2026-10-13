@@ -291,6 +291,74 @@ describe("Projects", () => {
     expect(fs.existsSync(path.join(root, "theirs/model.json"))).toBe(true)
     projects.close()
   })
+
+  it("calls a project what the user says, and leaves its folder as it is called", () => {
+    const file = path.join(root, "state/projects.json")
+    let said = 0
+    const projects = new Projects(file, () => said++)
+    write("theirs/model.json", MANIFEST)
+    const id = projects.add(path.join(root, "theirs"))
+    const now = () => projects.list(idle).find((p) => p.id === id)!
+    const before = said
+    projects.rename(id, "  Travel   case ")
+    expect(now().name).toBe("Travel case")
+    expect(now().path).toBe(path.join(root, "theirs"))
+    expect(said).toBe(before + 1)
+    // a name that says nothing changes nothing, and nor does the one it has
+    projects.rename(id, "   ")
+    projects.rename(id, "Travel case")
+    expect(now().name).toBe("Travel case")
+    expect(said).toBe(before + 1)
+    // and no name is longer than a card has any use for
+    projects.rename(id, "a".repeat(200))
+    expect(now().name).toHaveLength(80)
+    projects.close()
+    // it is kept
+    const again = new Projects(file, () => {})
+    expect(again.list(idle)[0]).toMatchObject({ name: "a".repeat(80) })
+    again.close()
+  })
+
+  it("keeps the name the user gave a project that went by a stand-in", () => {
+    const projects = new Projects(
+      path.join(root, "state/projects.json"),
+      () => {}
+    )
+    const start = path.join(root, "2026-10-05-2306-quiet-heron")
+    fs.mkdirSync(start)
+    const id = projects.add(start, { name: "Quiet heron", standIn: true })
+    projects.rename(id, "Travel case")
+    expect(projects.get(id)).toMatchObject({ name: "Travel case" })
+    expect(projects.get(id)?.standIn).toBeUndefined()
+    // the model's title no longer takes its place, and the folder is left alone
+    write("2026-10-05-2306-quiet-heron/build/enclose.model.json", {
+      ...MANIFEST,
+      title: "Pill box",
+    })
+    projects.refresh(id)
+    projects.christen(id, () => {
+      throw new Error("renamed")
+    })
+    expect(projects.list(idle)[0]).toMatchObject({
+      name: "Travel case",
+      path: start,
+    })
+    projects.close()
+  })
+
+  it("does not take a folder for its own making because it was given a name", () => {
+    const projects = new Projects(
+      path.join(root, "state/projects.json"),
+      () => {}
+    )
+    // opened, with nothing in it, and called something: taken off the list, it stays
+    fs.mkdirSync(path.join(root, "theirs"))
+    const id = projects.add(path.join(root, "theirs"))
+    projects.rename(id, "Mine")
+    projects.remove(id)
+    expect(fs.existsSync(path.join(root, "theirs"))).toBe(true)
+    projects.close()
+  })
 })
 
 describe("folderSize", () => {
