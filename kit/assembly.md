@@ -10,6 +10,13 @@ each step come in from where you say and go on, lit, over the ones that are on a
 So a guide is only words and the ids of parts. It holds no geometry and no HTML, and it
 changes nothing in the model.
 
+The reader has every part loose on the table. What they need from the guide is how each
+one goes to the next: which way round, into what, held by what. The picture is what
+tells them, so whatever is put together has to be seen being put together. A guide that
+brings a ring in with its dot already in it, or a carrier with its gears already on,
+has left out the very thing it was asked for. **Take the guide down to the single
+part.**
+
 A guide is given to the app, whole, with its `guide` tool (the one in the `assembly`
 set: your instructions name it as you know it). The app checks it against the model,
 files it as `assembly/<name>-v<n>.json` at the top of the project and shows its cover in
@@ -25,21 +32,42 @@ Do this before you write a word of the guide.
    well (`model.py`): it says what the boxes cannot, which is how things are held. A
    hole and the screw that goes through it, a tab and its slot, a press fit, a thread.
    Take a screenshot if you want to see the thing whole.
-2. **Find what everything is fitted to.** Most things have one part the rest goes on:
+2. **Go through them one at a time.** For each part, say to yourself what it touches
+   and how it is joined to that: pressed in, screwed on, glued, hooked, dropped in.
+   Every part in the list is a piece in the reader's hand, and every joint between two
+   of them is something the reader does and the guide shows. The model's groups are no
+   help here. A group is how the model is sorted, not how it goes together: a clock's
+   "Face" may be three rings with a dot to press into each, which is three things to
+   make up and six parts to show. Never write a step to a group.
+
+   The one exception is a thing that comes to the reader in one piece, which the model
+   may have as several parts: a bought movement with its case, shaft and contacts, a
+   motor and its shaft, a switch with its nut on. That goes on as one, and you say in
+   the text that it is the one thing.
+
+3. **Find what is put together before it goes on.** Not every part goes straight on to
+   the main thing. A dot is pressed into its ring before the ring goes on. Two gears go
+   on their shafts, and the shafts into a carrier, before the carrier does. A plate is
+   glued into a leg before the leg is hooked on. Each of these is a sub-assembly: made
+   up on the table, apart, and then fitted as one piece (see "Things made up first",
+   below). The sign of one is a part that can only be reached, or only goes in, while
+   what it belongs to is still off the main thing; or simply two parts that are easier
+   to join in the hand than in place.
+4. **Find what everything is fitted to.** Most things have one part the rest goes on:
    a base, a chassis, the bottom half of a case. That is the first step. Where the
    thing is built upside down or on its side, start with the part that lies on the
    table then.
-3. **Order the rest by what gets in the way of what.** A part that is shut in goes on
+5. **Order the rest by what gets in the way of what.** A part that is shut in goes on
    before whatever shuts it in. What is inside goes in before the outside closes. What
    is screwed down goes on before what covers its screws. Where the order does not
    matter, go from large to small, and do what is done from one side before turning
    the thing over.
-4. **Check every step as a hand would do it.** With only the parts of the steps before
+6. **Check every step as a hand would do it.** With only the parts of the steps before
    on the table: is there a way in for this part, in a straight line, with nothing in
    it? That line is the step's `from`. Once on, what holds it there: a screw, a snap,
    its own weight? If nothing does until a later step, say what to do meanwhile ("hold
    it there", "keep the case on its back").
-5. **Look for what cannot be done.** A model is drawn put together, and may never have
+7. **Look for what cannot be done.** A model is drawn put together, and may never have
    been taken apart in anyone's head: a part with no way in, a screw whose head is
    covered, nothing that holds a part where it sits. Do not write a step that cannot be
    done as if it could. Write the guide for what there is, and tell the user in your
@@ -47,19 +75,74 @@ Do this before you write a word of the guide.
 
 ## Steps
 
-A step is one thing a person does in one go, with the parts it puts on.
+A step is one thing a person does: one kind of part, going on in one way. The page
+brings everything a step puts on in together, along one line, as one. So what is in a
+step is seen to arrive, and nothing is seen of how the things in it go to each other.
 
 - **Parts that are alike and go on alike are one step**: the four legs, the six cover
-  screws. Parts that go on in different ways are different steps.
-- **Fasteners go with what they fasten** when they go in at once ("set the lid on and
-  fix it with the four screws"), and are a step of their own when something is lined up
-  or held first.
+  screws, the two planet gears.
+- **Parts that are not alike are different steps.** "Set the lid on" is a step, and
+  "fix it with the four screws" is the next. So are a bearing and what it is pressed
+  into, a shaft and the gear that goes on it, a ring and its dot. Do this even where
+  the hands would do both without stopping: the reader has to see the second thing go
+  to the first.
+- **A thing that comes in one piece is one step**, however many parts the model has it
+  as (the bought movement, above). It is the only step that puts on parts of more than
+  one kind.
 - **A step can put on nothing.** Turning the thing over, or checking that something
   turns freely, is a step with no parts.
 - **Every part goes on in one step.** A guide to the whole thing leaves no part out:
   the app tells you which you missed.
-- Most things take three to ten steps. Do not split one action in two to have more,
-  and do not make one step of a dozen parts that go on in different ways.
+- **There are as many steps as there are things to do.** A thing of twenty-five parts
+  seldom takes fewer than fifteen steps, and may take thirty. Do not gather parts
+  into a step to keep the guide short: the app also tells you which steps put on parts
+  of more than one kind, so that you can split them. And do not split one action in
+  two to have more.
+
+### Things made up first: `sub` and `fits`
+
+A step done to a sub-assembly says so with `sub`: what the sub-assembly is called, as
+the reader is told ("Outer ring", "Hour carrier", "Front legs"). Every step that makes
+it up gives the same name. The page shows a sub-assembly alone while it is made up:
+only its own parts, close to, filling the window, with the rest of the model out of
+sight. That is what lets a small thing, like a dot going into the back of a ring, be
+seen at all.
+
+- Its **first step lays down the part the rest go on to** ("Lay the outer ring face
+  down"), as the first step of the guide does for the whole thing. That part arrives
+  alone.
+- **Each step after puts one kind of part on to it**, like any other step: with a
+  `from`, a `view` where that helps, and a `tip` where there is one.
+- Then **one step fits it**: a step that names it in `fits`, and is done to what it
+  goes on to, which is mostly the main thing, so that the step has no `sub`. The page
+  brings the whole sub-assembly in as one piece, from that step's `from`, on to the
+  main thing, which is back in sight. Such a step usually has no `parts` of its own.
+
+      { "sub": "Outer ring", "title": "Lay the outer ring face down",
+        "text": "…", "parts": ["outer_ring"], "view": [1, -1, -1] },
+      { "sub": "Outer ring", "title": "Twist in the minute dot",
+        "text": "…", "parts": ["minute_dot"], "from": [0, 0, -25] },
+      { "title": "Press the outer ring on to its posts",
+        "text": "…", "parts": [], "fits": ["Outer ring"], "from": [0, 0, 50] }
+
+Rules that keep it readable:
+
+- **Make a thing up just before it goes on.** Put a sub-assembly's steps right before
+  the step that fits it, so the reader makes one thing and puts it on, and does not
+  make five things and then look for where each goes.
+- **Every sub-assembly is fitted once**, by a step that comes after all of its own.
+  The app rejects a guide that makes one up and leaves it on the table.
+- **Things that are alike are made up together.** Both front legs with their plates
+  are one sub-assembly, "Front legs": lay down the two legs, glue in the two plates,
+  and one step hooks both on. They are shown where the model has them, side by side.
+- **One sub-assembly can go into another.** The step that fits the smaller one gives
+  the bigger one as its `sub`.
+- **A part that goes straight on needs no `sub`.** Use one only where something is
+  joined to a part before that part goes on. A single part is never a sub-assembly.
+- The parts of a sub-assembly are shown where the model has them and the right way
+  up, in the model's frame, as everything is: `from` and `view` mean what they always
+  mean. Where it is made up face down on the table, say so in the text and give a
+  `view` from underneath.
 
 ### What a step says
 
@@ -118,11 +201,14 @@ right or left, front or back, above or below.
 The page does not turn the thing over: it stays as it is built. So where a step is
 done with the thing upside down, say so in the text ("turn it over") and give a `view`
 from underneath, so the reader sees the side they are working on. Left out, the view
-stays where the step before had it. Give one whenever what goes on would be hidden
-from there, and do not swing the view about for no reason.
+stays where the last step done to the same thing had it: a sub-assembly's views are
+its own, and when the main thing comes back it is seen as it last was. Give one
+whenever what goes on would be hidden from there, and do not swing the view about for
+no reason.
 
-How near the model is, is the page's own doing: it fills the window with what is on so
-far, so the first part is seen close to, and the view draws back as the rest go on.
+How near the model is, is the page's own doing: it fills the window with what the step
+is done to, so far. So the first part is seen close to, the view draws back as the rest
+go on, and a sub-assembly has the window to itself.
 
 ## The rest of a guide
 
@@ -172,6 +258,7 @@ steps are there to explain the thing; the cover is there to make someone want it
   Look at the thing first (take a screenshot), and think about which side carries
   what is distinctive: the curve, the dial, the joint, the thin edge. Draw it from
   where that shows. A thing is rarely at its best from the corner the app opens on.
+
 - `parts`: the ids of the parts the cover is filled with. Not the whole thing: the
   feature that sells it and says at a glance what it is. A stool's seat and backrest,
   a lamp's shade and arm, a clock's dial and bezel. The drawing is made as big as
@@ -194,19 +281,26 @@ fitted), write it for that alone:
 - `already` names the parts it is fitted to, by id, where the reader needs to see
   them: they are shown from the start, in place, and no step puts them on. Keep it to
   what the thing touches, not the whole model.
+- It goes down to the single part like any other guide, and more so: someone who asks
+  for a guide to one group wants to see what is inside it. Asked for a clock's face,
+  do not write "fit the three rings". Each ring is made up with its dot, as a
+  sub-assembly, and then goes on.
 
 ## Giving it
 
 Give the whole guide in one call. If the app rejects it, it says why in words (an id
-the model does not have, a part put on twice): put that right and give it again. If
-it says parts were left out and the guide is to the whole thing, add them. Giving it
-again in the same turn replaces what you gave before; in a later turn it is filed as
-the next version, and the earlier ones are kept for the user to go back to.
+the model does not have, a part put on twice, a sub-assembly that is never fitted): put
+that right and give it again. If it says parts were left out and the guide is to the
+whole thing, add them. If it says a step puts on parts of more than one kind, look at
+that step again: unless those parts come to the reader as one piece, split it, and
+give the guide again. Giving it again in the same turn replaces what you gave before;
+in a later turn it is filed as the next version, and the earlier ones are kept for the
+user to go back to.
 
 You cannot see the page. Check the guide against the parts instead: read down your
 steps with the list of parts beside you, and see that each part is in one step, that
-each `from` points away from what is already on, and that nothing goes on after the
-thing that shuts it in.
+no step holds two parts of which one goes into the other, that each `from` points away
+from what is already there, and that nothing goes on after the thing that shuts it in.
 
 Then reply to the user, shortly: that the guide is in the Assembly view, and what in
 it you were not sure of.
@@ -236,10 +330,16 @@ it you were not sure of.
       "from": [0, 0, 50]
     },
     {
-      "title": "Fix the cover",
-      "text": "Set the base cover over the weight so that the cable slot faces the back. Fix it from above with the three M3 × 10 screws, using the 2.5 mm hex key.",
-      "parts": ["base-cover", "cover-screws"],
-      "from": [0, 0, 70],
+      "title": "Set the cover on",
+      "text": "Set the base cover over the weight so that the cable slot faces the back. Its three holes line up with the three in the base plate.",
+      "parts": ["base-cover"],
+      "from": [0, 0, 70]
+    },
+    {
+      "title": "Screw the cover down",
+      "text": "Fix the cover from above with the three M3 × 10 screws, using the 2.5 mm hex key.",
+      "parts": ["cover-screws"],
+      "from": [0, 0, 40],
       "tip": "Turn each screw in a little before tightening any of them, so the cover settles flat."
     },
     {
@@ -249,11 +349,33 @@ it you were not sure of.
       "from": [0, 0, 180]
     },
     {
+      "sub": "Shade",
+      "title": "Lay the shade on its side",
+      "text": "Lay the shade on the table with its open end towards you and its two hinge lugs up.",
+      "parts": ["shade"],
+      "view": [1, -1, 1]
+    },
+    {
+      "sub": "Shade",
+      "title": "Clip in the lamp holder",
+      "text": "Push the lamp holder into the neck of the shade from inside, cable end first, until its two clips snap over the rim.",
+      "parts": ["lamp-holder"],
+      "from": [0, -60, 0],
+      "tip": "Both clips should click: pull gently on the holder to check."
+    },
+    {
       "title": "Hang the shade",
-      "text": "Hold the shade against the head of the post with the hinge pin lined up, and push the pin through from the right. Tighten its screw with the screwdriver until the shade stays where it is tilted.",
-      "parts": ["shade", "hinge-pin"],
-      "from": [60, 0, 0],
+      "text": "Hold the shade against the head of the post, with a lug either side of it and the holes in line.",
+      "parts": [],
+      "fits": ["Shade"],
+      "from": [0, 0, 60],
       "view": [1, 1, 1]
+    },
+    {
+      "title": "Push in the hinge pin",
+      "text": "Push the hinge pin through the lugs and the post from the right. Tighten its screw with the screwdriver until the shade stays where it is tilted.",
+      "parts": ["hinge-pin"],
+      "from": [60, 0, 0]
     }
   ]
 }

@@ -5,6 +5,12 @@
 // and keeps no copy of. So a guide is shown with the model as it now is, and it is only
 // when one is taken away, as an archive, that the parts go with it.
 //
+// Not everything goes straight on to the thing. A dot is pressed into its ring before
+// the ring goes on, and a gear on to its shaft before the shaft does: such a thing is
+// made up apart, in steps of its own that say what it is (`sub`), and then goes on whole
+// in a step that says it does (`fits`). So a step is seen with only what it is done to:
+// the thing itself, so far, or the one thing that is being made up on the table.
+//
 // kit/assembly.md says how one is written, and is what an agent reads before it writes
 // one.
 import type { Vec3 } from "./api"
@@ -62,6 +68,18 @@ export type GuideStep = {
   /** the parts that go on in it, by id as the model has them */
   parts: string[]
   /**
+   * What the step is done to, where that is not the thing itself: something made up
+   * apart from it, before it goes on, by what the reader is told it is called ("Hour
+   * carrier"). The steps that say the same make that one thing up between them, and it
+   * is seen alone in them. Null is the thing itself.
+   */
+  sub: string | null
+  /**
+   * The things made up apart that go on in this step, each whole, by what their steps
+   * call them: with the step's own parts, and from where those come.
+   */
+  fits: string[]
+  /**
    * Where they are before they go on, as how far that is from where they end up: mm, in
    * the model's own frame, Z up. They are shown coming from there, all of them alike.
    * Null leaves it to the page, which brings each of them in its own way from outside
@@ -72,7 +90,7 @@ export type GuideStep = {
    * Where the step is best looked at from: the way from the model to the eye, in the
    * model's frame. The page looks at the model from one of its corners, as a blueprint
    * does, and this says which: the one nearest that way (see `cornerOf`). Null is from
-   * where the step before was.
+   * where the last step done to the same thing was.
    */
   view: Vec3 | null
   /** something to take care over in it, if there is anything */
@@ -128,6 +146,8 @@ export type GuideGiven = {
     title: string
     text: string
     parts: string[]
+    sub?: string
+    fits?: string[]
     from?: number[]
     view?: number[]
     tip?: string
@@ -153,6 +173,12 @@ const needed = (v: unknown): Need[] =>
       : undefined
     return [{ name, icon: icon ?? null }]
   })
+/** What a thing made up apart is called, as what is the same however it is written. */
+const sameAs = (name: string) =>
+  name
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
 const vec3 = (v: unknown): Vec3 | null =>
   Array.isArray(v) && v.length === 3 && v.every((n) => Number.isFinite(n))
     ? (v as Vec3)
@@ -187,11 +213,24 @@ export function readGuide(written: unknown): Guide {
       title: what,
       text,
       parts: [...new Set(listed(raw.parts))],
+      sub: said(raw.sub),
+      fits: [...new Set(listed(raw.fits))],
       from: vec3(raw.from),
       view,
       tip: said(raw.tip),
     }
   })
+  // What is made up apart is called one thing throughout, as its first step has it:
+  // "Hour carrier" and "hour-carrier" are the same thing, said twice.
+  const names = new Map<string, string>()
+  for (const { sub } of steps)
+    if (sub && !names.has(sameAs(sub))) names.set(sameAs(sub), sub)
+  for (const step of steps) {
+    if (step.sub) step.sub = names.get(sameAs(step.sub))!
+    step.fits = [
+      ...new Set(step.fits.map((name) => names.get(sameAs(name)) ?? name)),
+    ]
+  }
   const version = Number(written.version)
   const made = typeof written.made === "string" ? Date.parse(written.made) : NaN
   const cover = isObject(written.cover) ? written.cover : {}
@@ -231,6 +270,148 @@ export const partsIn = (guide: Pick<Guide, "already" | "steps">): string[] => [
 ]
 
 /**
+ * The parts of each thing a guide has made up apart, by what the thing is called: the
+ * ones its own steps put on, and those of whatever they fit to it, in the order they
+ * go on.
+ */
+function madeUp(steps: GuideStep[]): Map<string, string[]> {
+  const whole = new Map<string, string[]>()
+  // (a thing fitted to itself, by whatever way round, is left out of itself)
+  const of = (name: string, within: string[]): string[] => {
+    const done = whole.get(name)
+    if (done) return done
+    if (within.includes(name)) return []
+    const parts = [
+      ...new Set(
+        steps
+          .filter((step) => step.sub === name)
+          .flatMap((step) => [
+            ...step.fits.flatMap((fitted) => of(fitted, [...within, name])),
+            ...step.parts,
+          ])
+      ),
+    ]
+    if (within.length === 0) whole.set(name, parts)
+    return parts
+  }
+  for (const { sub } of steps) if (sub) of(sub, [])
+  return whole
+}
+
+/**
+ * What is seen in a step: the parts that are there when it begins, and the ones it puts
+ * on, by id. Everything else is out of sight in it.
+ */
+export type Scene = { there: string[]; coming: string[] }
+
+/**
+ * What is seen in each step of a guide. A step done to the thing itself has all that has
+ * gone on to it so far, with what was there to begin with; a step done to something made
+ * up apart has only that thing, so far. What a step puts on is its own parts and all of
+ * whatever it fits.
+ */
+export function scenesOf(guide: Pick<Guide, "already" | "steps">): Scene[] {
+  const made = madeUp(guide.steps)
+  // what has gone on to each thing so far: the thing itself goes by null
+  const on = new Map<string | null, string[]>([[null, [...guide.already]]])
+  return guide.steps.map((step) => {
+    const there = on.get(step.sub) ?? []
+    const coming = [
+      ...new Set([
+        ...step.fits.flatMap((name) => made.get(name) ?? []),
+        ...step.parts,
+      ]),
+    ].filter((id) => !there.includes(id))
+    on.set(step.sub, [...there, ...coming])
+    return { there, coming }
+  })
+}
+
+/** Some steps, as they are spoken of: "step 3", "steps 3 and 4", "steps 3, 4 and 6". */
+const stepsSaid = (steps: number[]) => {
+  const said = steps.map((index) => String(index + 1))
+  return said.length === 1
+    ? `step ${said[0]}`
+    : `steps ${said.slice(0, -1).join(", ")} and ${said.at(-1)}`
+}
+
+/**
+ * What is wrong with how a guide's things made up apart are made up and fitted: each is
+ * made up by steps that come before the one step that fits it, and is fitted once.
+ */
+function troubleMadeUp(guide: Guide): string[] {
+  const trouble: string[] = []
+  const steps = new Map<string, number[]>()
+  guide.steps.forEach(({ sub }, index) => {
+    if (sub) steps.set(sub, [...(steps.get(sub) ?? []), index])
+  })
+  const fitted = new Map<string, number>()
+  guide.steps.forEach((step, index) => {
+    for (const name of step.fits) {
+      const made = steps.get(name)
+      const before = fitted.get(name)
+      if (!made)
+        trouble.push(
+          `Step ${index + 1} fits "${name}", which no step makes up: "fits" names what earlier steps give as their "sub"${steps.size > 0 ? ` (${[...steps.keys()].map((one) => `"${one}"`).join(", ")})` : ""}. A part that goes on by itself is in "parts".`
+        )
+      else if (step.sub === name)
+        trouble.push(
+          `Step ${index + 1} is done to "${name}" and fits it as well: the step that fits a thing is done to what the thing goes on to.`
+        )
+      else if (before !== undefined)
+        trouble.push(
+          `"${name}" is fitted in step ${before + 1} and again in step ${index + 1}: it goes on once.`
+        )
+      else {
+        fitted.set(name, index)
+        const late = made.filter((one) => one > index)
+        if (late.length > 0)
+          trouble.push(
+            `"${name}" goes on in step ${index + 1}, and ${stepsSaid(late)} ${late.length === 1 ? "is" : "are"} still done to it: all of its steps come before the one that fits it. What is done once it is on is a step with no "sub".`
+          )
+      }
+    }
+  })
+  for (const [name, made] of steps)
+    if (!fitted.has(name))
+      trouble.push(
+        `"${name}" is made up in ${stepsSaid(made)} and never goes on: a later step fits it, by naming it in "fits".`
+      )
+  return trouble
+}
+
+/** What kind of part one is, going by what it is called: "Leg, front left" and "Leg, back right" are both legs. */
+const kindOf = (called: string) => {
+  const kind = called
+    .split(",")[0]
+    .toLowerCase()
+    .replace(/[\d_-]+/g, " ")
+    .replace(/\b(left|right|front|back|rear|top|bottom|upper|lower)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+  return kind || called
+}
+
+/**
+ * The steps of a guide that put on parts of more than one kind at once, counted from 0,
+ * each with what those parts are called. A step's parts arrive as one, so such a step
+ * shows nothing of how they go to each other: right for a thing that comes in one
+ * piece, and otherwise a step that wants splitting. `called` is what each part is
+ * called, by id; one it does not have goes by its id.
+ */
+export function mixed(
+  guide: Guide,
+  called: ReadonlyMap<string, string> = new Map()
+): { step: number; parts: string[] }[] {
+  return guide.steps.flatMap((step, index) => {
+    const names = step.parts.map((id) => called.get(id) ?? id)
+    return new Set(names.map(kindOf)).size > 1
+      ? [{ step: index, parts: names }]
+      : []
+  })
+}
+
+/**
  * What is wrong with a guide for a model that has these parts, each thing in a line:
  * nothing, of one that can be written. A part named twice would go on twice.
  */
@@ -259,6 +440,7 @@ export function troubleWith(guide: Guide, model: string[]): string[] {
   })
   if (put.size === 0)
     trouble.push("No step puts a part on: each names the parts it adds.")
+  trouble.push(...troubleMadeUp(guide))
   const shown = new Set(partsIn(guide))
   const strange = guide.cover.parts.filter(
     (id) => known.has(id) && !shown.has(id)
@@ -319,7 +501,9 @@ export function writtenAs(guide: Guide): string {
         steps: guide.steps.map((step) => ({
           title: step.title,
           text: step.text,
+          ...(step.sub ? { sub: step.sub } : {}),
           parts: step.parts,
+          ...(step.fits.length > 0 ? { fits: step.fits } : {}),
           ...(step.from ? { from: step.from } : {}),
           ...(step.view ? { view: step.view } : {}),
           ...(step.tip ? { tip: step.tip } : {}),

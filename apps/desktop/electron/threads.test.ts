@@ -446,13 +446,24 @@ describe("assembling", () => {
     expect(told).toContain("changes nothing in the model's files")
     expect(told).toContain("no HTML")
   })
+
+  it("has a guide go down to the single part, and not to the model's groups", () => {
+    const told = assembling(claude, "/app/kit/enclose.py").join("\n")
+    expect(told).toContain(
+      "down to the single part, and not to the model's groups"
+    )
+    expect(told).toContain("as a sub-assembly, and then fitted")
+  })
 })
 
 describe("assemblyAsked", () => {
   it("asks for a guide to all of the model, where nothing was picked out", () => {
     const asked = assemblyAsked(null, "/app/kit/enclose.py")
     expect(asked).toContain("how all of it is put together")
+    expect(asked).toContain("down to the single part")
     expect(asked).toContain('Read "/app/kit/assembly.md"')
+    // (also where it was read earlier in the conversation, since when it may have changed)
+    expect(asked).toContain("Read it now even if you have read it before")
     expect(asked).toContain("mcp__assembly__guide")
     expect(asked).toContain("Change nothing in the model")
   })
@@ -466,6 +477,7 @@ describe("assemblyAsked", () => {
     expect(asked).toContain("for one thing in this model")
     expect(asked).toContain("Footrest")
     expect(asked).toContain("there to begin with (already)")
+    expect(asked).toContain("take it down to its single parts")
     expect(asked).toContain("assembly__guide")
     expect(asked).not.toContain("how all of it")
   })

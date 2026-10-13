@@ -7,10 +7,13 @@
 // wheel, a key or a swipe goes on a step, or back one, and never part of the way: the
 // steps come up to their place one at a time, as the pages of a blueprint are turned.
 //
+// A step done to something that is made up apart, before it goes on, says what that is
+// beside its number: the model shows that thing alone while it is made up.
+//
 // It is one page for every guide. What it shows it is told, by a file loaded ahead of
 // this one (see electron/guide-page.ts): the guide, and the model's parts.
 import type { Looks } from "@shared/api"
-import type { Guide, Need } from "@shared/assembly-format"
+import { partsIn, type Guide, type Need } from "@shared/assembly-format"
 import { readModel } from "@/lib/model"
 import { drawn, iconFor } from "./icons"
 import { madeWith } from "./made-with"
@@ -123,10 +126,7 @@ function page(told: NonNullable<Window["ENCLOSE_GUIDE"]>) {
   } catch {
     // none of the guide's parts are in the model any more: it is still to be read
   }
-  const shown = new Set([
-    ...guide.already,
-    ...guide.steps.flatMap((step) => step.parts),
-  ])
+  const shown = partsIn(guide)
   const when =
     guide.made === null
       ? null
@@ -147,14 +147,18 @@ function page(told: NonNullable<Window["ENCLOSE_GUIDE"]>) {
       made(
         "h2",
         "",
-        `${counted(guide.steps.length, "step")}, ${counted(shown.size, "part")}`
+        `${counted(guide.steps.length, "step")}, ${counted(shown.length, "part")}`
       ),
       ...(guide.summary ? written(guide.summary, "") : []),
       made("p", "label", "You will need"),
       needed(guide.needs)
     ),
     ...guide.steps.map((step, index) => {
-      const names = step.parts.flatMap((id) => called.get(id) ?? [])
+      // what goes on in it: the things made up before, each as one, and then its parts
+      const names = [
+        ...step.fits,
+        ...step.parts.flatMap((id) => called.get(id) ?? []),
+      ]
       const parts =
         names.length > NAMED + 1
           ? [...names.slice(0, NAMED), `${names.length - NAMED} more`]
@@ -162,7 +166,11 @@ function page(told: NonNullable<Window["ENCLOSE_GUIDE"]>) {
       return made(
         "section",
         "step",
-        made("p", "label", `Step ${index + 1}`),
+        made(
+          "p",
+          "label",
+          [`Step ${index + 1}`, step.sub].filter(Boolean).join(" · ")
+        ),
         made("h2", "", step.title),
         ...written(step.text, ""),
         // something to take care over, set apart with a lamp beside it, as a tip is

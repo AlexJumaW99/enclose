@@ -152,6 +152,69 @@ describe("fileGuide", () => {
       "2 parts of the model are in no step and will not be shown: cover, screws."
     )
   })
+
+  it("says which steps put on parts of more than one kind, by what the parts are called", () => {
+    const called = new Map([
+      ["cover", "Base cover"],
+      ["screws", "Cover screws, M3 × 10"],
+    ])
+    const { said } = fileGuide(root, lamp(), MODEL, null, 1000, called)
+    expect(said).toContain("One step puts on parts of more than one kind")
+    expect(said).toContain(
+      '- step 3, "Fix the cover": Base cover, Cover screws, M3 × 10'
+    )
+    expect(said).toContain('make it a sub-assembly ("sub", then "fits")')
+    // and nothing of it, of a guide that puts one kind on at a time
+    const apart = fileGuide(
+      root,
+      {
+        title: "Desk lamp",
+        steps: [
+          ...lamp().steps.slice(0, 2),
+          { title: "Set the cover on", text: "Slot back.", parts: ["cover"] },
+          { title: "Screw it down", text: "Three.", parts: ["screws"] },
+        ],
+      },
+      MODEL,
+      null,
+      2000,
+      called
+    )
+    expect(apart.said).not.toContain("more than one kind")
+  })
+
+  it("files what is made up apart, and will not file it left on the table", () => {
+    const steps = [
+      { title: "Start with the base", text: "Lay it.", parts: ["base"] },
+      { sub: "Cover", title: "Lay the cover", text: "Down.", parts: ["cover"] },
+      {
+        sub: "Cover",
+        title: "Start the screws",
+        text: "In.",
+        parts: ["screws"],
+      },
+    ]
+    expect(() =>
+      fileGuide(root, { title: "Desk lamp", steps }, MODEL, null, 1000)
+    ).toThrow(/was not written[\s\S]*"Cover" is made up in steps 2 and 3/)
+    const { id } = fileGuide(
+      root,
+      {
+        title: "Desk lamp",
+        steps: [
+          ...steps,
+          { title: "Fit the cover", text: "On.", parts: [], fits: ["cover"] },
+        ],
+      },
+      MODEL,
+      null,
+      1000
+    )
+    expect(guideOf(root, id)?.steps.at(-1)).toMatchObject({
+      sub: null,
+      fits: ["Cover"],
+    })
+  })
 })
 
 describe("removeGuide", () => {

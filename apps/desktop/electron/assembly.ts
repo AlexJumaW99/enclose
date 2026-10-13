@@ -10,6 +10,7 @@ import {
   fileNameOf,
   GUIDE_FILE,
   leftOut,
+  mixed,
   MOST_GUIDE_BYTES,
   MOST_GUIDES,
   partsIn,
@@ -115,14 +116,17 @@ export const counted = (many: number, what: string) =>
  * in words the guide can be mended by, where it is not one that can be shown.
  * `replacing` is a guide written a moment ago, in the same turn, that this one is
  * instead of: an agent that thinks better of what it wrote has written one guide, and
- * not two. Returns what it is known by, and what to say of it.
+ * not two. Returns what it is known by, and what to say of it: with which of its steps
+ * put on parts of more than one kind at once, which is seldom how a thing goes
+ * together, going by what the parts are called (`called`, by id).
  */
 export function fileGuide(
   root: string,
   given: GuideGiven,
   model: string[],
   replacing: string | null,
-  now: number
+  now: number,
+  called: ReadonlyMap<string, string> = new Map()
 ): { id: string; said: string } {
   const read = readGuide(given)
   const trouble = troubleWith(read, model)
@@ -150,6 +154,7 @@ export function fileGuide(
     id = `${name}-v${version}-${n}`
   fs.writeFileSync(path.join(dir, `${id}.json`), writtenAs(guide))
   const left = leftOut(guide, model)
+  const lumped = mixed(guide, called)
   return {
     id,
     said: [
@@ -157,6 +162,16 @@ export function fileGuide(
       ...(left.length > 0
         ? [
             `${counted(left.length, "part")} of the model ${left.length === 1 ? "is" : "are"} in no step and will not be shown: ${left.join(", ")}. That is right for a guide to part of the model. If this is a guide to all of it, give it again with ${left.length === 1 ? "it" : "them"} in.`,
+          ]
+        : []),
+      ...(lumped.length > 0
+        ? [
+            `${lumped.length === 1 ? "One step puts" : `${lumped.length} steps each put`} on parts of more than one kind at once:`,
+            ...lumped.map(
+              ({ step, parts }) =>
+                `- step ${step + 1}, "${guide.steps[step].title}": ${parts.join(", ")}`
+            ),
+            `The page brings a step's parts in together, as one, so the reader does not see how these go to each other. That is right only for what comes to them as one piece. Where one of these is fitted to another (pressed in, screwed on, glued), that fitting is a step of its own: split the step, and where the fitting is done before the thing goes on, make it a sub-assembly ("sub", then "fits"). Then give the guide again.`,
           ]
         : []),
     ].join("\n"),

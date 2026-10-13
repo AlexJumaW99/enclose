@@ -284,7 +284,19 @@ export function assemblyTools(
               parts: z
                 .array(z.string())
                 .describe(
-                  "The ids of the parts that go on in this step. A part goes on in one step only; a step that only turns the thing over or checks it has none."
+                  "The ids of the parts that go on in this step: one kind of part, going on one way, since the page brings them in together as one. Two parts of which one is fitted to the other are two steps, and never one. Parts of different kinds are one step only where they come to the reader as one piece (a bought movement, a motor). A part goes on in one step only; a step that only turns the thing over, checks it, or fits a sub-assembly has none."
+                ),
+              sub: z
+                .string()
+                .optional()
+                .describe(
+                  'For a step done to a sub-assembly, something put together on the table before it goes on to the main thing (a dot pressed into its ring, gears on the carrier they turn in): what that sub-assembly is called, as the reader is told ("Outer ring"). Every step that makes it up gives the same name; its first lays down the part the rest go on to. The page shows it alone in those steps, close to, with nothing else of the model in sight. Left out, the step is done to the main thing.'
+                ),
+              fits: z
+                .array(z.string())
+                .optional()
+                .describe(
+                  'The sub-assemblies that go on in this step, each whole, by the names their steps gave as "sub". The page brings all of each in as one piece, from this step\'s "from". Every sub-assembly is fitted by one step, which comes after all of its own and is not one of them.'
                 ),
               from: three
                 .optional()
@@ -294,7 +306,7 @@ export function assemblyTools(
               view: three
                 .optional()
                 .describe(
-                  "Which corner of the model the step is seen from. The page always looks at the model from one of its corners, as a blueprint does, and only the signs here count: [1, -1, 1] is from the right, the front and above, which is where it begins; [-1, -1, 1] from the left; [1, 1, 1] from behind; [1, -1, -1] from underneath. Left out, the view stays as it was."
+                  "Which corner of the model the step is seen from. The page always looks at the model from one of its corners, as a blueprint does, and only the signs here count: [1, -1, 1] is from the right, the front and above, which is where it begins; [-1, -1, 1] from the left; [1, 1, 1] from behind; [1, -1, -1] from underneath. Left out, the view is as the last step done to the same thing had it: a sub-assembly's views are its own."
                 ),
               tip: z
                 .string()
@@ -304,7 +316,9 @@ export function assemblyTools(
                 ),
             })
           )
-          .describe("In the order they are done."),
+          .describe(
+            "In the order they are done, one thing done to a step: as many as there are things to do, down to the single part. A part that is joined to another before the two go on is not left to the words: it has steps of its own, as a sub-assembly."
+          ),
       },
       async (given) => write(given).then(words, failed)
     ),

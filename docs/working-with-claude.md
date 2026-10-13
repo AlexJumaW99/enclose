@@ -59,6 +59,12 @@ from, and what is needed to hand. With something picked out of the model before 
 guides are turned to, the button offers a guide to that alone, how it is put together
 and fitted, with **Whole model** beside it.
 
+A guide goes down to the single part, and not to the model's groups: a step puts on one
+kind of part, in one way. What is put together before it goes on, as a dot is pressed
+into its ring or two gears go on the carrier they turn in, is a sub-assembly. It has
+steps of its own, and then one that fits it. Only a thing that comes in one piece, like
+a bought movement, goes on as one, however many parts the model has it as.
+
 It is asked in the conversation, as a message would be. It can be asked for there in
 words too, and changed the same way ("split step 3 in two"). While Claude is at it, the
 foot of the view says how long it has been and what it is doing, with a button that
@@ -86,7 +92,9 @@ perspective. A turn of the wheel, a swipe or an arrow key goes on one step, or b
 one. The parts of each step come in and go on, lit, over the ones that are on already,
 and going back takes the thing apart again. The model fills the window with what is on
 so far: the first part is seen close to, and the view draws back as the rest go on. A
-part that goes on behind something shows through it faintly. The model is turned by
+sub-assembly is shown alone while it is made up, filling the window, with what it is
+called beside the step's number; then the rest comes back, and it goes on as one piece.
+A part that goes on behind something shows through it faintly. The model is turned by
 pulling it, moved across the window by pulling it with Shift held, and brought nearer
 with a pinch. The round button at the top right puts it back as the page had it.
 
@@ -198,12 +206,12 @@ Code is set.
 
 Claude starts out with full access and never asks leave.
 
-| Access | What Claude does |
-|---|---|
-| Full access | Never asks |
-| Auto | Does what is routine and asks about the rest |
+| Access            | What Claude does                                 |
+| ----------------- | ------------------------------------------------ |
+| Full access       | Never asks                                       |
+| Auto              | Does what is routine and asks about the rest     |
 | Auto-accept edits | Edits files freely and asks before anything else |
-| Supervised | Asks before it changes a file or runs anything |
+| Supervised        | Asks before it changes a file or runs anything   |
 
 ## Taking a change back
 

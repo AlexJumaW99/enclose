@@ -487,6 +487,7 @@ export function assembling(
   const reference = path.join(path.dirname(kit), ASSEMBLY_GUIDE)
   return [
     `- The user can have assembly guides for this model (the Assembly button beside the view): how the thing is put together, a step at a time, for whoever has its parts on the table. The app makes each into a page that shows the model's own parts going on, step by step, from a guide you write. When the user asks for one, or asks how the thing is assembled as something to keep or to hand on, write a guide: read "${reference}" first, which says how one is worked out, then give it to ${tool(ASSEMBLY, "guide")}. That checks it against the model, files it in ${ASSEMBLY_FOLDER}/ at the top of the project and shows its cover in the Assembly view. Write no such file by hand and no HTML: the page is the app's.`,
+    `- A guide goes down to the single part, and not to the model's groups: every part is a piece in the reader's hand, and how each is joined to the next is a step the page shows. What is put together before it goes on (a dot pressed into its ring, gears on their carrier) is made up in steps of its own, as a sub-assembly, and then fitted: the reference says how.`,
     `- A guide is of the model as it is: writing one changes nothing in the model's files. Where the thing cannot be put together as it is drawn (a part with no way in, nothing that holds a part where it sits), say so in the short reply, and write the guide for what there is. You cannot see the page, so check a guide against the parts themselves, their sizes and places (${tool(VIEWPORT, "parts")}), before you give it. When the user wants a guide changed, give the whole of it again with the change in: it is filed as the next version, and the ones before are kept.`,
   ]
 }
@@ -822,9 +823,9 @@ export function assemblyAsked(
   const reference = path.join(path.dirname(kit), ASSEMBLY_GUIDE)
   return [
     of
-      ? `Make an assembly guide for one thing in this model, and not for all of it: ${of.label}, which the message names as its object. It is a guide to putting that together and, where it goes on to something else, to fitting it there: whatever it is fitted to is there to begin with (already), and is not put together in this guide.`
-      : "Make an assembly guide for this model: how all of it is put together, from the first part to the last.",
-    `This was asked for from the app's Assembly view, where the user is waiting for the guide's cover. Read "${reference}" and go by it, then give the guide to ${tool(ASSEMBLY, "guide")}. Change nothing in the model for it. When it is written, say in a sentence or two that it is there, and what in it you were not sure of: the order of two steps, a tool you took to be needed.`,
+      ? `Make an assembly guide for one thing in this model, and not for all of it: ${of.label}, which the message names as its object. It is a guide to putting that together and, where it goes on to something else, to fitting it there: whatever it is fitted to is there to begin with (already), and is not put together in this guide. Whoever asks for a guide to one thing wants to see inside it: take it down to its single parts, each joined to the next in a step of its own, and do not bring it on in a few pieces already made up.`
+      : "Make an assembly guide for this model: how all of it is put together, from the first part to the last, down to the single part. The model's groups are how it is sorted and not how it goes together: what is inside each is put together in the guide too.",
+    `This was asked for from the app's Assembly view, where the user is waiting for the guide's cover. Read "${reference}" and go by it, then give the guide to ${tool(ASSEMBLY, "guide")}. Read it now even if you have read it before in this conversation: it is what the app goes by, and may have changed since. Change nothing in the model for it. When it is written, say in a sentence or two that it is there, and what in it you were not sure of: the order of two steps, a tool you took to be needed.`,
   ].join("\n\n")
 }
 

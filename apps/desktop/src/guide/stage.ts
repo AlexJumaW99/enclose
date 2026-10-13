@@ -8,6 +8,11 @@
 // own colours. Where each part is, and how much of it, is all worked out from how far
 // through the guide the page is (see standing.ts).
 //
+// A step is drawn with what it is done to and no more. Mostly that is the thing itself,
+// as far as it has got. But something that is made up apart before it goes on, as a
+// gear is on its shaft, is drawn alone while it is: the rest is out of sight, and it
+// fills the window. Then it goes on, whole, as a part does.
+//
 // It is looked at as a blueprint draws it: with no lens, so that nothing is smaller for
 // being further off, and from one of its corners, with three of its sides turned
 // equally to the eye. And it is as big as the room it has lets it be: what is on so far
@@ -21,8 +26,14 @@ import { UNDER_FROM, underlit } from "@/components/viewport/light"
 import { EDGE, finish, skinColour } from "@/components/viewport/paint"
 import { readModel, type Model, type Part } from "@/lib/model"
 import type { Looks, Vec3 } from "@shared/api"
-import { cornerOf, type Guide } from "@shared/assembly-format"
-import { standing, towards } from "./standing"
+import {
+  cornerOf,
+  partsIn,
+  scenesOf,
+  type Guide,
+  type Scene,
+} from "@shared/assembly-format"
+import { standing, stoodIn, towards, type Stand } from "./standing"
 
 /**
  * Where the model is looked at from to begin with: its front right corner, from above,
@@ -156,8 +167,8 @@ function skinsOf(scene: THREE.Object3D, part: Part) {
 
 /** A part as the page draws it. */
 type Shown = {
-  /** the step that puts it on, counted from 0: null of one that is there to begin with */
-  step: number | null
+  /** how it is in each step: out of sight, on already, or what the step puts on */
+  stands: Stand[]
   /** all of it, where the model has it: what is moved when it is on its way in */
   whole: THREE.Group
   home: THREE.Matrix4
@@ -165,8 +176,12 @@ type Shown = {
   corners: THREE.Vector3[]
   /** where the model says it goes when it is pulled apart, mm: nowhere, if it does not say */
   away: THREE.Vector3
-  /** where it comes from, as how far that is from its place, mm (see comingFrom) */
-  comes: THREE.Vector3
+  /**
+   * Where it comes from, in each step that brings it, as how far that is from its
+   * place, mm (see comingFrom). A part of something made up apart comes twice: on to
+   * that, and with it on to what that is fitted to.
+   */
+  comes: Map<number, THREE.Vector3>
   /** the room it takes up, in the model, where the model has it */
   box: THREE.Box3
   surfaces: {
@@ -189,7 +204,7 @@ async function shownOf(
   part: Part,
   turn: number,
   chosen: string | null,
-  step: number | null
+  stands: Stand[]
 ): Promise<Shown> {
   const [gltf, edges] = await Promise.all([
     fileOf(part.file).then((file) => new GLTFLoader().parseAsync(file, "")),
@@ -257,7 +272,7 @@ async function shownOf(
   whole.matrix.copy(home)
   box.applyMatrix4(home)
   return {
-    step,
+    stands,
     whole,
     home,
     corners: [0, 1, 2, 3, 4, 5, 6, 7].map((corner) =>
@@ -268,7 +283,7 @@ async function shownOf(
       ])
     ),
     away: new THREE.Vector3(...part.explode),
-    comes: new THREE.Vector3(),
+    comes: new Map(),
     box,
     surfaces,
     lines,
@@ -295,52 +310,72 @@ export type Stage = {
 }
 
 /**
- * Says where each part comes from, in the model's own measure: where its step says,
- * which is the same for every part of the step. Where the step does not say, each
- * comes its own way in from outside: back along the way the model says it goes when it
- * is pulled apart, if the model says, and otherwise straight in towards the middle of
- * what is on by then. So four bolts through four legs come in from four sides. A part
- * with nothing on before it, or in the middle of the rest, comes down from above.
+ * Says where each part comes from in each step that brings it, in the model's own
+ * measure: where the step says, which is the same for everything the step puts on.
+ * Where the step does not say, each of its own parts comes its own way in from outside:
+ * back along the way the model says it goes when it is pulled apart, if the model says,
+ * and otherwise straight in towards the middle of what is there by then. So four bolts
+ * through four legs come in from four sides. A part with nothing there before it, or in
+ * the middle of the rest, comes down from above. And what a step fits, made up already,
+ * comes all one way, as the one thing it now is.
  */
-function comingFrom(guide: Guide, shown: Map<string, Shown>, across: number) {
+function comingFrom(
+  guide: Guide,
+  scenes: Scene[],
+  shown: Map<string, Shown>,
+  across: number
+) {
   const least = Math.max(COMES_FROM.mm, across * COMES_FROM.least)
   const most = Math.max(least, across * COMES_FROM.most)
   const far = Math.max(COMES_FROM.mm, across * COMES_FROM.share)
-  const on = new THREE.Box3()
-  for (const id of guide.already) {
-    const part = shown.get(id)
-    if (part) on.union(part.box)
+  const boxOf = (ids: string[]) => {
+    const box = new THREE.Box3()
+    for (const id of ids) {
+      const part = shown.get(id)
+      if (part) box.union(part.box)
+    }
+    return box
   }
-  for (const step of guide.steps) {
-    const these = step.parts.flatMap((id) => shown.get(id) ?? [])
-    for (const part of these) {
-      if (step.from) {
-        part.comes.set(...step.from)
-        continue
-      }
-      if (part.away.lengthSq() > 1e-6) {
-        const length = part.away.length() * FURTHER
-        part.comes
-          .copy(part.away)
-          .setLength(THREE.MathUtils.clamp(length, least, most))
-        continue
-      }
-      const out = on.isEmpty()
+  /** The way in for what takes up `box`, from outside what is there. */
+  const wayIn = (box: THREE.Box3, on: THREE.Box3) => {
+    const out =
+      on.isEmpty() || box.isEmpty()
         ? new THREE.Vector3()
-        : part.box
+        : box
             .getCenter(new THREE.Vector3())
             .sub(on.getCenter(new THREE.Vector3()))
-      // what is nearly along one of the model's axes is taken to be along it
-      const [x, y, z] = out.toArray().map(Math.abs)
-      const longest = Math.max(x, y, z)
-      if (x < longest * ASIDE) out.x = 0
-      if (y < longest * ASIDE) out.y = 0
-      if (z < longest * ASIDE) out.z = 0
-      if (longest < across * 0.02) out.set(0, 0, 1)
-      part.comes.copy(out).setLength(far)
-    }
-    for (const part of these) on.union(part.box)
+    // what is nearly along one of the model's axes is taken to be along it
+    const [x, y, z] = out.toArray().map(Math.abs)
+    const longest = Math.max(x, y, z)
+    if (x < longest * ASIDE) out.x = 0
+    if (y < longest * ASIDE) out.y = 0
+    if (z < longest * ASIDE) out.z = 0
+    if (longest < across * 0.02) out.set(0, 0, 1)
+    return out.setLength(far)
   }
+  guide.steps.forEach((step, index) => {
+    const { there, coming } = scenes[index]
+    const on = boxOf(there)
+    const fitted = coming.filter((id) => !step.parts.includes(id))
+    const together = step.from
+      ? new THREE.Vector3(...step.from)
+      : wayIn(boxOf(fitted), on)
+    for (const id of coming) {
+      const part = shown.get(id)
+      if (!part) continue
+      if (step.from || fitted.includes(id)) part.comes.set(index, together)
+      else if (part.away.lengthSq() > 1e-6)
+        part.comes.set(
+          index,
+          part.away
+            .clone()
+            .setLength(
+              THREE.MathUtils.clamp(part.away.length() * FURTHER, least, most)
+            )
+        )
+      else part.comes.set(index, wayIn(part.box, on))
+    }
+  })
 }
 
 /**
@@ -364,12 +399,10 @@ export async function stageOf(
     // a model with none of the guide's parts left in it: the steps are still to be read
   }
   const steps = guide.steps.length
-  const stepOf = new Map<string, number | null>()
-  for (const id of guide.already) stepOf.set(id, null)
-  guide.steps.forEach((step, index) => {
-    for (const id of step.parts) if (!stepOf.has(id)) stepOf.set(id, index)
-  })
-  const wanted = (model?.parts ?? []).filter((part) => stepOf.has(part.id))
+  const scenes = scenesOf(guide)
+  const { stands, cuts } = stoodIn(guide)
+  const ids = new Set(partsIn(guide))
+  const wanted = (model?.parts ?? []).filter((part) => ids.has(part.id))
 
   const renderer = new THREE.WebGLRenderer({
     canvas,
@@ -409,7 +442,7 @@ export async function stageOf(
           part,
           turn,
           looks.colours[part.id] ?? null,
-          stepOf.get(part.id) ?? null
+          stands.get(part.id) ?? []
         )
         shown.set(part.id, one)
         root.add(one.whole)
@@ -428,7 +461,7 @@ export async function stageOf(
   const across = all.getSize(new THREE.Vector3()).length()
   const radius = Math.max(across / 2, 1)
   const middle = toWorld(all.getCenter(new THREE.Vector3()).toArray())
-  comingFrom(guide, shown, across)
+  comingFrom(guide, scenes, shown, across)
 
   // No lens: a length is the same length wherever it is, as on a drawing.
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, radius * 40)
@@ -483,17 +516,18 @@ export async function stageOf(
   }
 
   /**
-   * What is on at a place in the guide, fitted to the room the model has, as it is
+   * What is seen at a place in the guide, fitted to the room the model has, as it is
    * looked at now: what goes in the middle of that room, and how many pixels to a mm
-   * make it fill it. Before the steps, and after them, all of the thing is on.
+   * make it fill it. In a step that is what the step is done to, with what it puts on;
+   * before the steps, and after them, it is all of the thing.
    */
   const fitted = (place: number) => {
-    const upTo = place < 0 || place >= steps ? Infinity : Math.round(place)
+    const step = place < 0 || place >= steps ? null : Math.round(place)
     const seen = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity }
     let deep = 0
     let counted = 0
     for (const part of shown.values()) {
-      if (part.step !== null && part.step > upTo) continue
+      if (step !== null && part.stands[step] === "away") continue
       for (const corner of part.corners) {
         const [x, y] = [corner.dot(right), corner.dot(up)]
         seen.x0 = Math.min(seen.x0, x)
@@ -522,15 +556,18 @@ export async function stageOf(
   }
 
   const draw = () => {
+    // the step that is under way: the one whose parts are on their way in
+    const bringing = Math.floor(at) + 1
     for (const part of shown.values()) {
-      const { there, out, lit, own } = standing(at, part.step, steps)
+      const { there, out, lit, own } = standing(at, part.stands, cuts)
       part.whole.visible = there > 0.01
       if (!part.whole.visible) continue
       part.whole.matrix.copy(part.home)
-      if (out > 0) {
-        part.whole.matrix.elements[12] += part.comes.x * out
-        part.whole.matrix.elements[13] += part.comes.y * out
-        part.whole.matrix.elements[14] += part.comes.z * out
+      const comes = out > 0 ? part.comes.get(bringing) : undefined
+      if (comes) {
+        part.whole.matrix.elements[12] += comes.x * out
+        part.whole.matrix.elements[13] += comes.y * out
+        part.whole.matrix.elements[14] += comes.z * out
       }
       // lit is for what a step is about: the thing whole has nothing picked out of it
       const light = lit * (1 - own)
@@ -640,15 +677,20 @@ export async function stageOf(
 
   /**
    * Where a place in the guide is looked at from: for a step, the corner it asks to be
-   * seen from, or that the last step before it asked; and for the thing whole, before
-   * the steps and after them, the corner a model is looked at from to begin with.
+   * seen from, or that the last step done to the same thing asked. So something made up
+   * apart is seen as its own steps say, and the thing itself, when it is come back to,
+   * as it last was. (The first step of something made up apart, if it does not say, is
+   * seen as the thing itself last was.) And for the thing whole, before the steps and
+   * after them, it is the corner a model is looked at from to begin with.
    */
   const viewFor = (place: number) => {
     const upTo = place < steps ? Math.round(place) : -1
-    for (let index = upTo; index >= 0; index--) {
-      const view = guide.steps[index].view
-      if (view) return toWorld(cornerOf(view))
-    }
+    const sub = upTo < 0 ? null : guide.steps[upTo].sub
+    for (const of of sub === null ? [null] : [sub, null])
+      for (let index = upTo; index >= 0; index--) {
+        const step = guide.steps[index]
+        if (step.sub === of && step.view) return toWorld(cornerOf(step.view))
+      }
     return toWorld(CORNER)
   }
 

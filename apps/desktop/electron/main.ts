@@ -1519,12 +1519,14 @@ if (!app.requestSingleInstanceLock()) {
           throw new Error(
             "This project has no model built yet: there is nothing to write a guide to."
           )
+        const parts = partsOf(project.manifest)
         const filed = fileGuide(
           project.path,
           given,
-          partsOf(project.manifest).map((part) => part.id),
+          parts.map((part) => part.id),
           replacing,
-          Date.now()
+          Date.now(),
+          new Map(parts.map((part) => [part.id, part.label]))
         )
         // its cover is in the view as soon as it is written, and not when the turn ends
         projects.refresh(id)

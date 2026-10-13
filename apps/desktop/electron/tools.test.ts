@@ -182,6 +182,20 @@ describe("answerTo", () => {
       },
     })
     expect(given).toHaveLength(1)
+    // with what is made up apart, and the step that fits it
+    await call({
+      title: "Desk lamp",
+      needs,
+      cover: {},
+      steps: [
+        { ...step, sub: "Shade" },
+        { title: "Hang it", text: "On the post.", parts: [], fits: ["Shade"] },
+      ],
+    })
+    expect(given[1]).toMatchObject({
+      steps: [{ sub: "Shade" }, { fits: ["Shade"] }],
+    })
+    given.pop()
     // what is wrong with a guide is said to whoever gave it, to be put right
     const cover = { parts: ["base"] }
     expect(
