@@ -10,19 +10,17 @@
 // AskForGuide): of the whole model, or of what was picked out of it before the guides
 // were turned to.
 import * as React from "react"
-import * as THREE from "three"
 import { cn } from "cn"
 import { DownloadIcon, PlusIcon, Trash2Icon } from "lucide-react"
 
-import type { GuideSummary, Looks, ObjectRef, Project, Vec3 } from "@shared/api"
+import type { GuideSummary, Looks, ObjectRef, Project } from "@shared/api"
 import {
   keyOf,
   laidOut,
   Lines,
   type Drawing,
 } from "@/components/blueprint/blueprint"
-import { drawn, type Looking, type Stroke } from "@/components/blueprint/lines"
-import { lookingFrom, SHEET, type Seen } from "@/components/blueprint/sheet"
+import { drawn, type Stroke } from "@/components/blueprint/lines"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import {
@@ -34,20 +32,12 @@ import { objectsOf } from "@/components/viewport/apart"
 import type { LoadedModel, LoadedPart } from "@/components/viewport/load"
 import { MAC } from "@/lib/platform"
 import { allOf, goesBy, useStore } from "@/lib/store"
+import { FROM, lookingAt, roomOf, setOn } from "./cover"
 
 /** Stable while a project's guides are not read yet. */
 const NOT_READ: GuideSummary[] = []
 const NO_COLOURS: Record<string, string> = {}
 
-/**
- * How a cover's drawing is set on its sheet, as shares of the sheet: how far down it
- * begins and how far down it ends, and how much of each side is kept clear. That is
- * nearly all of the sheet: the drawing has the sheet to itself, and what is written on
- * the cover is written over it, in the corners, and is not something it begins after.
- * It is what the cover is filled with that is kept within these: the rest of the thing
- * goes where it goes, off the sheet's edge if it comes to that.
- */
-const SET = { top: 0.07, foot: 0.97, side: 0.06 }
 /** How long the drawing goes on at a time, in ms, before the window is let draw itself. */
 const AT_A_TIME_MS = 10
 /**
@@ -95,46 +85,6 @@ function useGuides(project: Project): GuideSummary[] | null {
 const kept = new Map<string, Drawing>()
 const KEPT = 8
 
-/** Where a thing is drawn from on its cover when its guide does not say: its front right corner, from above. */
-const FROM: Vec3 = [1, -1, 1]
-
-/**
- * How the model is looked at from somewhere, said as the way from the model to the eye:
- * whatever way that is, since a cover is drawn from wherever the thing looks its best.
- * Straight above and straight below are a hair off, so that there is a front to them.
- */
-function lookingAt([x, y, z]: Vec3): Looking {
-  const far = Math.hypot(x, y, z) || 1
-  return lookingFrom({
-    // round from the front, which is the model's -Y, towards its right
-    azimuth: Math.atan2(x, -y),
-    // and down from straight above
-    polar: Math.min(Math.PI - 0.01, Math.max(0.01, Math.acos(z / far))),
-  })
-}
-
-/** The room some parts take up as they are looked at, in the model's own measure. */
-function roomOf(parts: LoadedPart[], { right, up }: Looking): Seen {
-  const room = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity }
-  const corner = new THREE.Vector3()
-  const [across, high] = [new THREE.Vector3(...right), new THREE.Vector3(...up)]
-  for (const { box, home } of parts)
-    for (let i = 0; i < 8; i++) {
-      corner
-        .set(
-          i & 1 ? box.max.x : box.min.x,
-          i & 2 ? box.max.y : box.min.y,
-          i & 4 ? box.max.z : box.min.z
-        )
-        .applyMatrix4(home)
-      room.x0 = Math.min(room.x0, corner.dot(across))
-      room.x1 = Math.max(room.x1, corner.dot(across))
-      room.y0 = Math.min(room.y0, corner.dot(high))
-      room.y1 = Math.max(room.y1, corner.dot(high))
-    }
-  return room
-}
-
 /**
  * A drawing of these parts for a cover: their lines from one corner, as a blueprint
  * draws them, a little at a time so that the window is never held up. It is set on a
@@ -176,27 +126,12 @@ function useDrawing(
         if (stopped) return
         since = performance.now()
       }
-      // What the cover is filled with fits the room the sheet has for it, and is in
-      // the middle of that room: which is lower on the sheet than the sheet's own.
+      // what the cover is filled with fits the room the sheet has for it
       const wanted = new Set(cover.parts)
       const some = parts.filter((part) => wanted.has(part.part.id))
-      const room = roomOf(some.length > 0 ? some : parts, looking)
-      const by = Math.max(
-        (room.x1 - room.x0) / (SHEET.width * (1 - 2 * SET.side)),
-        (room.y1 - room.y0) / (SHEET.height * (SET.foot - SET.top)),
-        1e-6
-      )
       const drawing: Drawing = {
         strokes,
-        placing: {
-          middle: [
-            (room.x0 + room.x1) / 2,
-            (room.y0 + room.y1) / 2 +
-              by * SHEET.height * ((SET.top + SET.foot) / 2 - 0.5),
-          ],
-          by,
-          paper: SHEET,
-        },
+        placing: setOn(roomOf(some.length > 0 ? some : parts, looking)),
       }
       kept.set(of, drawing)
       for (const old of [...kept.keys()].slice(0, -KEPT)) kept.delete(old)

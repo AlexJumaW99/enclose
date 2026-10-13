@@ -6,41 +6,18 @@
 // but itself.
 //
 // Two things keep it from the network. What a worker is given to reach it with is taken
-// away below. And the window's policy (shared/content-policy.ts), which a worker made
-// by the window has too, lets no script in from anywhere else: so a tool cannot `import`
-// from an address, nor make code up to run, which no list of names could stop.
+// away (shut-in.ts). And the window's policy (shared/content-policy.ts), which a worker
+// made by the window has too, lets nothing be fetched from anywhere else, and no script
+// in: so a tool cannot `import` from an address, nor make code up to run, which no list
+// of names could stop. (`npm run sandbox` runs a tool that tries all of it, in the app.)
 import { declared } from "./declare"
 import { Running } from "./running"
+import { shutIn } from "./shut-in"
 import type { FromRunner, ToRunner } from "./types"
 
 const scope = self as unknown as {
   onmessage: ((event: MessageEvent<ToRunner>) => void) | null
   postMessage(message: FromRunner, transfer?: Transferable[]): void
-}
-
-/** What a worker is given that a tool has no call for: ways out of it. */
-const WAYS_OUT = [
-  "fetch",
-  "XMLHttpRequest",
-  "WebSocket",
-  "WebSocketStream",
-  "WebTransport",
-  "EventSource",
-  "importScripts",
-  "indexedDB",
-  "caches",
-  "BroadcastChannel",
-  "Worker",
-  "SharedWorker",
-]
-
-function shutIn() {
-  for (const name of WAYS_OUT)
-    try {
-      Object.defineProperty(self, name, { value: undefined, writable: false })
-    } catch {
-      // not there to begin with, or not to be taken away: nothing a tool is told of
-    }
 }
 
 /** What went wrong, with the line of the tool's file it went wrong on where that is known. */
@@ -56,7 +33,7 @@ let running: Running | null = null
 let count = 0
 
 async function start(message: Extract<ToRunner, { type: "start" }>) {
-  shutIn()
+  shutIn(self)
   const url = URL.createObjectURL(
     new Blob([message.source], { type: "text/javascript" })
   )

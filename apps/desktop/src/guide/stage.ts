@@ -26,20 +26,11 @@ import { UNDER_FROM, underlit } from "@/components/viewport/light"
 import { EDGE, finish, skinColour } from "@/components/viewport/paint"
 import { readModel, type Model, type Part } from "@/lib/model"
 import type { Looks, Vec3 } from "@shared/api"
-import {
-  cornerOf,
-  partsIn,
-  scenesOf,
-  type Guide,
-  type Scene,
-} from "@shared/assembly-format"
+import { partsIn, scenesOf, type Guide } from "@shared/assembly-format"
+import { comingFrom } from "./coming"
+import { CORNER, seenFrom } from "./seen"
 import { standing, stoodIn, towards, type Stand } from "./standing"
 
-/**
- * Where the model is looked at from to begin with: its front right corner, from above,
- * which is the corner its covers are drawn from.
- */
-const CORNER: Vec3 = [1, -1, 1]
 /** How much of the room it has, across and down, what is on so far is made to fill. */
 const FILLS = 0.78
 /**
@@ -57,19 +48,6 @@ const FITS_TAKES = 0.35
 /** How far the view turns under a pull, in radians a pixel; and how close it is let get, and how far. */
 const PULL = 0.006
 const NEAR = { most: 4, least: 0.5 }
-/**
- * How far off a part is before it goes on, where the guide does not say, as a share of
- * how far across the whole thing is: at the least, at the most, and where there is
- * nothing to go by. And never less than this many mm.
- */
-const COMES_FROM = { least: 0.12, most: 0.45, share: 0.32, mm: 15 }
-/**
- * How much further off than the model pulls a part, when it is pulled apart, the part
- * is before it goes on: a model is pulled apart a little way, to be seen into.
- */
-const FURTHER = 1.5
-/** How much of the way a part lies from the rest counts as none, beside the most of it. */
-const ASIDE = 0.35
 /** What a part that is on already is drawn in: its own colour, most of the way to this. */
 const QUIET = { towards: new THREE.Color("#3c3e42"), by: 0.72 }
 /** What a part the step is about is drawn in, and how much of its own light it gives off. */
@@ -307,75 +285,6 @@ export type Stage = {
   again(): void
   /** Have done with it. */
   close(): void
-}
-
-/**
- * Says where each part comes from in each step that brings it, in the model's own
- * measure: where the step says, which is the same for everything the step puts on.
- * Where the step does not say, each of its own parts comes its own way in from outside:
- * back along the way the model says it goes when it is pulled apart, if the model says,
- * and otherwise straight in towards the middle of what is there by then. So four bolts
- * through four legs come in from four sides. A part with nothing there before it, or in
- * the middle of the rest, comes down from above. And what a step fits, made up already,
- * comes all one way, as the one thing it now is.
- */
-function comingFrom(
-  guide: Guide,
-  scenes: Scene[],
-  shown: Map<string, Shown>,
-  across: number
-) {
-  const least = Math.max(COMES_FROM.mm, across * COMES_FROM.least)
-  const most = Math.max(least, across * COMES_FROM.most)
-  const far = Math.max(COMES_FROM.mm, across * COMES_FROM.share)
-  const boxOf = (ids: string[]) => {
-    const box = new THREE.Box3()
-    for (const id of ids) {
-      const part = shown.get(id)
-      if (part) box.union(part.box)
-    }
-    return box
-  }
-  /** The way in for what takes up `box`, from outside what is there. */
-  const wayIn = (box: THREE.Box3, on: THREE.Box3) => {
-    const out =
-      on.isEmpty() || box.isEmpty()
-        ? new THREE.Vector3()
-        : box
-            .getCenter(new THREE.Vector3())
-            .sub(on.getCenter(new THREE.Vector3()))
-    // what is nearly along one of the model's axes is taken to be along it
-    const [x, y, z] = out.toArray().map(Math.abs)
-    const longest = Math.max(x, y, z)
-    if (x < longest * ASIDE) out.x = 0
-    if (y < longest * ASIDE) out.y = 0
-    if (z < longest * ASIDE) out.z = 0
-    if (longest < across * 0.02) out.set(0, 0, 1)
-    return out.setLength(far)
-  }
-  guide.steps.forEach((step, index) => {
-    const { there, coming } = scenes[index]
-    const on = boxOf(there)
-    const fitted = coming.filter((id) => !step.parts.includes(id))
-    const together = step.from
-      ? new THREE.Vector3(...step.from)
-      : wayIn(boxOf(fitted), on)
-    for (const id of coming) {
-      const part = shown.get(id)
-      if (!part) continue
-      if (step.from || fitted.includes(id)) part.comes.set(index, together)
-      else if (part.away.lengthSq() > 1e-6)
-        part.comes.set(
-          index,
-          part.away
-            .clone()
-            .setLength(
-              THREE.MathUtils.clamp(part.away.length() * FURTHER, least, most)
-            )
-        )
-      else part.comes.set(index, wayIn(part.box, on))
-    }
-  })
 }
 
 /**
@@ -675,27 +584,11 @@ export async function stageOf(
     draw()
   }
 
-  /**
-   * Where a place in the guide is looked at from: for a step, the corner it asks to be
-   * seen from, or that the last step done to the same thing asked. So something made up
-   * apart is seen as its own steps say, and the thing itself, when it is come back to,
-   * as it last was. (The first step of something made up apart, if it does not say, is
-   * seen as the thing itself last was.) And for the thing whole, before the steps and
-   * after them, it is the corner a model is looked at from to begin with.
-   */
-  const viewFor = (place: number) => {
-    const upTo = place < steps ? Math.round(place) : -1
-    const sub = upTo < 0 ? null : guide.steps[upTo].sub
-    for (const of of sub === null ? [null] : [sub, null])
-      for (let index = upTo; index >= 0; index--) {
-        const step = guide.steps[index]
-        if (step.sub === of && step.view) return toWorld(cornerOf(step.view))
-      }
-    return toWorld(CORNER)
-  }
+  /** Where a place in the guide is looked at from, as the scene has it (see seen.ts). */
+  const viewFor = (place: number) => toWorld(seenFrom(guide.steps, place))
 
   /** where the step shown is looked at from, as the page has it */
-  let seenFrom = viewFor(-1)
+  let shownFrom = viewFor(-1)
 
   // The view is turned by taking hold of it: and stays as it was turned until a step
   // is gone to that is to be seen from somewhere else. With Shift held as it is taken
@@ -738,7 +631,7 @@ export async function stageOf(
   const unheld = () => canvas.classList.remove("across")
   /** The view as the page has it again: where it looks from, how near, and in the middle of its room. */
   const again = () => {
-    bound.setFromVector3(seenFrom)
+    bound.setFromVector3(shownFrom)
     bound.phi = THREE.MathUtils.clamp(bound.phi, 0.02, Math.PI - 0.02)
     turned = false
     near = 1
@@ -777,8 +670,8 @@ export async function stageOf(
       if (atOnce) at = place
       const view = viewFor(place)
       // (a step that asks for the view the last one had leaves it as the hand turned it)
-      if (!view.equals(seenFrom)) {
-        seenFrom = view
+      if (!view.equals(shownFrom)) {
+        shownFrom = view
         bound.setFromVector3(view)
         bound.phi = THREE.MathUtils.clamp(bound.phi, 0.02, Math.PI - 0.02)
         turned = false

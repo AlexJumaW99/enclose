@@ -10,7 +10,8 @@
 //
 // Before it changes anything it sees that a release can be made at all: that nothing is
 // uncommitted, that this is main and has all that the remote has, that the version is
-// one nobody has, and that the tests pass. Nothing is published until the app has been
+// one nobody has, that the tests pass, and that a project's tool is shut in, in the app
+// as it is built (scripts/sandbox.mjs). Nothing is published until the app has been
 // built and a Mac has been seen to take it. If it stops after the version was committed,
 // a build that failed say, run it again with that version and it goes on from there.
 import { spawnSync } from "node:child_process"
@@ -127,7 +128,7 @@ console.log(
 )
 if (dry) {
   console.log(
-    `[release] (dry) would test, ${resumed ? "" : `commit "chore: ${next}", `}build and notarize, tag ${tag}, push, and publish with notes since ${before}`
+    `[release] (dry) would test, see that a tool is shut in, ${resumed ? "" : `commit "chore: ${next}", `}build and notarize, tag ${tag}, push, and publish with notes since ${before}`
   )
   process.exit(0)
 }
@@ -147,6 +148,14 @@ if (!sure) {
 
 step("the tests")
 must("npm", ["test"])
+
+// A project's tool is run without anyone having read it, and what keeps it in can only
+// be seen to hold in the app as it is built: so it is built, and a tool that tries to
+// get out is run in it. (What is given out is built again below, from the same files
+// with their new version.)
+step("that a project's tool is shut in")
+must("npm", ["run", "build"])
+must("npm", ["run", "sandbox"])
 
 if (!resumed) {
   step(`the version: ${next}`)

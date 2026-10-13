@@ -15,6 +15,7 @@ import {
 import { UpdateButton } from "@/components/update"
 import { bridge } from "@/components/viewport/bridge"
 import { Viewport } from "@/components/viewport/viewport"
+import { appKey } from "@/lib/app-keys"
 import { toolsAsked, toolUsed } from "@/lib/custom-tools/asked"
 import { isPicture } from "@/lib/pictures"
 import { MAC } from "@/lib/platform"
@@ -86,38 +87,38 @@ function useViewportRequests() {
 function useAppKeys() {
   React.useEffect(() => {
     const key = (event: KeyboardEvent) => {
-      // Ctrl+B on a Mac is a key for moving through text: left to do that
-      const held = MAC ? event.metaKey && !event.ctrlKey : event.ctrlKey
-      if (!held || event.altKey) return
+      const asked = appKey(event, MAC)
+      if (!asked) return
       const state = useStore.getState()
-      const letter = event.key.toLowerCase()
-      // A Mac's picker takes files and folders alike. No other system's does: there
-      // Ctrl+O asks for files, and with Shift, the one key here it goes with, a folder.
-      const folder = !MAC && event.shiftKey && letter === "o"
-      if (event.shiftKey && !folder) return
-      if (event.key === ",") {
+      if (asked === "settings") {
         event.preventDefault()
         state.setSettingsOpen(!state.settingsOpen)
         return
       }
       // the rest are for what the settings are over
       if (state.settingsOpen) return
-      if (letter === "n" || letter === "o") {
+      if (asked === "conversation" || asked === "bare") {
+        // (both are of the project that is open)
+        if (!state.activeId) return
         event.preventDefault()
-        // (held down, it would go on making projects)
-        if (event.repeat) return
-        if (letter === "n") void state.createProject()
-        else void state.addProject(MAC ? undefined : folder ? "folder" : "file")
+        if (asked === "conversation")
+          return state.setThreadOpen(!state.threadOpen)
+        // (held down, it would put them away and bring them back by turns)
+        if (!event.repeat) state.setBare(!state.bare)
         return
       }
-      if (letter !== "b" && event.key !== ".") return
-      const { activeId, threadOpen, setThreadOpen } = state
-      if (!activeId) return
       event.preventDefault()
-      if (letter === "b") return setThreadOpen(!threadOpen)
-      // (held down, it would put them away and bring them back by turns)
+      // (held down, it would go on making projects)
       if (event.repeat) return
-      state.setBare(!state.bare)
+      if (asked === "new") void state.createProject()
+      else
+        void state.addProject(
+          asked === "open"
+            ? undefined
+            : asked === "open-folder"
+              ? "folder"
+              : "file"
+        )
     }
     window.addEventListener("keydown", key)
     return () => window.removeEventListener("keydown", key)

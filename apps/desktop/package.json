@@ -21,6 +21,7 @@
     "typecheck": "tsc -b",
     "lint": "eslint .",
     "test": "vitest run",
+    "sandbox": "node scripts/sandbox.mjs",
     "format": "prettier --write \"**/*.{ts,tsx}\""
   },
   "dependencies": {

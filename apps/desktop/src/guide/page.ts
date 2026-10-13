@@ -18,6 +18,7 @@ import { readModel } from "@/lib/model"
 import { drawn, iconFor } from "./icons"
 import { madeWith } from "./made-with"
 import { stageOf, type Room, type Stage } from "./stage"
+import { wheelHeard } from "./wheel"
 import "./page.css"
 
 declare global {
@@ -50,15 +51,6 @@ const FOOT = 88
 /** How many of the parts a step puts on it names, at the most: the rest are counted. */
 const NAMED = 6
 
-/**
- * How a wheel goes through the steps. A step is gone to and the wheel then not heard
- * for `rests` ms. After that it has to be turned afresh: a trackpad goes on saying it
- * is turned for a good while after the fingers have left it, each time by a little
- * less, and that is no asking for the step after. Afresh is after it has been still
- * for `still` ms, or by more than it was the moment before. Less than `least` is no
- * turn at all. (A mouse's wheel says the same each click: that is afresh too.)
- */
-const WHEEL = { rests: 480, still: 140, least: 4, click: 50 }
 /** How far a finger has to go up or down the page, in px, to go on a step or back one. */
 const SWIPE = 36
 /**
@@ -312,25 +304,16 @@ function page(told: NonNullable<Window["ENCLOSE_GUIDE"]>) {
     event.preventDefault()
     go(on)
   })
-  // A turn of the wheel goes one step, however far it is turned (see WHEEL). With the
-  // key held that a pinch comes with it is the model's, to be brought nearer by.
-  const wheel = { turned: -Infinity, heard: -Infinity, by: 0 }
+  // A turn of the wheel goes one step, however far it is turned (see wheel.ts). With
+  // the key held that a pinch comes with it is the model's, to be brought nearer by.
+  const heard = wheelHeard()
   window.addEventListener(
     "wheel",
     (event) => {
       if (event.ctrlKey || event.metaKey) return
       event.preventDefault()
-      const by = Math.abs(event.deltaY)
-      const afresh =
-        event.timeStamp - wheel.heard > WHEEL.still ||
-        by > wheel.by * 1.4 + 2 ||
-        (by === wheel.by && by >= WHEEL.click)
-      wheel.heard = event.timeStamp
-      wheel.by = by
-      if (by < WHEEL.least || Math.abs(event.deltaX) > by) return
-      if (event.timeStamp - wheel.turned < WHEEL.rests || !afresh) return
-      wheel.turned = event.timeStamp
-      go(event.deltaY > 0)
+      const asked = heard(event)
+      if (asked) go(asked === "on")
     },
     { passive: false }
   )

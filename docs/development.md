@@ -26,6 +26,23 @@ npm test
 npm run format      # .ts and .tsx only
 ```
 
+One check is of the app itself, and not of its code, so it is no part of `npm test`:
+
+```
+npm run build && npm run sandbox    # the built app
+npm run sandbox -- --dev            # the app as `npm run dev` serves it
+```
+
+A [project's tool](project-tools.md) is code that came with a folder, and the app runs it
+without anyone having read it. [`scripts/sandbox.mjs`](../apps/desktop/scripts/sandbox.mjs)
+sees that it is shut in. It copies an example into a scratch folder, puts one tool in it
+that tries every way out a worker comes with, each at a listening post on your own
+machine, and runs the app on that with no window shown and none of your own projects or
+settings. It passes if the post heard nothing and the tool was refused each way, and
+says which was not otherwise. Run both after a change to how tools are run
+(`src/lib/custom-tools`) or to the window's policy (`shared/content-policy.ts`): the two
+make the tool's worker differently.
+
 ## Where things are
 
 ```
@@ -150,7 +167,8 @@ APPLE_KEYCHAIN_PROFILE=<profile> npm run release
 [`scripts/release.mjs`](../apps/desktop/scripts/release.mjs) makes the next version
 (0.0.5 after 0.0.4; `npm run release -- 0.1.0` makes that one), having first seen that
 one can be made: nothing uncommitted, on main with all the remote has, the tests
-passing. It asks before it goes on (`-- --yes` has it not ask), and publishes nothing
+passing, and a project's tool shut in (`npm run sandbox`, under [Checks](#checks)). It
+asks before it goes on (`-- --yes` has it not ask), and publishes nothing
 until the app is built and a Mac has been seen to take it. `-- --dry` only sees that
 everything is ready. If it stops after the version was committed, run it again with that
 version and it goes on from there.
@@ -158,7 +176,8 @@ version and it goes on from there.
 What it does, a step at a time, which can also be done by hand:
 
 1. Commit what is to go out, and leave nothing uncommitted. The build takes the files as
-   they stand, committed or not, and a release is what its tag says it is.
+   they stand, committed or not, and a release is what its tag says it is. See that it
+   is fit to go out: `npm test`, and `npm run build && npm run sandbox`.
 2. Give the app its new version, in `package.json` and the lock file both, and commit
    that:
 
