@@ -447,6 +447,12 @@ export type GuideSummary = {
   steps: number
   /** the parts it shows, by id: those there to begin with, and those its steps put on */
   parts: string[]
+  /**
+   * How the thing is drawn on its cover: where it is drawn from, as the way from the
+   * model to the eye (null for its front right corner, from above), and the parts the
+   * cover is filled with, by id (none for all of the thing).
+   */
+  cover: { view: Vec3 | null; parts: string[] }
   /** why it cannot be opened, in a line: its file does not read as a guide. Null of one that can */
   trouble: string | null
 }
@@ -670,6 +676,11 @@ export type CadApi = {
      * parts it shows in it: something to send to someone, or to put on a site.
      */
     save(projectId: string, guideId: string, looks: Looks): Promise<boolean>
+    /**
+     * Take a guide away: its file goes to the system's bin, where it can be had back
+     * from. Not while an agent is at work in the project. Resolves to whether it went.
+     */
+    remove(projectId: string, guideId: string): Promise<boolean>
   }
   pictures: {
     /**
@@ -825,6 +836,7 @@ export const CHANNEL = {
   assemblyMake: "assembly:make",
   assemblyOpen: "assembly:open",
   assemblySave: "assembly:save",
+  assemblyRemove: "assembly:remove",
   picturesAdd: "pictures:add",
   picturesDrop: "pictures:drop",
   threadItems: "thread:items",

@@ -20,6 +20,8 @@
   --ink: #fafafa;
   --quiet: rgb(250 250 250 / 0.5);
   --faint: rgb(250 250 250 / 0.14);
+  /* what a line of dots is drawn in */
+  --dots: rgb(250 250 250 / 0.38);
   /* how wide the steps are written, and how far in */
   --column: 16.5rem;
   --inset: 2.125rem;
@@ -29,13 +31,16 @@
   --clear: 7.25rem;
 }
 
+/* The page does not scroll: the steps are gone to one at a time (see page.ts), and how
+   far through them it is, is said by the mark at its edge. */
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
 html {
   background: var(--ground);
-  /* how far down the page it is, is said by the mark at its edge */
-  scrollbar-width: none;
-}
-html::-webkit-scrollbar {
-  display: none;
 }
 
 body {
@@ -68,6 +73,10 @@ body {
 .stage.ready {
   opacity: 1;
 }
+/* (with Shift held a pull moves it across, and does not turn it: the pointer says so) */
+.stage.across {
+  cursor: move;
+}
 .stage.pulled {
   cursor: grabbing;
 }
@@ -77,8 +86,9 @@ body {
   position: fixed;
   z-index: 3;
   top: 1.625rem;
-  left: 1.5rem;
-  max-width: calc(var(--column) + var(--inset));
+  /* (as far in as the steps under it are: one edge down the page) */
+  left: var(--inset);
+  max-width: var(--column);
   pointer-events: none;
   font-size: 1.3125rem;
   line-height: 1.32;
@@ -97,9 +107,9 @@ body {
 }
 
 /* The steps, one below another, in a window of their own over the model: they go up
-   through it as the page is gone down (see page.ts), and come out of nothing at its
-   top and go back into it at its foot. The first is as far down as the one shown is.
-   Only what is written is theirs to be pressed: the rest of the window is the model's. */
+   through it as the guide is gone through (see page.ts), and come out of nothing at
+   its top and go back into it at its foot. The one shown is a set way down it. Only
+   what is written is theirs to be pressed: the rest of the window is the model's. */
 .steps {
   position: fixed;
   z-index: 2;
@@ -127,9 +137,10 @@ body {
   padding-top: var(--shown);
   will-change: transform;
 }
-/* what gives the page its length, for the steps to be gone through by */
-.length {
-  width: 1px;
+/* (once the page is laid out, a step goes to its place: quick away, and slow into it) */
+.laid .list,
+.laid .progress i {
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 /* a step that is not the one shown is written more faintly */
 .step {
@@ -161,18 +172,51 @@ body {
   font-size: 0.75rem;
   font-weight: 500;
 }
-.step .label.needs {
+.step p + .label {
   margin-top: 1.1rem;
 }
-.step ul {
+/* What is needed to hand, one thing to a line, with a line of dots over each: its
+   picture, in a square of its own with nothing drawn round it, and beside that what it
+   is, the two level at the top. (The dots are a dot and three clear, as a border's own
+   run together on a screen that is not sharp.) And something to take care over in a
+   step is set apart the same way, with a lamp for its picture. */
+.needs {
+  margin-top: 0.45rem;
   padding: 0;
   list-style: none;
 }
-/* something to take care over: set off by a line down its side */
+.needs li,
+.step .tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.6rem 0;
+  background: linear-gradient(to right, var(--dots) 1px, transparent 1px) left
+    top / 4px 1px repeat-x;
+  line-height: 1.4;
+}
+.tile {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+/* (drawn as the app's own icons are: a line and a half wide, with round ends) */
+.tile svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* (it is said more quietly than the step it is a word on, lamp and all, and what comes
+   after it is as near as it would be to the step) */
 .step .tip {
   margin-top: 0.8em;
-  padding-left: 0.7rem;
-  border-left: 1px solid var(--quiet);
+  padding-bottom: 0;
   color: var(--quiet);
 }
 /* which parts the step puts on, by what they are called */
@@ -180,6 +224,57 @@ body {
   margin-top: 0.8em;
   color: var(--quiet);
   font-size: 0.75rem;
+}
+
+/* What puts the view back as the page has it, in the corner: a round button as the
+   app's own are, of frosted glass with a fine line round it. It is faint while there
+   is nothing for it to put back. */
+.again {
+  position: fixed;
+  z-index: 3;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(10 10 10 / 0.6);
+  box-shadow:
+    0 0 0 1px rgb(250 250 250 / 0.1),
+    0 1px 2px rgb(0 0 0 / 0.05);
+  color: var(--ink);
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(20px) saturate(1.3) brightness(0.55);
+  backdrop-filter: blur(20px) saturate(1.3) brightness(0.55);
+  transition:
+    background-color 0.15s,
+    opacity 0.2s;
+}
+.again:hover {
+  background: rgb(38 38 38 / 0.8);
+}
+.again:focus-visible {
+  outline: 2px solid var(--quiet);
+  outline-offset: 2px;
+}
+.again:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+.again:disabled:hover {
+  background: rgb(10 10 10 / 0.6);
+}
+.again svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* How far down the page it is: a mark on a line at the right, in place of a scroll bar. */
@@ -241,7 +336,7 @@ noscript {
   }
   .cover {
     top: 1rem;
-    left: 1.125rem;
+    right: 3.75rem;
     font-size: 1.0625rem;
   }
   .list {
@@ -270,7 +365,9 @@ noscript {
 
 @media (prefers-reduced-motion: reduce) {
   .stage,
-  .step {
+  .step,
+  .laid .list,
+  .laid .progress i {
     transition: none;
   }
 }

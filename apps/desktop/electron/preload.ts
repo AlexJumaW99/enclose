@@ -66,6 +66,8 @@ const api: CadApi = {
       ipcRenderer.invoke(CHANNEL.assemblyOpen, projectId, guideId, looks),
     save: (projectId, guideId, looks) =>
       ipcRenderer.invoke(CHANNEL.assemblySave, projectId, guideId, looks),
+    remove: (projectId, guideId) =>
+      ipcRenderer.invoke(CHANNEL.assemblyRemove, projectId, guideId),
   },
   pictures: {
     add: (projectId, picture) =>

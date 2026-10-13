@@ -7,6 +7,12 @@
 // already is quieter; and before the first step, and after the last, the thing is in its
 // own colours. Where each part is, and how much of it, is all worked out from how far
 // through the guide the page is (see standing.ts).
+//
+// It is looked at as a blueprint draws it: with no lens, so that nothing is smaller for
+// being further off, and from one of its corners, with three of its sides turned
+// equally to the eye. And it is as big as the room it has lets it be: what is on so far
+// fills that room, so the first part is seen close to, and the view draws back as the
+// rest go on.
 import * as THREE from "three"
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js"
@@ -15,30 +21,28 @@ import { UNDER_FROM, underlit } from "@/components/viewport/light"
 import { EDGE, finish, skinColour } from "@/components/viewport/paint"
 import { readModel, type Model, type Part } from "@/lib/model"
 import type { Looks, Vec3 } from "@shared/api"
-import type { Guide } from "@shared/assembly-format"
+import { cornerOf, type Guide } from "@shared/assembly-format"
 import { standing, towards } from "./standing"
 
-/** How wide the camera's lens is, in degrees: the app's. */
-const FOV = 30
-/** Where the model is looked at from to begin with: front right, and down on it, as the app opens one. */
-const HOME: Vec3 = [0.5, -0.62, 0.6]
-/** How much room is left round the model, of the room it has: a little, for parts on their way in. */
-const ROOM = 1.14
 /**
- * How long a step takes to go on, in seconds; the camera to come round to a step's
- * view; and to come up to a step's parts.
+ * Where the model is looked at from to begin with: its front right corner, from above,
+ * which is the corner its covers are drawn from.
+ */
+const CORNER: Vec3 = [1, -1, 1]
+/** How much of the room it has, across and down, what is on so far is made to fill. */
+const FILLS = 0.78
+/**
+ * The least that is framed, as a share of how far across the whole thing is: a first
+ * part that is very small beside the rest is not made to fill the window.
+ */
+const LEAST = 0.18
+/**
+ * How long a step takes to go on, in seconds; the view to come round to a step's
+ * corner; and to draw back, or come up, to what is on.
  */
 const STEP_TAKES = 0.9
 const TURN_TAKES = 0.28
-const NEARS_TAKES = 0.4
-/**
- * How near the camera comes to the parts a step puts on: what it frames is this many
- * times as far across as they are, and this share of the whole thing more, so that
- * they are seen with what they go on to; and never less of the whole thing than `least`.
- * Parts that are all round the thing are as far across as it is, and it stays where
- * it was for them.
- */
-const CLOSE = { times: 2.4, more: 0.12, least: 0.3 }
+const FITS_TAKES = 0.35
 /** How far the view turns under a pull, in radians a pixel; and how close it is let get, and how far. */
 const PULL = 0.006
 const NEAR = { most: 4, least: 0.5 }
@@ -157,6 +161,8 @@ type Shown = {
   /** all of it, where the model has it: what is moved when it is on its way in */
   whole: THREE.Group
   home: THREE.Matrix4
+  /** the corners of the room it takes up, as the scene has them: what it is fitted to the view by */
+  corners: THREE.Vector3[]
   /** where the model says it goes when it is pulled apart, mm: nowhere, if it does not say */
   away: THREE.Vector3
   /** where it comes from, as how far that is from its place, mm (see comingFrom) */
@@ -249,13 +255,21 @@ async function shownOf(
   if (part.matrix)
     home.set(...(part.matrix as Parameters<THREE.Matrix4["set"]>))
   whole.matrix.copy(home)
+  box.applyMatrix4(home)
   return {
     step,
     whole,
     home,
+    corners: [0, 1, 2, 3, 4, 5, 6, 7].map((corner) =>
+      toWorld([
+        corner & 1 ? box.max.x : box.min.x,
+        corner & 2 ? box.max.y : box.min.y,
+        corner & 4 ? box.max.z : box.min.z,
+      ])
+    ),
     away: new THREE.Vector3(...part.explode),
     comes: new THREE.Vector3(),
-    box: box.applyMatrix4(home),
+    box,
     surfaces,
     lines,
     through,
@@ -271,6 +285,11 @@ export type Stage = {
   go(to: number, atOnce?: boolean): void
   /** The room the model has to itself, when that changes. */
   give(room: Room): void
+  /**
+   * Put the view back as the page has it: looked at from where the step shown is, as
+   * near as fits it, and in the middle of its room.
+   */
+  again(): void
   /** Have done with it. */
   close(): void
 }
@@ -327,11 +346,15 @@ function comingFrom(guide: Guide, shown: Map<string, Shown>, across: number) {
 /**
  * Draw a guide's model on a canvas. `progress` hears how many of its parts are loaded,
  * of how many, as they come. The parts are all there by the time this resolves.
+ * `byHand` hears whether the view is as a hand has left it, turned, moved across or
+ * brought nearer, and not as the page has it: each time that comes to be so, or no
+ * longer.
  */
 export async function stageOf(
   canvas: HTMLCanvasElement,
   told: { guide: Guide; model: unknown; looks: Looks },
-  progress: (done: number, total: number) => void
+  progress: (done: number, total: number) => void,
+  byHand: (changed: boolean) => void
 ): Promise<Stage> {
   const { guide, looks } = told
   let model: Model | null = null
@@ -407,80 +430,95 @@ export async function stageOf(
   const middle = toWorld(all.getCenter(new THREE.Vector3()).toArray())
   comingFrom(guide, shown, across)
 
-  // What the camera frames at each step: the parts the step puts on, with room round
-  // them, as far as that is less than all of the thing. It looks at the middle of
-  // that: of the parts, where it has come right up to them, and of the thing where it
-  // has not.
-  type Framed = { middle: THREE.Vector3; radius: number }
-  const whole: Framed = { middle, radius }
-  const framed = guide.steps.map((step): Framed => {
-    const these = new THREE.Box3()
-    for (const id of step.parts) {
-      const part = shown.get(id)
-      if (part) these.union(part.box)
-    }
-    if (these.isEmpty()) return whole
-    const round = THREE.MathUtils.clamp(
-      (these.getSize(new THREE.Vector3()).length() / 2) * CLOSE.times +
-        radius * CLOSE.more,
-      radius * CLOSE.least,
-      radius
-    )
-    const off = (round / radius - CLOSE.least) / (1 - CLOSE.least)
-    return {
-      middle: toWorld(these.getCenter(new THREE.Vector3()).toArray()).lerp(
-        middle,
-        off
-      ),
-      radius: round,
-    }
-  })
-  /** What is framed at a place in the guide: all of the thing, before the steps and after. */
-  const framedAt = (place: number) =>
-    (place < steps ? framed[Math.round(place)] : undefined) ?? whole
-
-  const camera = new THREE.PerspectiveCamera(FOV, 1, radius / 50, radius * 60)
-  /** where the eye is, round the middle of the model: and where it is on its way to */
-  const eye = new THREE.Spherical().setFromVector3(toWorld(HOME))
+  // No lens: a length is the same length wherever it is, as on a drawing.
+  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, radius * 40)
+  /** where the eye is, round what it looks at: and where it is on its way to */
+  const eye = new THREE.Spherical().setFromVector3(toWorld(CORNER))
   const bound = new THREE.Spherical().copy(eye)
   let near = 1
   let room: Room = { left: 0, top: 0, right: 0, bottom: 0 }
-  /** how far back the eye stands for what it frames, as so many times how far round that is */
-  let back = 4
-  /** what the camera frames, and what it is on its way to framing */
-  const aim: Framed = { middle: middle.clone(), radius }
-  let aimed = whole
+  /** what is in the middle of the room the model has, and how many pixels there are to a mm */
+  const aim = { middle: middle.clone(), scale: 1 }
+  /** it is to be so at once, and not come to be: the page has only just been laid out */
+  let settled = false
 
   /** where the guide is, and where it is going */
   let at = -1
   let to = -1
   let dirty = true
-  let pulled: { x: number; y: number } | null = null
+  /** where the pointer is, held down on the view: and whether it is moving it across, and not turning it */
+  let pulled: { x: number; y: number; across: boolean } | null = null
+  /** how far the model has been moved across the window by hand, in px */
+  const moved = new THREE.Vector2()
+  /** and whether it is on its way back to where the page has it */
+  let returning = false
+  /** it has been turned by hand since it was last looked at from where a step asks */
+  let turned = false
+  /** what was last said of its being as a hand left it */
+  let changed = false
   const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches
 
+  /** The room the model has, in px: how big it is, and where its middle is from the window's. */
+  const free = () => ({
+    wide: Math.max(1, window.innerWidth - room.left - room.right),
+    high: Math.max(1, window.innerHeight - room.top - room.bottom),
+    across: (room.left - room.right) / 2,
+    down: (room.top - room.bottom) / 2,
+  })
+
   const size = () => {
-    const [wide, high] = [window.innerWidth, window.innerHeight]
-    renderer.setSize(wide, high, false)
-    camera.aspect = wide / high
-    // The model is in the middle of the room it has, which is not the middle of the
-    // window: the picture is made of the window moved over by that much.
-    const free = {
-      wide: Math.max(1, wide - room.left - room.right),
-      high: Math.max(1, high - room.top - room.bottom),
-    }
-    camera.setViewOffset(
-      wide,
-      high,
-      (room.right - room.left) / 2,
-      (room.bottom - room.top) / 2,
-      wide,
-      high
-    )
-    // and it stands far enough back for the model to fit the lesser way of that room
-    const lens = Math.tan(THREE.MathUtils.degToRad(FOV / 2))
-    const least = Math.min(free.high, free.wide) / high
-    back = ROOM / Math.sin(Math.atan(lens * least))
+    renderer.setSize(window.innerWidth, window.innerHeight, false)
     dirty = true
+  }
+
+  // which way the eye is from what it looks at, and what is to its right and up from there
+  const back = new THREE.Vector3()
+  const right = new THREE.Vector3()
+  const up = new THREE.Vector3()
+  const UP = new THREE.Vector3(0, 1, 0)
+  const facing = () => {
+    back.setFromSphericalCoords(1, eye.phi, eye.theta)
+    right.crossVectors(UP, back).normalize()
+    up.crossVectors(back, right)
+  }
+
+  /**
+   * What is on at a place in the guide, fitted to the room the model has, as it is
+   * looked at now: what goes in the middle of that room, and how many pixels to a mm
+   * make it fill it. Before the steps, and after them, all of the thing is on.
+   */
+  const fitted = (place: number) => {
+    const upTo = place < 0 || place >= steps ? Infinity : Math.round(place)
+    const seen = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity }
+    let deep = 0
+    let counted = 0
+    for (const part of shown.values()) {
+      if (part.step !== null && part.step > upTo) continue
+      for (const corner of part.corners) {
+        const [x, y] = [corner.dot(right), corner.dot(up)]
+        seen.x0 = Math.min(seen.x0, x)
+        seen.x1 = Math.max(seen.x1, x)
+        seen.y0 = Math.min(seen.y0, y)
+        seen.y1 = Math.max(seen.y1, y)
+        deep += corner.dot(back)
+        counted++
+      }
+    }
+    if (counted === 0) return { middle, scale: aim.scale }
+    const least = across * LEAST
+    const { wide, high } = free()
+    return {
+      middle: new THREE.Vector3()
+        .addScaledVector(right, (seen.x0 + seen.x1) / 2)
+        .addScaledVector(up, (seen.y0 + seen.y1) / 2)
+        .addScaledVector(back, deep / counted),
+      scale:
+        FILLS *
+        Math.min(
+          wide / Math.max(seen.x1 - seen.x0, least),
+          high / Math.max(seen.y1 - seen.y0, least)
+        ),
+    }
   }
 
   const draw = () => {
@@ -513,10 +551,25 @@ export async function stageOf(
       part.through.opacity = there * light * THROUGH
       part.through.visible = part.through.opacity > 0.005
     }
-    eye.radius = (aim.radius * back) / near
-    camera.position.setFromSpherical(eye).add(aim.middle)
-    camera.lookAt(aim.middle)
+    // The window is so many mm across, at this many pixels to one. What is aimed at
+    // is in the middle of the room the model has, which is not the middle of the
+    // window: the eye stands that much to one side of it.
+    const scale = aim.scale * near
+    const { across: over, down: lower } = free()
+    camera.right = window.innerWidth / (2 * scale)
+    camera.left = -camera.right
+    camera.top = window.innerHeight / (2 * scale)
+    camera.bottom = -camera.top
     camera.updateProjectionMatrix()
+    // (and as much again as it has been moved across by hand)
+    camera.position
+      .copy(aim.middle)
+      .addScaledVector(right, -(over + moved.x) / scale)
+      .addScaledVector(up, (lower + moved.y) / scale)
+      .addScaledVector(back, radius * 20)
+    camera.quaternion.setFromRotationMatrix(
+      new THREE.Matrix4().makeBasis(right, up, back)
+    )
     under.intensity = underlit(camera)
     renderer.render(scene, camera)
   }
@@ -533,13 +586,13 @@ export async function stageOf(
     }
     // the eye comes round to where it is bound for, the short way, and slows into it
     if (!pulled && (eye.theta !== bound.theta || eye.phi !== bound.phi)) {
-      const share = still ? 1 : 1 - Math.exp(-seconds / TURN_TAKES)
+      const share = still || !settled ? 1 : 1 - Math.exp(-seconds / TURN_TAKES)
       const round = Math.atan2(
         Math.sin(bound.theta - eye.theta),
         Math.cos(bound.theta - eye.theta)
       )
       const down = bound.phi - eye.phi
-      if (Math.abs(round) + Math.abs(down) < 1e-3) {
+      if (share === 1 || Math.abs(round) + Math.abs(down) < 1e-3) {
         eye.theta = bound.theta
         eye.phi = bound.phi
       } else {
@@ -548,63 +601,107 @@ export async function stageOf(
       }
       dirty = true
     }
-    // and comes up to what the step puts on, or back off it, the same way
-    if (aim.radius !== aimed.radius || !aim.middle.equals(aimed.middle)) {
-      const share = still ? 1 : 1 - Math.exp(-seconds / NEARS_TAKES)
-      if (
-        Math.abs(aimed.radius - aim.radius) < radius * 1e-3 &&
-        aim.middle.distanceTo(aimed.middle) < radius * 1e-3
-      ) {
-        aim.radius = aimed.radius
-        aim.middle.copy(aimed.middle)
+    // And it draws back from what is on, or comes up to it, the same way: to where
+    // that fills the room it has, from wherever it is looked at.
+    facing()
+    const fit = fitted(to)
+    const off =
+      Math.abs(Math.log(fit.scale / aim.scale)) +
+      (aim.middle.distanceTo(fit.middle) * fit.scale) / window.innerHeight
+    if (off > 0) {
+      const share = still || !settled ? 1 : 1 - Math.exp(-seconds / FITS_TAKES)
+      if (share === 1 || off < 1e-3) {
+        aim.scale = fit.scale
+        aim.middle.copy(fit.middle)
       } else {
-        aim.radius += (aimed.radius - aim.radius) * share
-        aim.middle.lerp(aimed.middle, share)
+        aim.scale *= (fit.scale / aim.scale) ** share
+        aim.middle.lerp(fit.middle, share)
       }
       dirty = true
     }
+    // What was moved across by hand goes back to its place the same way, once
+    // another step is gone to, or it is asked to.
+    if (returning && !pulled) {
+      const share = still ? 1 : 1 - Math.exp(-seconds / FITS_TAKES)
+      if (share === 1 || moved.length() < 0.5) {
+        moved.set(0, 0)
+        returning = false
+      } else moved.multiplyScalar(1 - share)
+      dirty = true
+    }
+    settled = true
+    // (and whoever asked is told when it comes to be as a hand left it, or no longer is)
+    const left = turned || near !== 1 || (!returning && moved.lengthSq() > 0.25)
+    if (left !== changed) byHand((changed = left))
     if (!dirty) return
     dirty = false
     draw()
   }
 
   /**
-   * Where a place in the guide is looked at from: for a step, where it asks to be, or
-   * the last step before it that asked; and for the thing whole, before the steps and
-   * after them, where a model is looked at from to begin with.
+   * Where a place in the guide is looked at from: for a step, the corner it asks to be
+   * seen from, or that the last step before it asked; and for the thing whole, before
+   * the steps and after them, the corner a model is looked at from to begin with.
    */
   const viewFor = (place: number) => {
     const upTo = place < steps ? Math.round(place) : -1
     for (let index = upTo; index >= 0; index--) {
       const view = guide.steps[index].view
-      if (view) return toWorld(view)
+      if (view) return toWorld(cornerOf(view))
     }
-    return toWorld(HOME)
+    return toWorld(CORNER)
   }
 
+  /** where the step shown is looked at from, as the page has it */
+  let seenFrom = viewFor(-1)
+
   // The view is turned by taking hold of it: and stays as it was turned until a step
-  // is gone to that is to be seen from somewhere else.
+  // is gone to that is to be seen from somewhere else. With Shift held as it is taken
+  // hold of, it is moved across the window instead, as the app's own view is: and
+  // stays where it was moved to until another step is gone to.
   const down = (event: PointerEvent) => {
     if (event.button !== 0) return
-    pulled = { x: event.clientX, y: event.clientY }
+    pulled = { x: event.clientX, y: event.clientY, across: event.shiftKey }
     canvas.setPointerCapture(event.pointerId)
     canvas.classList.add("pulled")
   }
   const move = (event: PointerEvent) => {
     if (!pulled) return
-    eye.theta -= (event.clientX - pulled.x) * PULL
-    eye.phi = THREE.MathUtils.clamp(
-      eye.phi - (event.clientY - pulled.y) * PULL,
-      0.02,
-      Math.PI - 0.02
-    )
-    bound.copy(eye)
-    pulled = { x: event.clientX, y: event.clientY }
+    const [over, lower] = [event.clientX - pulled.x, event.clientY - pulled.y]
+    if (pulled.across) {
+      moved.x += over
+      moved.y += lower
+      returning = false
+    } else {
+      eye.theta -= over * PULL
+      eye.phi = THREE.MathUtils.clamp(
+        eye.phi - lower * PULL,
+        0.02,
+        Math.PI - 0.02
+      )
+      bound.copy(eye)
+      turned = true
+    }
+    pulled.x = event.clientX
+    pulled.y = event.clientY
     dirty = true
   }
-  const up = () => {
+  const letGo = () => {
     pulled = null
     canvas.classList.remove("pulled")
+  }
+  // The pointer says which a pull would do, while it is over the view.
+  const held = (event: KeyboardEvent) =>
+    canvas.classList.toggle("across", event.shiftKey)
+  const unheld = () => canvas.classList.remove("across")
+  /** The view as the page has it again: where it looks from, how near, and in the middle of its room. */
+  const again = () => {
+    bound.setFromVector3(seenFrom)
+    bound.phi = THREE.MathUtils.clamp(bound.phi, 0.02, Math.PI - 0.02)
+    turned = false
+    near = 1
+    returning = true
+    dirty = true
   }
   // A wheel goes through the guide, which is the page's: with the key held that a
   // pinch comes with, it brings the model nearer.
@@ -620,16 +717,20 @@ export async function stageOf(
   }
   canvas.addEventListener("pointerdown", down)
   canvas.addEventListener("pointermove", move)
-  canvas.addEventListener("pointerup", up)
-  canvas.addEventListener("pointercancel", up)
+  canvas.addEventListener("pointerup", letGo)
+  canvas.addEventListener("pointercancel", letGo)
   canvas.addEventListener("wheel", wheel, { passive: false })
+  window.addEventListener("keydown", held)
+  window.addEventListener("keyup", held)
+  window.addEventListener("blur", unheld)
   window.addEventListener("resize", size)
   size()
   frame = requestAnimationFrame(tick)
 
-  let seenFrom = viewFor(-1)
   return {
     go(place, atOnce = false) {
+      // (what was moved across by hand was moved to see this step, and not the next)
+      if (place !== to) returning = true
       to = place
       if (atOnce) at = place
       const view = viewFor(place)
@@ -638,27 +739,28 @@ export async function stageOf(
         seenFrom = view
         bound.setFromVector3(view)
         bound.phi = THREE.MathUtils.clamp(bound.phi, 0.02, Math.PI - 0.02)
-        if (atOnce) eye.copy(bound)
+        turned = false
       }
-      aimed = framedAt(place)
-      if (atOnce) {
-        aim.radius = aimed.radius
-        aim.middle.copy(aimed.middle)
-      }
+      // (where it is to be so at once, it is at the next time it is drawn)
+      if (atOnce) settled = false
       dirty = true
     },
     give(given) {
       room = given
       size()
     },
+    again,
     close() {
       cancelAnimationFrame(frame)
       window.removeEventListener("resize", size)
       canvas.removeEventListener("pointerdown", down)
       canvas.removeEventListener("pointermove", move)
-      canvas.removeEventListener("pointerup", up)
-      canvas.removeEventListener("pointercancel", up)
+      canvas.removeEventListener("pointerup", letGo)
+      canvas.removeEventListener("pointercancel", letGo)
       canvas.removeEventListener("wheel", wheel)
+      window.removeEventListener("keydown", held)
+      window.removeEventListener("keyup", held)
+      window.removeEventListener("blur", unheld)
       renderer.dispose()
     },
   }

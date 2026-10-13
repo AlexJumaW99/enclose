@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  cornerOf,
   fileNameOf,
   leftOut,
   partsIn,
@@ -12,7 +13,14 @@ import {
 const lamp = {
   title: "  Desk lamp ",
   summary: "A lamp with a weighted base.",
-  needs: ["2.5 mm hex key", "", 3],
+  needs: [
+    "2.5 mm hex key",
+    "",
+    3,
+    { name: " Wood glue ", icon: "glue" },
+    { name: "A second person", icon: "nobody" },
+    { icon: "clamp" },
+  ],
   steps: [
     { title: "Start with the base", text: "Lay it down.", parts: ["base"] },
     {
@@ -33,8 +41,14 @@ describe("readGuide", () => {
       version: 1,
       made: null,
       summary: "A lamp with a weighted base.",
-      needs: ["2.5 mm hex key"],
+      // each by its name, with the picture it was given where the page has that one
+      needs: [
+        { name: "2.5 mm hex key", icon: null },
+        { name: "Wood glue", icon: "glue" },
+        { name: "A second person", icon: null },
+      ],
       already: [],
+      cover: { view: null, parts: [] },
       steps: [
         {
           title: "Start with the base",
@@ -59,12 +73,22 @@ describe("readGuide", () => {
 
   it("reads back what it wrote, with which writing it is and when", () => {
     const guide = {
-      ...readGuide({ ...lamp, already: ["post"] }),
+      ...readGuide({
+        ...lamp,
+        already: ["post"],
+        cover: { view: [-1, -1, 1], parts: ["cover", "cover", "base"] },
+      }),
       version: 3,
       made: Date.UTC(2026, 9, 12, 15, 30),
     }
     expect(readGuide(JSON.parse(writtenAs(guide)))).toEqual(guide)
     expect(writtenAs(guide)).toContain('"made": "2026-10-12T15:30:00.000Z"')
+    // a thing with no picture is written as its name, as a guide always wrote one
+    expect(JSON.parse(writtenAs(guide)).needs).toEqual([
+      "2.5 mm hex key",
+      { name: "Wood glue", icon: "glue" },
+      "A second person",
+    ])
   })
 
   it("says what is wrong with what is no guide", () => {
@@ -83,6 +107,9 @@ describe("readGuide", () => {
     expect(() =>
       readGuide({ title: "Lamp", steps: [{ ...step, view: [0, 0, 0] }] })
     ).toThrow('"view" has to point somewhere')
+    expect(() =>
+      readGuide({ title: "Lamp", cover: { view: "front" }, steps: [step] })
+    ).toThrow('The cover\'s "view" is three numbers')
   })
 })
 
@@ -116,6 +143,22 @@ describe("troubleWith", () => {
     )
   })
 
+  it("has a cover filled with parts the guide shows, and no others", () => {
+    const covered = (parts: string[]) =>
+      readGuide({
+        title: "Lamp",
+        already: ["base"],
+        cover: { parts },
+        steps: [{ title: "Do", text: "It.", parts: ["cover"] }],
+      })
+    expect(troubleWith(covered(["base", "cover"]), model)).toEqual([])
+    expect(troubleWith(covered(["weight"]), model)[0]).toContain(
+      "filled with weight, which the guide does not show"
+    )
+    // (a part the model has not is said of once, with the rest of what it has not)
+    expect(troubleWith(covered(["shade"]), model)).toEqual([])
+  })
+
   it("wants some step to put a part on", () => {
     expect(troubleWith(guide([[]], ["base"]), model)).toEqual([
       "No step puts a part on: each names the parts it adds.",
@@ -136,6 +179,18 @@ describe("the parts of a guide", () => {
 
   it("leave out the rest of the model", () => {
     expect(leftOut(guide, ["base", "weight", "cover"])).toEqual(["weight"])
+  })
+})
+
+describe("cornerOf", () => {
+  it("is the corner of the model a way of looking at it is nearest", () => {
+    expect(cornerOf([1, -1, 0.8])).toEqual([1, -1, 1])
+    expect(cornerOf([-0.2, 3, -0.7])).toEqual([-1, 1, -1])
+  })
+
+  it("is from the right, the front and above, where the way leans to neither side", () => {
+    expect(cornerOf([0, 0, 1])).toEqual([1, -1, 1])
+    expect(cornerOf([0, 0, -1])).toEqual([1, -1, -1])
   })
 })
 

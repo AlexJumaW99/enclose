@@ -528,9 +528,12 @@ function ExampleItem({ example }: { example: Example }) {
 export function Sidebar({ children }: { children: React.ReactNode }) {
   const projects = useStore((state) => state.projects)
   // While it is a model's blueprint that is looked at, the sheets have the window: the
-  // card of the project they are of stays, at the top, and the rest are put away.
+  // card of the project they are of stays, at the top, and the rest are put away. And
+  // so it is while it is the model's assembly guides, whose covers have it likewise.
   const activeId = useStore((state) => state.activeId)
-  const blueprint = useStore((state) => state.view.blueprint)
+  const sheets = useStore(
+    (state) => state.view.blueprint || state.view.assembly
+  )
   // And while one sheet has the view to itself that card is gone too, and what is at
   // the foot with it: there is nothing over the sheet that is not the sheet's. They
   // fade where they are, and come back the same way.
@@ -564,7 +567,7 @@ export function Sidebar({ children }: { children: React.ReactNode }) {
         {projects.map((project) => (
           <Tucked
             key={project.id}
-            away={blueprint && project.id !== activeId}
+            away={sheets && project.id !== activeId}
             faded={alone}
           >
             <ProjectCard project={project} now={now} />
@@ -575,7 +578,7 @@ export function Sidebar({ children }: { children: React.ReactNode }) {
             the two of them one over the other, and that stays at the foot of the list
             as the cards go by: over them, and over what shows from under a card. */}
         <div className="sticky bottom-0 z-20 flex shrink-0 grow flex-col justify-between gap-2 pb-4">
-          <Tucked away={blueprint}>
+          <Tucked away={sheets}>
             <DropdownMenu open={adding} onOpenChange={setAdding}>
               <Tooltip>
                 <TooltipTrigger

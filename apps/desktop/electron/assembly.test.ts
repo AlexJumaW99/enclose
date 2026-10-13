@@ -4,7 +4,13 @@ import path from "node:path"
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
-import { fileGuide, findGuides, guideOf, guidesIn } from "./assembly"
+import {
+  fileGuide,
+  findGuides,
+  guideOf,
+  guidesIn,
+  removeGuide,
+} from "./assembly"
 import { Projects } from "./projects"
 
 let root: string
@@ -63,6 +69,22 @@ describe("fileGuide", () => {
       title: "Desk lamp",
       version: 1,
       made: Date.UTC(2026, 9, 12),
+    })
+    // its cover is of all of the thing, from where a model is first looked at
+    expect(guidesIn(root)[0].cover).toEqual({ view: null, parts: [] })
+  })
+
+  it("keeps how the cover is drawn, where the guide says", () => {
+    fileGuide(
+      root,
+      { ...lamp(), cover: { view: [-1, -1, 1], parts: ["cover", "base"] } },
+      MODEL,
+      null,
+      1000
+    )
+    expect(guidesIn(root)[0].cover).toEqual({
+      view: [-1, -1, 1],
+      parts: ["cover", "base"],
     })
   })
 
@@ -129,6 +151,45 @@ describe("fileGuide", () => {
     expect(said).toContain(
       "2 parts of the model are in no step and will not be shown: cover, screws."
     )
+  })
+})
+
+describe("removeGuide", () => {
+  /** Stands in for the system's bin: what is put away is kept, to be had back. */
+  const bin = () => {
+    const kept: string[] = []
+    return {
+      kept,
+      away: async (file: string) => {
+        kept.push(path.relative(root, file))
+        fs.renameSync(file, `${file}.away`)
+      },
+    }
+  }
+
+  it("puts the one guide away, and leaves the rest", async () => {
+    fileGuide(root, lamp(), MODEL, null, 1000)
+    fileGuide(root, lamp("Felt side down."), MODEL, null, 2000)
+    const { kept, away } = bin()
+    expect(await removeGuide(root, "desk-lamp-v1", away)).toBe(true)
+    expect(kept).toEqual([path.join("assembly", "desk-lamp-v1.json")])
+    expect(findGuides(root)).toEqual(["desk-lamp-v2.json"])
+  })
+
+  it("puts away one that does not read as a guide, all the same", async () => {
+    write("assembly/desk-lamp-v1.json", "{ not a guide")
+    const { kept, away } = bin()
+    expect(await removeGuide(root, "desk-lamp-v1", away)).toBe(true)
+    expect(kept).toHaveLength(1)
+  })
+
+  it("touches nothing that is no guide of the folder's", async () => {
+    write("model.py", "")
+    write("assembly/notes.md", "")
+    const { kept, away } = bin()
+    for (const id of ["desk-lamp-v9", "notes", "../model", "../../etc/hosts"])
+      expect(await removeGuide(root, id, away)).toBe(false)
+    expect(kept).toEqual([])
   })
 })
 

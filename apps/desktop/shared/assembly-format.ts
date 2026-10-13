@@ -20,6 +20,39 @@ export const MOST_GUIDES = 40
 export const MOST_GUIDE_BYTES = 400_000
 export const MOST_STEPS = 80
 
+/**
+ * The pictures the page has for what is needed to hand, by what each goes by: a guide
+ * says which a thing is shown with, and the page draws it (src/guide/icons.ts).
+ */
+export const NEED_ICONS = [
+  "hex-key",
+  "screwdriver",
+  "wrench",
+  "pliers",
+  "hammer",
+  "glue",
+  "tape",
+  "scissors",
+  "knife",
+  "drill",
+  "soldering-iron",
+  "ruler",
+  "clamp",
+  "cloth",
+  "pencil",
+  "box",
+  "screw",
+  "battery",
+  "helper",
+] as const
+export type NeedIcon = (typeof NEED_ICONS)[number]
+
+/**
+ * Something needed that is no part of the model: what it is, and the picture it is
+ * shown with. Null leaves the picture to the page, which makes it out from the name.
+ */
+export type Need = { name: string; icon: NeedIcon | null }
+
 /** One step of a guide: what goes on, and what is done with it. */
 export type GuideStep = {
   /** what is done in it, in a few words: "Fit the seat" */
@@ -37,11 +70,30 @@ export type GuideStep = {
   from: Vec3 | null
   /**
    * Where the step is best looked at from: the way from the model to the eye, in the
-   * model's frame. Null is from where the step before was.
+   * model's frame. The page looks at the model from one of its corners, as a blueprint
+   * does, and this says which: the one nearest that way (see `cornerOf`). Null is from
+   * where the step before was.
    */
   view: Vec3 | null
   /** something to take care over in it, if there is anything */
   tip: string | null
+}
+
+/**
+ * How the thing is drawn on its guide's cover: in lines, under what the guide is called,
+ * as on the cover of a manual. Whoever wrote the guide knows what the thing is, and so
+ * what of it says so at a glance: the drawing is made as big as fills the cover with
+ * that, and the rest of the thing runs off the edge of the sheet.
+ */
+export type GuideCover = {
+  /**
+   * Where it is drawn from: the way from the thing to the eye, in the model's frame,
+   * whatever way shows it at its best. (A cover is not kept to the corners a step is
+   * seen from.) Null is its front right corner, from above.
+   */
+  view: Vec3 | null
+  /** the parts the cover is filled with, by id: none, where it is all of the thing */
+  parts: string[]
 }
 
 /** A guide, as its file has it. */
@@ -55,12 +107,13 @@ export type Guide = {
   /** a line or two on what is being put together, for the top of it */
   summary: string | null
   /** what is needed that is no part of the model: a screwdriver, glue, something to buy */
-  needs: string[]
+  needs: Need[]
   /**
    * The parts that are there before the first step, by id: what a guide to one part of
    * the model fits that part to. They are shown from the start, and no step puts them on.
    */
   already: string[]
+  cover: GuideCover
   steps: GuideStep[]
 }
 
@@ -68,8 +121,9 @@ export type Guide = {
 export type GuideGiven = {
   title: string
   summary?: string
-  needs?: string[]
+  needs?: (string | { name: string; icon?: string })[]
   already?: string[]
+  cover?: { view?: number[]; parts?: string[] }
   steps: {
     title: string
     text: string
@@ -89,6 +143,16 @@ const said = (v: unknown): string | null =>
   typeof v === "string" && v.trim() ? v.trim() : null
 const listed = (v: unknown): string[] =>
   (Array.isArray(v) ? v : []).flatMap((one) => said(one) ?? [])
+/** What is needed, as it is written: each a name, or a name with its picture. */
+const needed = (v: unknown): Need[] =>
+  (Array.isArray(v) ? v : []).flatMap((one): Need[] => {
+    const name = said(isObject(one) ? one.name : one)
+    if (!name) return []
+    const icon = isObject(one)
+      ? NEED_ICONS.find((known) => known === one.icon)
+      : undefined
+    return [{ name, icon: icon ?? null }]
+  })
 const vec3 = (v: unknown): Vec3 | null =>
   Array.isArray(v) && v.length === 3 && v.every((n) => Number.isFinite(n))
     ? (v as Vec3)
@@ -130,19 +194,39 @@ export function readGuide(written: unknown): Guide {
   })
   const version = Number(written.version)
   const made = typeof written.made === "string" ? Date.parse(written.made) : NaN
+  const cover = isObject(written.cover) ? written.cover : {}
+  const from = vec3(cover.view)
+  if (cover.view !== undefined && cover.view !== null && !from)
+    throw new Error('The cover\'s "view" is three numbers: [x, y, z].')
   return {
     title,
     version: Number.isInteger(version) && version > 0 ? version : 1,
     made: Number.isFinite(made) ? made : null,
     summary: said(written.summary),
-    needs: listed(written.needs),
+    needs: needed(written.needs),
     already: [...new Set(listed(written.already))],
+    cover: {
+      view: from && from.some((n) => n !== 0) ? from : null,
+      parts: [...new Set(listed(cover.parts))],
+    },
     steps,
   }
 }
 
+/**
+ * The corner of the model that a way of looking at it is nearest, as the way from the
+ * model to the eye there: each of the three sides it shows turned equally to the eye,
+ * which is how a blueprint draws a corner. A way that leans to neither side of one of
+ * the model's axes is from the right, from the front, and from above.
+ */
+export const cornerOf = ([x, y, z]: Vec3): Vec3 => [
+  x < 0 ? -1 : 1,
+  y > 0 ? 1 : -1,
+  z < 0 ? -1 : 1,
+]
+
 /** The parts a guide shows, by id: those there to begin with, then those its steps put on. */
-export const partsIn = (guide: Guide): string[] => [
+export const partsIn = (guide: Pick<Guide, "already" | "steps">): string[] => [
   ...new Set([...guide.already, ...guide.steps.flatMap((step) => step.parts)]),
 ]
 
@@ -175,6 +259,14 @@ export function troubleWith(guide: Guide, model: string[]): string[] {
   })
   if (put.size === 0)
     trouble.push("No step puts a part on: each names the parts it adds.")
+  const shown = new Set(partsIn(guide))
+  const strange = guide.cover.parts.filter(
+    (id) => known.has(id) && !shown.has(id)
+  )
+  if (strange.length > 0)
+    trouble.push(
+      `The cover is to be filled with ${strange.join(", ")}, which the guide does not show: a cover is of parts the guide puts on, or that are there already.`
+    )
   return trouble
 }
 
@@ -206,8 +298,24 @@ export function writtenAs(guide: Guide): string {
           ? {}
           : { made: new Date(guide.made).toISOString() }),
         ...(guide.summary ? { summary: guide.summary } : {}),
-        ...(guide.needs.length > 0 ? { needs: guide.needs } : {}),
+        ...(guide.needs.length > 0
+          ? {
+              needs: guide.needs.map(({ name, icon }) =>
+                icon ? { name, icon } : name
+              ),
+            }
+          : {}),
         ...(guide.already.length > 0 ? { already: guide.already } : {}),
+        ...(guide.cover.view || guide.cover.parts.length > 0
+          ? {
+              cover: {
+                ...(guide.cover.view ? { view: guide.cover.view } : {}),
+                ...(guide.cover.parts.length > 0
+                  ? { parts: guide.cover.parts }
+                  : {}),
+              },
+            }
+          : {}),
         steps: guide.steps.map((step) => ({
           title: step.title,
           text: step.text,

@@ -2,16 +2,17 @@
 // from the folder it was taken away in.
 //
 // At the left, what the guide is to and when it was written, and under that its steps,
-// one below another. The page is gone down through as any page is, and the step that
-// has come up to the middle of it is the one the model beside it shows: its parts come
-// in and go on, over the ones that are on already. So the wheel, the keys and a finger
-// all go through the guide, and going back up takes it apart again.
+// one below another. One of them is the one shown, and the model beside them shows that
+// step: its parts come in and go on, over the ones that are on already. A turn of the
+// wheel, a key or a swipe goes on a step, or back one, and never part of the way: the
+// steps come up to their place one at a time, as the pages of a blueprint are turned.
 //
 // It is one page for every guide. What it shows it is told, by a file loaded ahead of
 // this one (see electron/guide-page.ts): the guide, and the model's parts.
 import type { Looks } from "@shared/api"
-import type { Guide } from "@shared/assembly-format"
+import type { Guide, Need } from "@shared/assembly-format"
 import { readModel } from "@/lib/model"
+import { drawn, iconFor } from "./icons"
 import { madeWith } from "./made-with"
 import { stageOf, type Room, type Stage } from "./stage"
 import "./page.css"
@@ -27,16 +28,42 @@ declare global {
 
 /**
  * How the page is laid out: with the steps beside the model, or, where it is too narrow
- * for that, with the model over them. For each, how far down the page a step has come
- * up to when it is the one shown, as a share of the page's height; the room the model
- * has to itself; and how far down what is written begins to be seen.
+ * for that, with the model over them. For each, how far down the window the step shown
+ * begins, as a share of the window's height; the room the model has to itself; and how
+ * far down the window what is written begins to come out of nothing: so many px, or
+ * that share of the window's height. (These are what page.css says, for working out
+ * where a step will be.)
  */
 const NARROW = "(max-width: 820px)"
-const BESIDE = { shown: 0.45, column: 340, edge: 44 }
-const OVER = { shown: 0.6, model: 0.52, top: 84 }
+const BESIDE = { shown: 0.45, column: 340, edge: 44, clear: 116 }
+const OVER = { shown: 0.6, model: 0.52, top: 84, clear: 0.5 }
+/**
+ * How far what is written takes to come out of nothing, at the top, and how much of the
+ * foot of the window it goes back into nothing over, in px.
+ */
+const COMES = 72
+const FOOT = 88
 
 /** How many of the parts a step puts on it names, at the most: the rest are counted. */
 const NAMED = 6
+
+/**
+ * How a wheel goes through the steps. A step is gone to and the wheel then not heard
+ * for `rests` ms. After that it has to be turned afresh: a trackpad goes on saying it
+ * is turned for a good while after the fingers have left it, each time by a little
+ * less, and that is no asking for the step after. Afresh is after it has been still
+ * for `still` ms, or by more than it was the moment before. Less than `least` is no
+ * turn at all. (A mouse's wheel says the same each click: that is afresh too.)
+ */
+const WHEEL = { rests: 480, still: 140, least: 4, click: 50 }
+/** How far a finger has to go up or down the page, in px, to go on a step or back one. */
+const SWIPE = 36
+/**
+ * How much of the room what is written has, a step too long for that room is gone down
+ * at a time, before the step after it is gone to: most of it, so that the last lines
+ * read are still in sight.
+ */
+const AT_A_TIME = 0.7
 
 const counted = (many: number, what: string) =>
   `${many} ${what}${many === 1 ? "" : "s"}`
@@ -60,6 +87,31 @@ const written = (text: string, called: string) =>
     .map((words) => words.replace(/\s+/g, " ").trim())
     .filter(Boolean)
     .map((words) => made("p", called, words))
+
+/** What a guide that needs nothing to hand is said to need: the page says so in every guide. */
+const NOTHING: Need = { name: "Nothing but your hands", icon: "helper" }
+
+/**
+ * What is needed to hand, one thing to a line: its picture in a square of its own, and
+ * beside that what it is. Every guide says, and one that needs nothing says that. (A
+ * guide written before things had pictures says only what each is called.)
+ */
+function needed(needs: (Need | string)[]) {
+  return made(
+    "ul",
+    "needs",
+    ...(needs.length > 0 ? needs : [NOTHING]).map((need) => {
+      const { name, icon } =
+        typeof need === "string" ? { name: need, icon: null } : need
+      return made(
+        "li",
+        "",
+        made("span", "tile", drawn(iconFor(name, icon))),
+        made("span", "", name)
+      )
+    })
+  )
+}
 
 function page(told: NonNullable<Window["ENCLOSE_GUIDE"]>) {
   const { guide } = told
@@ -98,10 +150,8 @@ function page(told: NonNullable<Window["ENCLOSE_GUIDE"]>) {
         `${counted(guide.steps.length, "step")}, ${counted(shown.size, "part")}`
       ),
       ...(guide.summary ? written(guide.summary, "") : []),
-      guide.needs.length > 0 ? made("p", "label needs", "You will need") : null,
-      guide.needs.length > 0
-        ? made("ul", "", ...guide.needs.map((need) => made("li", "", need)))
-        : null
+      made("p", "label", "You will need"),
+      needed(guide.needs)
     ),
     ...guide.steps.map((step, index) => {
       const names = step.parts.flatMap((id) => called.get(id) ?? [])
@@ -115,7 +165,15 @@ function page(told: NonNullable<Window["ENCLOSE_GUIDE"]>) {
         made("p", "label", `Step ${index + 1}`),
         made("h2", "", step.title),
         ...written(step.text, ""),
-        step.tip ? made("p", "tip", step.tip) : null,
+        // something to take care over, set apart with a lamp beside it, as a tip is
+        step.tip
+          ? made(
+              "p",
+              "tip",
+              made("span", "tile", drawn("lamp")),
+              made("span", "", step.tip)
+            )
+          : null,
         parts.length > 0 ? made("p", "parts", parts.join(" · ")) : null
       )
     }),
@@ -127,14 +185,20 @@ function page(told: NonNullable<Window["ENCLOSE_GUIDE"]>) {
       made("p", "", "Every part is on.")
     ),
   ]
-  // The steps are in a window of their own over the model, which they go up through as
-  // the page is gone down: so that they come out of nothing under the name of the
-  // thing, and go back into it at the foot, wherever the page is. What gives the page
-  // its length is beside them, and as long as they are.
+  // The steps are in a window of their own over the model, which they go up through:
+  // so that they come out of nothing under the name of the thing, and go back into it
+  // at the foot.
   const list = made("div", "list", ...sections)
-  const steps = made("main", "steps", list)
-  const length = made("div", "length")
   const thumb = made("i", "")
+  const mark = made("div", "progress", thumb)
+  // What puts the view back as the page has it, once a hand has turned it, moved it or
+  // brought it nearer: a round button in the corner, as the app's own are. Until then
+  // there is nothing for it to do.
+  const again = made("button", "again", drawn("again"))
+  again.type = "button"
+  again.title = "Reset view"
+  again.setAttribute("aria-label", "Reset view")
+  again.disabled = true
   const loading = made("p", "loading", "Loading the parts")
   document.body.append(
     canvas,
@@ -146,21 +210,23 @@ function page(told: NonNullable<Window["ENCLOSE_GUIDE"]>) {
       made("p", "", "Assembly Guide"),
       made("p", "", [when, `v${guide.version}`].filter(Boolean).join(" · "))
     ),
-    steps,
-    length,
-    made("div", "progress", thumb),
+    made("main", "steps", list),
+    mark,
+    again,
     loading
   )
 
   const narrow = window.matchMedia(NARROW)
-  const still = window.matchMedia("(prefers-reduced-motion: reduce)")
   let stage: Stage | null = null
   /** which of the sections is the one shown, by its place among them */
-  let active = -1
+  let active = 0
+  /** how far down the one shown has been gone, in px, where it is too long to be all in sight */
+  let down = 0
+  /** and how far down it there is to go */
+  let further = 0
+  /** how much of it is in sight at a time */
+  let sight = 0
 
-  /** How far down the page a section has come to when it is the one shown, in px. */
-  const line = () =>
-    window.innerHeight * (narrow.matches ? OVER.shown : BESIDE.shown)
   /** The room the model has to itself. */
   const room = (): Room =>
     narrow.matches
@@ -172,61 +238,59 @@ function page(told: NonNullable<Window["ENCLOSE_GUIDE"]>) {
         }
       : { left: BESIDE.column, top: 0, right: BESIDE.edge, bottom: 0 }
 
-  /** The page is as long as takes the last step up to where it is the one shown. */
-  const measure = () => {
-    const last = sections[sections.length - 1]
-    length.style.height = `${last.offsetTop - sections[0].offsetTop + window.innerHeight}px`
+  /**
+   * Put the steps where the one shown is in its place: it begins a set way down the
+   * window, or higher, where it is too long to be all in sight from there, as far up as
+   * what is written is seen at all. One too long even for that is gone down a
+   * windowful at a time (see `go`).
+   */
+  const place = () => {
+    const high = window.innerHeight
+    const [line, clear] = narrow.matches
+      ? [high * OVER.shown, high * OVER.clear + COMES]
+      : [high * BESIDE.shown, BESIDE.clear + COMES]
+    const section = sections[active]
+    const over = Math.max(0, section.offsetHeight - (high - line - FOOT))
+    const risen = Math.min(over, Math.max(0, line - clear))
+    sight = high - clear - FOOT
+    further = over - risen
+    down = Math.min(down, further)
+    list.style.transform = `translateY(${sections[0].offsetTop - section.offsetTop - risen - down}px)`
+    // and how far through the guide that is, on the mark at the window's edge
+    const track = mark.clientHeight - thumb.clientHeight
+    thumb.style.transform = `translateY(${(active / (sections.length - 1)) * track}px)`
   }
 
-  const look = () => {
-    list.style.transform = `translateY(${-window.scrollY}px)`
-    const at = line()
-    let now = 0
-    sections.forEach((section, index) => {
-      if (section.getBoundingClientRect().top <= at + 1) now = index
-    })
-    sections.forEach((section, index) =>
-      section.classList.toggle("shown", index === now)
-    )
-    // how far down the page it is, on the mark at its edge
-    const most = document.documentElement.scrollHeight - window.innerHeight
-    const track = thumb.parentElement!.clientHeight - thumb.clientHeight
-    thumb.style.transform = `translateY(${most > 0 ? (window.scrollY / most) * track : 0}px)`
-    if (now === active) return
-    const first = active < 0
-    active = now
-    // (the first of them is the thing whole, which is before the first step)
-    stage?.go(now - 1, first)
-  }
-
-  /** Bring a section up to where it is the one shown. */
+  /** Go to one of the sections: the step shown is that one, and the model shows it. */
   const goTo = (index: number) => {
-    const section = sections[Math.min(sections.length - 1, Math.max(0, index))]
-    window.scrollTo({
-      top: section.getBoundingClientRect().top + window.scrollY - line() + 2,
-      behavior: still.matches ? "instant" : "smooth",
-    })
+    const next = Math.min(sections.length - 1, Math.max(0, index))
+    if (next === active) return
+    sections[active].classList.remove("shown")
+    active = next
+    down = 0
+    sections[active].classList.add("shown")
+    place()
+    // (the first of them is the thing whole, which is before the first step)
+    stage?.go(active - 1)
   }
 
-  let soon = 0
-  const looked = () => {
-    cancelAnimationFrame(soon)
-    soon = requestAnimationFrame(look)
+  /**
+   * Go on, or back: to the step after the one shown, or the one before. But first down
+   * the rest of the one shown, where that is too long to be all in sight, or back up it.
+   */
+  const go = (on: boolean) => {
+    const to = on
+      ? Math.min(further, down + sight * AT_A_TIME)
+      : Math.max(0, down - sight * AT_A_TIME)
+    if (Math.abs(to - down) < 1) return goTo(active + (on ? 1 : -1))
+    down = to
+    place()
   }
-  window.addEventListener("scroll", looked, { passive: true })
-  window.addEventListener("resize", () => {
-    stage?.give(room())
-    measure()
-    looked()
-  })
-  // (what is written takes another size once its typeface is here)
-  new ResizeObserver(() => {
-    measure()
-    looked()
-  }).observe(list)
+
   sections.forEach((section, index) =>
     section.addEventListener("click", () => goTo(index))
   )
+  again.addEventListener("click", () => stage?.again())
   // the keys that go down a page go on a step, and the ones that go up, back one
   window.addEventListener("keydown", (event) => {
     if (event.metaKey || event.ctrlKey || event.altKey) return
@@ -238,15 +302,81 @@ function page(told: NonNullable<Window["ENCLOSE_GUIDE"]>) {
       (event.key === " " && event.shiftKey)
     if (!on && !back) return
     event.preventDefault()
-    goTo(active + (on ? 1 : -1))
+    go(on)
   })
-  measure()
-  look()
+  // A turn of the wheel goes one step, however far it is turned (see WHEEL). With the
+  // key held that a pinch comes with it is the model's, to be brought nearer by.
+  const wheel = { turned: -Infinity, heard: -Infinity, by: 0 }
+  window.addEventListener(
+    "wheel",
+    (event) => {
+      if (event.ctrlKey || event.metaKey) return
+      event.preventDefault()
+      const by = Math.abs(event.deltaY)
+      const afresh =
+        event.timeStamp - wheel.heard > WHEEL.still ||
+        by > wheel.by * 1.4 + 2 ||
+        (by === wheel.by && by >= WHEEL.click)
+      wheel.heard = event.timeStamp
+      wheel.by = by
+      if (by < WHEEL.least || Math.abs(event.deltaX) > by) return
+      if (event.timeStamp - wheel.turned < WHEEL.rests || !afresh) return
+      wheel.turned = event.timeStamp
+      go(event.deltaY > 0)
+    },
+    { passive: false }
+  )
+  // And so does a finger drawn up the page, or down it: once for each time it is put
+  // down. (Drawn across, it is turning the model.)
+  let finger: { x: number; y: number } | null = null
+  window.addEventListener(
+    "touchstart",
+    (event) => {
+      const [touch] = event.touches
+      finger =
+        event.touches.length === 1
+          ? { x: touch.clientX, y: touch.clientY }
+          : null
+    },
+    { passive: true }
+  )
+  window.addEventListener(
+    "touchmove",
+    (event) => {
+      if (!finger) return
+      const [touch] = event.touches
+      const [across, drawn] = [
+        touch.clientX - finger.x,
+        touch.clientY - finger.y,
+      ]
+      if (Math.abs(drawn) < SWIPE || Math.abs(drawn) < Math.abs(across)) return
+      finger = null
+      go(drawn < 0)
+    },
+    { passive: true }
+  )
+  window.addEventListener("touchend", () => (finger = null), { passive: true })
 
-  void stageOf(canvas, told, (done, total) => {
-    loading.textContent =
-      total > 0 ? `Loading ${done} of ${counted(total, "part")}` : ""
-  }).then(
+  window.addEventListener("resize", () => {
+    stage?.give(room())
+    place()
+  })
+  // (what is written takes another size once its typeface is here)
+  new ResizeObserver(place).observe(list)
+  sections[active].classList.add("shown")
+  place()
+  // from here on the steps go to their place, and are not put there
+  requestAnimationFrame(() => document.body.classList.add("laid"))
+
+  void stageOf(
+    canvas,
+    told,
+    (done, total) => {
+      loading.textContent =
+        total > 0 ? `Loading ${done} of ${counted(total, "part")}` : ""
+    },
+    (byHand) => (again.disabled = !byHand)
+  ).then(
     (ready) => {
       stage = ready
       stage.give(room())

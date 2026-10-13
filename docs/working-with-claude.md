@@ -45,7 +45,8 @@ set for less motion, the camera goes and nothing else.
 
 **Assembly** (A) puts the model's assembly guides where the view was, as
 [Blueprint](blueprints.md) puts its sheets there: A again, the button or Esc brings the
-view back. A guide says how the thing is put together, a step at a time, for whoever has
+view back. The cards of the other projects close up meanwhile, as they do for the
+sheets. A guide says how the thing is put together, a step at a time, for whoever has
 its parts on the table. Claude writes it, and the app makes it a page.
 
 ### Asking for one
@@ -65,20 +66,33 @@ stops it. Writing a guide changes nothing in the model.
 
 ### The covers
 
-Each guide has a cover, the one written last first: what it is a guide to, the day it
-was written and which version it is, over a drawing of the parts it shows. A guide
-written again is the next version, and the ones before are kept.
+Each guide has a cover, the one written last first. At its top left, small, is what it
+is a guide to, the day it was written and how many steps and parts it has, and at its
+top right which version it is. All of the sheet is a line drawing of the thing, which
+Claude composes as an advertisement would show it: from the angle it looks its best,
+and as big as fills the sheet with the parts that make it what it is, the rest running
+off the sheet's edge. A guide written again is the next version, and the ones before
+are kept.
 
-Click a cover and the guide opens in your browser. The arrow over it saves it as a zip.
+Click a cover and the guide opens in your browser. The arrow over it saves it as a zip,
+and the red button beside that moves the guide to the Trash, where it can be had back
+from.
 
 ### The page
 
 A guide is a page: the steps down the left, and the model beside them, drawn as the app
-draws it. Going down the page goes through the steps. The parts of each come in and go
-on, lit, over the ones that are on already, and going back up takes the thing apart
-again. The camera comes up to small parts, and a part that goes on behind something
-shows through it faintly. The arrow keys go a step at a time. The model is turned by
-pulling it, and brought nearer with a pinch.
+draws it and looked at as a blueprint is, from one of its corners and with no
+perspective. A turn of the wheel, a swipe or an arrow key goes on one step, or back
+one. The parts of each step come in and go on, lit, over the ones that are on already,
+and going back takes the thing apart again. The model fills the window with what is on
+so far: the first part is seen close to, and the view draws back as the rest go on. A
+part that goes on behind something shows through it faintly. The model is turned by
+pulling it, moved across the window by pulling it with Shift held, and brought nearer
+with a pinch. The round button at the top right puts it back as the page had it.
+
+Before the first step the page says what is needed to hand, each thing with a small
+picture of it: a hex key, glue, a clamp. Every guide says, and one for a thing that goes
+together by hand alone says that.
 
 Opened from the app, the page is served from your own machine and shows the model as it
 is now: nothing is copied for it, and it is there for as long as the app is open. The

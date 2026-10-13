@@ -49,7 +49,7 @@ import { archiveOf, EXAMPLES, EXAMPLES_URL } from "../shared/examples"
 import { PICTURE_TYPES } from "../shared/pictures"
 import { Analytics, POSTHOG } from "./analytics"
 import { unpack, type Filed } from "./archive"
-import { fileGuide, guideOf, guidesIn } from "./assembly"
+import { fileGuide, guideOf, guidesIn, removeGuide } from "./assembly"
 import { Changes } from "./changes"
 import { Versions } from "./versions"
 import { zipOf } from "./zip"
@@ -1077,6 +1077,23 @@ function wire() {
       // shown where it is: it is something to send on, or to open
       shell.showItemInFolder(picked.filePath)
       analytics?.record("assembly guide saved", { steps: guide.steps.length })
+      return true
+    }
+  )
+  ipcMain.handle(
+    CHANNEL.assemblyRemove,
+    async (_, id: string, guideId: string) => {
+      const project = projects.get(String(id))
+      // one thing at a time is done in a project's folder: not under an agent at work
+      if (!project || threads.working(project.id)) return false
+      // (to the system's bin, and not for good: it is the user's, and can be had back)
+      const went = await removeGuide(project.path, String(guideId), (file) =>
+        shell.trashItem(file)
+      ).catch(() => false)
+      if (!went) return false
+      projects.refresh(project.id)
+      broadcast()
+      analytics?.record("assembly guide removed")
       return true
     }
   )

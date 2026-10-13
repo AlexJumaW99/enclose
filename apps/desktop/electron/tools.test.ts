@@ -166,10 +166,13 @@ describe("answerTo", () => {
         params: { name: "guide", arguments: guide },
       })
     const step = { title: "Fit", text: "Push it on.", parts: ["base"] }
+    const needs = [{ name: "2.5 mm hex key", icon: "hex-key" }]
     expect(
       await call({
         title: "Desk lamp",
-        steps: [{ ...step, from: [0, 0, 60], view: [1, -1, 0.8] }],
+        needs,
+        cover: { view: [1, -1, 1], parts: ["base"] },
+        steps: [{ ...step, from: [0, 0, 60], view: [1, -1, 1] }],
       })
     ).toMatchObject({
       result: {
@@ -180,16 +183,35 @@ describe("answerTo", () => {
     })
     expect(given).toHaveLength(1)
     // what is wrong with a guide is said to whoever gave it, to be put right
-    expect(await call({ title: "Nothing", steps: [step] })).toMatchObject({
+    const cover = { parts: ["base"] }
+    expect(
+      await call({ title: "Nothing", needs, cover, steps: [step] })
+    ).toMatchObject({
       result: {
         isError: true,
         content: [{ type: "text", text: "The guide was not written." }],
       },
     })
-    // and what is no guide at all is not passed on: a way that is not three numbers
-    expect(
-      await call({ title: "Desk lamp", steps: [{ ...step, from: [0, 60] }] })
-    ).toMatchObject({ result: { isError: true } })
+    // and what is no guide at all is not passed on: a way that is not three numbers,
+    // a picture the page has not, nothing said of what is needed
+    for (const not of [
+      {
+        title: "Desk lamp",
+        needs,
+        cover,
+        steps: [{ ...step, from: [0, 60] }],
+      },
+      {
+        title: "Desk lamp",
+        needs: [{ name: "Glue", icon: "bottle" }],
+        cover,
+        steps: [step],
+      },
+      { title: "Desk lamp", cover, steps: [step] },
+      // or of how it is drawn on its cover
+      { title: "Desk lamp", needs, steps: [step] },
+    ])
+      expect(await call(not)).toMatchObject({ result: { isError: true } })
     expect(given).toHaveLength(2)
   })
 

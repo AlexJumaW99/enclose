@@ -24,6 +24,7 @@ Each thing counted is an event: its name, and a few words and numbers that say w
 | `assembly guide written` | How many steps |
 | `assembly guide opened` | |
 | `assembly guide saved` | How many steps |
+| `assembly guide removed` | |
 | `feature used` | Which of these the view was put into: a section, the exploded view, parts shown alone, parts hidden, the blueprint, the assembly guides, a reference scene, or a project's own tools. Each is counted once for a run of the app |
 | `provider switched` | Which agent, and whether on or off |
 | `update fetched` | The version |

@@ -9,7 +9,11 @@ import type { AddressInfo } from "node:net"
 import { z } from "zod"
 
 import type { ViewportAsked } from "../shared/api"
-import { ASSEMBLY_FOLDER, type GuideGiven } from "../shared/assembly-format"
+import {
+  ASSEMBLY_FOLDER,
+  NEED_ICONS,
+  type GuideGiven,
+} from "../shared/assembly-format"
 import type { Arrangement } from "./imports"
 
 /** What a tool gives back: words, or a picture. */
@@ -225,16 +229,46 @@ export function assemblyTools(
             "A line or two for the top of the guide: what is being put together, and anything to know before starting."
           ),
         needs: z
-          .array(z.string())
-          .optional()
+          .array(
+            z.object({
+              name: z
+                .string()
+                .describe(
+                  'What it is, in a few words, with its size: "4 mm hex key", "Wood glue".'
+                ),
+              icon: z
+                .enum(NEED_ICONS)
+                .optional()
+                .describe(
+                  "The picture the page shows it with: whichever of these it is, or is nearest to. Left out, the page goes by the name."
+                ),
+            })
+          )
           .describe(
-            'What is needed that is no part of the model, each in a few words: "4 mm hex key", "Wood glue".'
+            "What is needed that is no part of the model: tools, glue, something to stand the thing on, a second person. Every guide says: the page has a place for it at its top. Empty only for a thing that goes together by hand alone, which the page then says."
           ),
         already: z
           .array(z.string())
           .optional()
           .describe(
             "For a guide to part of the model: the ids of the parts that are there before the first step, which the guide's parts are fitted to. They are shown from the start, and no step puts them on."
+          ),
+        cover: z
+          .object({
+            view: three
+              .optional()
+              .describe(
+                "Where the thing is drawn from on the cover: the way from it to the eye, [x, y, z] in the model's frame, any way at all and not only a corner. Choose the angle it looks its best from, as a product is shown in an advertisement: [1, -2, 0.5] is a low three-quarter view from the front right, [0, -1, 0.1] square on from the front, [1, 0, 0] in profile, [0.3, -0.5, 1] from nearly overhead. Left out, the front right corner, from above."
+              ),
+            parts: z
+              .array(z.string())
+              .optional()
+              .describe(
+                "The ids of the parts the cover is filled with: the feature that makes the thing desirable, and says at a glance what it is (a stool's seat and backrest, a lamp's shade and arm). The whole thing is still drawn, as big as makes these fill the sheet under its title, and the rest of it runs off the sheet's edge. Left out, all of it is fitted on."
+              ),
+          })
+          .describe(
+            "How the thing is drawn on the guide's cover: a large line drawing under a small title, with all of the sheet below the title to itself. Compose it as an art director would an Apple advertisement: one product, shown from its most flattering angle, close and cropped with confidence, so that it is wanted before it is understood."
           ),
         steps: z
           .array(
@@ -260,13 +294,13 @@ export function assemblyTools(
               view: three
                 .optional()
                 .describe(
-                  "Where the step is best seen from: the way from the model to the eye, [x, y, z] in the model's frame. [1, -1, 0.8] is from the front right, a little above; [0, 0, -1] from underneath. Left out, the view stays as it was."
+                  "Which corner of the model the step is seen from. The page always looks at the model from one of its corners, as a blueprint does, and only the signs here count: [1, -1, 1] is from the right, the front and above, which is where it begins; [-1, -1, 1] from the left; [1, 1, 1] from behind; [1, -1, -1] from underneath. Left out, the view stays as it was."
                 ),
               tip: z
                 .string()
                 .optional()
                 .describe(
-                  "Something to take care over in this step, in a sentence, where there is anything."
+                  "Something to take care over in this step, in a sentence: a caution, a knack, a thing to check. The page sets it apart under the step with a lamp beside it, so whenever a step has one it goes here, and never in text."
                 ),
             })
           )

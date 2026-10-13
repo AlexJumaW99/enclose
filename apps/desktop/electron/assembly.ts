@@ -74,6 +74,22 @@ export function guideOf(root: string, id: string): Guide | null {
   return foundIn(root).find((one) => one.id === id)?.guide ?? null
 }
 
+/**
+ * Take one of a folder's guides away, by what it is known by: its file is handed to
+ * `away`, which is to put it where it can be had back from, and not to destroy it.
+ * Whether there was one. (Its file may not read as a guide: that is no reason to keep it.)
+ */
+export async function removeGuide(
+  root: string,
+  id: string,
+  away: (file: string) => Promise<void>
+): Promise<boolean> {
+  const found = foundIn(root).find((one) => one.id === id)
+  if (!found) return false
+  await away(found.file)
+  return true
+}
+
 /** A folder's guides as their covers have them, the one written last first. */
 export function guidesIn(root: string): GuideSummary[] {
   return foundIn(root)
@@ -84,6 +100,7 @@ export function guidesIn(root: string): GuideSummary[] {
       made: guide?.made ?? written,
       steps: guide?.steps.length ?? 0,
       parts: guide ? partsIn(guide) : [],
+      cover: guide?.cover ?? { view: null, parts: [] },
       trouble,
     }))
     .sort((a, b) => b.made - a.made)

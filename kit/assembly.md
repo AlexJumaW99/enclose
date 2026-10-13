@@ -75,7 +75,11 @@ A step is one thing a person does in one go, with the parts it puts on.
 - Leave out what the picture shows. The reader sees the part arrive.
 
 `tip` is one sentence for the thing that goes wrong in this step, where there is one:
-"Do not tighten these yet: the legs need the play." Most steps have none.
+"Do not tighten these yet: the legs need the play." Most steps have none. The page
+sets it apart under the step, with a lamp beside it. So whenever a step has something
+of that kind to say (a caution, a knack, a thing to check before going on), it goes in
+`tip` and nowhere else: never write "Tip:", "Note:" or a warning into `text`, where
+it would read as one more thing to do.
 
 ### Where the parts come from: `from`
 
@@ -101,19 +105,24 @@ on.
 
 ### Where it is seen from: `view`
 
-`view` turns the model so the step can be seen: the way from the model to the eye, as
-`[x, y, z]` in the same frame. Only its direction counts.
+The page draws the model as a blueprint does: with no perspective, from one of its
+corners, three of its sides turned equally to the eye. `view` says which corner, as the
+way from the model to the eye, `[x, y, z]` in the same frame. Only the signs count:
+right or left, front or back, above or below.
 
-    [1, -1, 0.8]    from the front right, a little above: how a model opens
-    [-1, -1, 0.8]   from the front left
-    [1, -1, -0.7]   from the front right, from below
-    [0, 0, 1]       straight down from above
+    [1, -1, 1]      from the right, the front and above: where the page begins
+    [-1, -1, 1]     from the left, the front and above
+    [1, 1, 1]       from the right and behind, above
+    [1, -1, -1]     from the right and the front, underneath
 
 The page does not turn the thing over: it stays as it is built. So where a step is
 done with the thing upside down, say so in the text ("turn it over") and give a `view`
-from below, so the reader sees the side they are working on. Left out, the view stays
-where the step before had it. Give one whenever what goes on would be hidden from
-there, and do not swing the view about for no reason.
+from underneath, so the reader sees the side they are working on. Left out, the view
+stays where the step before had it. Give one whenever what goes on would be hidden
+from there, and do not swing the view about for no reason.
+
+How near the model is, is the page's own doing: it fills the window with what is on so
+far, so the first part is seen close to, and the view draws back as the rest go on.
 
 ## The rest of a guide
 
@@ -121,13 +130,59 @@ there, and do not swing the view about for no reason.
   ("Counter stool"); the page writes "Assembly Guide" under it.
 - `summary`: a line or two for the top. What is being put together, and anything to
   know before starting: how long it takes, that it needs two people, a soft surface.
-- `needs`: what is needed that is no part of the model, each in a few words. Tools
-  with their sizes ("3 mm hex key"), glue, thread lock, and anything to buy that the
-  model does not have as a part. Leave it out if nothing is needed.
+- `needs`: what is needed that is no part of the model, each with its `name` in a few
+  words: tools with their sizes ("3 mm hex key"), glue, thread lock, something to
+  stand the thing on, a second pair of hands, and anything to buy that the model does
+  not have as a part. The page shows each with a small picture. Say which with `icon`,
+  the nearest of: `hex-key`, `screwdriver`, `wrench`, `pliers`, `hammer`, `glue`,
+  `tape`, `scissors`, `knife`, `drill`, `soldering-iron`, `ruler`, `clamp`, `cloth`,
+  `pencil`, `box`, `screw`, `battery`, `helper`. Leave `icon` out where none of them
+  is near. Every guide gives `needs`: the page has a place for it at the top of each.
+  Think through every step for what the hand holds in it. Only a thing that goes
+  together by hand alone gives an empty list, and the page then says so.
 - `already`: only for a guide to part of the model (below).
+- `cover`: how the thing is drawn on the guide's cover (below). Every guide gives one.
 
 Sizes come from the model and its script, or from the standard for a thing that has
 one. Do not make one up: a tool size you had to guess is said as a guess in your reply.
+
+## The cover
+
+Every guide has a cover in the app: an upright sheet given over, from edge to edge and
+from top to foot, to one line drawing of the thing, with a small title over it in the
+top left corner. You have just worked out what the thing is. Say how it is drawn, with `cover`,
+and compose it as an art director would an advertisement for it.
+
+Think of how Apple shows a product. One object, large. The angle it looks its best
+from, which is seldom the angle that explains it. Close, and cropped with confidence,
+so that its best feature fills the frame and the rest of it runs off the edge. The
+steps are there to explain the thing; the cover is there to make someone want it.
+
+- `view`: where it is drawn from, as the way from the thing to the eye, `[x, y, z]` in
+  the model's frame. Unlike a step's view, this is any way at all, not only a corner.
+  Find the most flattering one:
+
+      [1, -2, 0.5]      a low three-quarter view from the front right: the usual hero
+      [-1, -2, 0.5]     the same from the left, for a thing that leans or faces that way
+      [0, -1, 0.1]      square on from the front, for a thing with a face
+      [1, 0, 0.05]      in profile, for a thing with a strong outline
+      [0.3, -0.5, 1]    from nearly overhead, for a thing whose top is its face
+      [1, -1.5, -0.4]   from below, looking up at it, to make it stand tall
+
+  Look at the thing first (take a screenshot), and think about which side carries
+  what is distinctive: the curve, the dial, the joint, the thin edge. Draw it from
+  where that shows. A thing is rarely at its best from the corner the app opens on.
+- `parts`: the ids of the parts the cover is filled with. Not the whole thing: the
+  feature that sells it and says at a glance what it is. A stool's seat and backrest,
+  a lamp's shade and arm, a clock's dial and bezel. The drawing is made as big as
+  makes these fill the sheet. The whole thing is still drawn, and what
+  there is no room for runs off the sheet's edge: legs off the foot, a cable off the
+  side. That crop is the point.
+
+Name the parts that make up between a third and two thirds of the thing as it is seen
+from your `view`: fewer, and the cover is a close-up nobody can place; more, and it is
+only the thing fitted on a page. Leave `parts` out only for a thing that is all one
+shape, with no one feature to give the sheet to.
 
 ## A guide to part of the model
 
@@ -162,13 +217,17 @@ it you were not sure of.
 {
   "title": "Desk lamp",
   "summary": "A lamp with a weighted base and a shade that tilts. It goes together in about ten minutes.",
-  "needs": ["2.5 mm hex key", "Phillips screwdriver, PH1"],
+  "needs": [
+    { "name": "2.5 mm hex key", "icon": "hex-key" },
+    { "name": "Phillips screwdriver, PH1", "icon": "screwdriver" }
+  ],
+  "cover": { "view": [-1, -2, 0.5], "parts": ["shade", "hinge-pin", "post"] },
   "steps": [
     {
       "title": "Start with the base",
       "text": "Lay the base plate on the table with its felt side down. The post and the weight both go on to it.",
       "parts": ["base-plate"],
-      "view": [1, -1, 0.8]
+      "view": [1, -1, 1]
     },
     {
       "title": "Drop in the weight",
@@ -194,7 +253,7 @@ it you were not sure of.
       "text": "Hold the shade against the head of the post with the hinge pin lined up, and push the pin through from the right. Tighten its screw with the screwdriver until the shade stays where it is tilted.",
       "parts": ["shade", "hinge-pin"],
       "from": [60, 0, 0],
-      "view": [1, -0.6, 0.5]
+      "view": [1, 1, 1]
     }
   ]
 }

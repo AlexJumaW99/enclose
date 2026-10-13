@@ -2,25 +2,27 @@
 // guide a page of its own that is opened in the browser. Their covers stand in a row
 // where the view of the model was, the way a blueprint's sheets do, the one written last
 // first: what each is a guide to, when it was written and which writing of it it is,
-// over a drawing of the parts it shows. A cover that is pressed opens its guide; the
-// arrow over it takes the guide away as one archive, with the parts in it.
+// and a drawing of the thing, large, as on the cover of a manual. A cover that is
+// pressed opens its guide; the arrow over it takes the guide away as one archive, with
+// the parts in it.
 //
 // A guide is written by Claude, when it is asked for at the foot of the row (see
 // AskForGuide): of the whole model, or of what was picked out of it before the guides
 // were turned to.
 import * as React from "react"
+import * as THREE from "three"
 import { cn } from "cn"
-import { DownloadIcon, PlusIcon } from "lucide-react"
+import { DownloadIcon, PlusIcon, Trash2Icon } from "lucide-react"
 
-import type { GuideSummary, Looks, ObjectRef, Project } from "@shared/api"
+import type { GuideSummary, Looks, ObjectRef, Project, Vec3 } from "@shared/api"
 import {
   keyOf,
   laidOut,
   Lines,
   type Drawing,
 } from "@/components/blueprint/blueprint"
-import { drawn, type Stroke } from "@/components/blueprint/lines"
-import { SIDES } from "@/components/blueprint/sheet"
+import { drawn, type Looking, type Stroke } from "@/components/blueprint/lines"
+import { lookingFrom, SHEET, type Seen } from "@/components/blueprint/sheet"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import {
@@ -30,6 +32,7 @@ import {
 } from "@/components/ui/tooltip"
 import { objectsOf } from "@/components/viewport/apart"
 import type { LoadedModel, LoadedPart } from "@/components/viewport/load"
+import { MAC } from "@/lib/platform"
 import { allOf, goesBy, useStore } from "@/lib/store"
 
 /** Stable while a project's guides are not read yet. */
@@ -37,13 +40,14 @@ const NOT_READ: GuideSummary[] = []
 const NO_COLOURS: Record<string, string> = {}
 
 /**
- * Where the model is drawn from on a cover, among the sides a blueprint draws it from:
- * the corner that shows its top, its front and its right, which is much how the view
- * opens on it.
+ * How a cover's drawing is set on its sheet, as shares of the sheet: how far down it
+ * begins and how far down it ends, and how much of each side is kept clear. That is
+ * nearly all of the sheet: the drawing has the sheet to itself, and what is written on
+ * the cover is written over it, in the corners, and is not something it begins after.
+ * It is what the cover is filled with that is kept within these: the rest of the thing
+ * goes where it goes, off the sheet's edge if it comes to that.
  */
-const FROM = 1
-/** The paper a cover's drawing is made to fit, in mm, and how much of it is clear all round. */
-const PAPER = { width: 180, height: 170, clear: 4 }
+const SET = { top: 0.07, foot: 0.97, side: 0.06 }
 /** How long the drawing goes on at a time, in ms, before the window is let draw itself. */
 const AT_A_TIME_MS = 10
 /**
@@ -56,6 +60,9 @@ const AFTER_MS = 70
 
 const counted = (many: number, what: string) =>
   `${many} ${what}${many === 1 ? "" : "s"}`
+
+/** What the system calls where a file goes that is taken away, to be had back from. */
+const BIN = MAC ? "Trash" : "Recycle Bin"
 
 /** A day as a cover says it: "Oct 12, 2026". */
 const day = new Intl.DateTimeFormat("en-US", {
@@ -86,15 +93,66 @@ function useGuides(project: Project): GuideSummary[] | null {
 
 /** The drawings made for covers, by what they are of: the last few, to come up with at once. */
 const kept = new Map<string, Drawing>()
-const KEPT = 6
+const KEPT = 8
+
+/** Where a thing is drawn from on its cover when its guide does not say: its front right corner, from above. */
+const FROM: Vec3 = [1, -1, 1]
+
+/**
+ * How the model is looked at from somewhere, said as the way from the model to the eye:
+ * whatever way that is, since a cover is drawn from wherever the thing looks its best.
+ * Straight above and straight below are a hair off, so that there is a front to them.
+ */
+function lookingAt([x, y, z]: Vec3): Looking {
+  const far = Math.hypot(x, y, z) || 1
+  return lookingFrom({
+    // round from the front, which is the model's -Y, towards its right
+    azimuth: Math.atan2(x, -y),
+    // and down from straight above
+    polar: Math.min(Math.PI - 0.01, Math.max(0.01, Math.acos(z / far))),
+  })
+}
+
+/** The room some parts take up as they are looked at, in the model's own measure. */
+function roomOf(parts: LoadedPart[], { right, up }: Looking): Seen {
+  const room = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity }
+  const corner = new THREE.Vector3()
+  const [across, high] = [new THREE.Vector3(...right), new THREE.Vector3(...up)]
+  for (const { box, home } of parts)
+    for (let i = 0; i < 8; i++) {
+      corner
+        .set(
+          i & 1 ? box.max.x : box.min.x,
+          i & 2 ? box.max.y : box.min.y,
+          i & 4 ? box.max.z : box.min.z
+        )
+        .applyMatrix4(home)
+      room.x0 = Math.min(room.x0, corner.dot(across))
+      room.x1 = Math.max(room.x1, corner.dot(across))
+      room.y0 = Math.min(room.y0, corner.dot(high))
+      room.y1 = Math.max(room.y1, corner.dot(high))
+    }
+  return room
+}
 
 /**
  * A drawing of these parts for a cover: their lines from one corner, as a blueprint
- * draws them, a little at a time so that the window is never held up. Null until it is
- * done, and of no parts at all.
+ * draws them, a little at a time so that the window is never held up. It is set on a
+ * sheet the shape of the cover, as big as makes the parts the cover is filled with
+ * (`filled`, or all of them) fill what room the sheet has under its title: the rest are
+ * drawn where that leaves them, which may be off its edge. Null until it is done, and
+ * of no parts at all.
  */
-function useDrawing(parts: LoadedPart[]): Drawing | null {
-  const of = React.useMemo(() => keyOf(parts, 0), [parts])
+function useDrawing(
+  parts: LoadedPart[],
+  cover: GuideSummary["cover"]
+): Drawing | null {
+  const filled = cover.parts.join("\n")
+  const from = (cover.view ?? FROM).join()
+  const of = React.useMemo(
+    () => `${keyOf(parts, 0)} from ${from} of ${filled}`,
+    [parts, from, filled]
+  )
   const [made, setMade] = React.useState<{
     of: string
     drawing: Drawing
@@ -103,8 +161,8 @@ function useDrawing(parts: LoadedPart[]): Drawing | null {
     if (parts.length === 0 || kept.has(of)) return
     let stopped = false
     const draw = async () => {
-      const { bodies, seen } = laidOut(parts, 0)
-      const run = drawn(bodies, SIDES[FROM].looking)
+      const looking = lookingAt(cover.view ?? FROM)
+      const run = drawn(laidOut(parts, 0).bodies, looking)
       let strokes: Stroke[][]
       let since = performance.now()
       for (;;) {
@@ -118,19 +176,26 @@ function useDrawing(parts: LoadedPart[]): Drawing | null {
         if (stopped) return
         since = performance.now()
       }
-      // on paper of its own, no bigger than it needs, at whatever scale fits it
-      const room = seen[FROM]
-      const [wide, high] = [room.x1 - room.x0, room.y1 - room.y0]
-      const by = Math.max(wide / PAPER.width, high / PAPER.height, 1e-6)
+      // What the cover is filled with fits the room the sheet has for it, and is in
+      // the middle of that room: which is lower on the sheet than the sheet's own.
+      const wanted = new Set(cover.parts)
+      const some = parts.filter((part) => wanted.has(part.part.id))
+      const room = roomOf(some.length > 0 ? some : parts, looking)
+      const by = Math.max(
+        (room.x1 - room.x0) / (SHEET.width * (1 - 2 * SET.side)),
+        (room.y1 - room.y0) / (SHEET.height * (SET.foot - SET.top)),
+        1e-6
+      )
       const drawing: Drawing = {
         strokes,
         placing: {
-          middle: [(room.x0 + room.x1) / 2, (room.y0 + room.y1) / 2],
+          middle: [
+            (room.x0 + room.x1) / 2,
+            (room.y0 + room.y1) / 2 +
+              by * SHEET.height * ((SET.top + SET.foot) / 2 - 0.5),
+          ],
           by,
-          paper: {
-            width: wide / by + 2 * PAPER.clear,
-            height: high / by + 2 * PAPER.clear,
-          },
+          paper: SHEET,
         },
       }
       kept.set(of, drawing)
@@ -141,6 +206,8 @@ function useDrawing(parts: LoadedPart[]): Drawing | null {
     return () => {
       stopped = true
     }
+    // (what the cover says is all in `of`)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [of, parts])
   return kept.get(of) ?? (made?.of === of ? made.drawing : null)
 }
@@ -162,8 +229,10 @@ function Cover({
   place,
   parts,
   alone,
+  busy,
   onOpen,
   onSave,
+  onRemove,
 }: {
   guide: GuideSummary
   /** its place in the row, from the left: it comes in that much after the first */
@@ -172,10 +241,13 @@ function Cover({
   parts: LoadedPart[]
   /** it is the only sheet there is, and stands in the middle of the view */
   alone: boolean
+  /** Claude is at work in the project: nothing is taken out of its folder meanwhile */
+  busy: boolean
   onOpen: () => void
   onSave: () => void
+  onRemove: () => void
 }) {
-  const drawing = useDrawing(parts)
+  const drawing = useDrawing(parts, guide.cover)
   // parts it names that the model has no longer: they are left out of what it shows
   const gone = guide.parts.length - parts.length
   const readable = guide.trouble === null
@@ -191,23 +263,48 @@ function Cover({
             v{guide.version}
           </span>
         </h2>
-        <Tooltip disableHoverablePopup>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon"
-                className="shrink-0 bg-foreground/8 hover:bg-foreground/14 dark:hover:bg-foreground/14"
-                disabled={!readable}
-                onClick={onSave}
-              />
-            }
-          >
-            <DownloadIcon />
-            <span className="sr-only">Download as a zip</span>
-          </TooltipTrigger>
-          <TooltipContent side="top">Download as a zip</TooltipContent>
-        </Tooltip>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <Tooltip disableHoverablePopup>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="bg-foreground/8 hover:bg-foreground/14 dark:hover:bg-foreground/14"
+                  disabled={!readable}
+                  onClick={onSave}
+                />
+              }
+            >
+              <DownloadIcon />
+              <span className="sr-only">Download as a zip</span>
+            </TooltipTrigger>
+            <TooltipContent side="top">Download as a zip</TooltipContent>
+          </Tooltip>
+          {/* And what takes the guide away, in the colour of something not to be
+              pressed by mistake: red on a darker red. It goes to the system's bin,
+              and can be had back from there. (A guide that does not read can still
+              be taken away: it is the one most likely to be.) */}
+          <Tooltip disableHoverablePopup>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="bg-destructive/20 text-destructive hover:bg-destructive/30 hover:text-destructive dark:bg-destructive/25 dark:hover:bg-destructive/40"
+                  disabled={busy}
+                  onClick={onRemove}
+                />
+              }
+            >
+              <Trash2Icon />
+              <span className="sr-only">Delete</span>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              {busy ? AT_WORK : `Move to the ${BIN}`}
+            </TooltipContent>
+          </Tooltip>
+        </div>
       </header>
       <button
         type="button"
@@ -217,52 +314,54 @@ function Cover({
         onClick={onOpen}
         className={cn(
           PAPERED,
-          "[container-type:size] cursor-pointer bg-white text-left text-black ring-1 ring-foreground/10 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default dark:bg-[#f5f6ec] dark:ring-0 dark:focus-visible:ring-[3px]"
+          "cursor-pointer bg-white text-left text-black ring-1 ring-foreground/10 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default dark:bg-[#f5f6ec] dark:ring-0 dark:focus-visible:ring-[3px]"
         )}
       >
-        {/* Everything on it is sized by the sheet, so that a cover is the same cover
-            however big the window lets it be. */}
-        <div className="absolute inset-[7cqw] flex flex-col">
-          <div className="text-[6cqw]/[1.25]">
-            <div className="truncate font-bold tracking-tight">
-              {guide.title}
-            </div>
-            <div className="text-black/45">Assembly Guide</div>
-            <div className="text-black/45">{day.format(guide.made)}</div>
-          </div>
-          {readable ? (
-            // the parts it shows, drawn as a blueprint draws them: as big as there is room for
-            <div className="[container-type:size] my-[5cqw] flex min-h-0 flex-1 items-center justify-center">
-              {drawing ? (
-                <div
-                  className="relative shrink-0 animate-in duration-300 fade-in"
-                  style={{
-                    aspectRatio: `${drawing.placing.paper!.width} / ${drawing.placing.paper!.height}`,
-                    width: `min(100cqw, 100cqh * ${drawing.placing.paper!.width / drawing.placing.paper!.height})`,
-                  }}
-                >
-                  <Lines drawing={drawing} measures={null} labels={null} />
-                </div>
-              ) : (
-                parts.length > 0 && (
-                  <Spinner className="size-5 animate-in text-black/35 delay-300 duration-300 fill-mode-both fade-in" />
-                )
-              )}
+        {/* The thing, drawn as a blueprint draws it, on all of the sheet, from edge to
+            edge and from top to foot: as big as its guide has it, and going off the
+            sheet's edge where it does. */}
+        {readable &&
+          (drawing ? (
+            <div className="absolute inset-0 animate-in duration-300 fade-in">
+              <Lines drawing={drawing} measures={null} labels={null} />
             </div>
           ) : (
-            <div className="my-[5cqw] flex-1 text-[3.4cqw]/[1.4] text-black/55">
-              This guide could not be read. {guide.trouble}
+            parts.length > 0 && (
+              <div className="absolute inset-0 flex animate-in items-center justify-center delay-300 duration-300 fill-mode-both fade-in">
+                <Spinner className="size-5 text-black/35" />
+              </div>
+            )
+          ))}
+        {/* What is written on it is over the drawing, in its top corners, in the
+            app's own sizes whatever size the sheet is: at the left what it is a
+            guide to, and under that, smaller, how much there is to it; at the right,
+            which writing of it this is. The lines may well run on under any of it:
+            each word has the paper's own colour close round it, to be read over them. */}
+        <div className="absolute inset-x-5 top-5 flex items-start justify-between gap-4 [text-shadow:0_0_2px_#fff,0_0_3px_#fff,0_0_6px_#fff] dark:[text-shadow:0_0_2px_#f5f6ec,0_0_3px_#f5f6ec,0_0_6px_#f5f6ec]">
+          <div className="min-w-0">
+            <div className="text-sm/5">
+              <div className="truncate font-semibold">{guide.title}</div>
+              <div className="text-black/45">Assembly Guide</div>
+              <div className="text-black/45">{day.format(guide.made)}</div>
             </div>
-          )}
-          <div className="flex items-baseline justify-between gap-[3cqw] text-[3.2cqw]/[1.3] text-black/45 tabular-nums">
-            <span>Version {guide.version}</span>
-            {readable && (
-              <span className="truncate">
-                {gone > 0
-                  ? `${counted(gone, "part")} no longer in the model`
-                  : `${counted(guide.steps, "step")} · ${counted(guide.parts.length, "part")}`}
-              </span>
-            )}
+            <div className="mt-1.5 text-[11px]/4 text-black/45 tabular-nums">
+              {readable ? (
+                <div className="truncate">
+                  {counted(guide.steps, "step")},{" "}
+                  {gone > 0
+                    ? `${counted(gone, "part")} no longer in the model`
+                    : counted(guide.parts.length, "part")}
+                </div>
+              ) : (
+                <div className="mt-2 text-black/55">
+                  This guide could not be read. {guide.trouble}
+                </div>
+              )}
+            </div>
+          </div>
+          {/* (level with the first line across from it) */}
+          <div className="shrink-0 text-[11px]/5 text-black/45 tabular-nums">
+            Version {guide.version}
           </div>
         </div>
       </button>
@@ -374,6 +473,14 @@ export function Assembly({
     void window.cad.assembly.save(project.id, guide.id, looks).then((saved) => {
       if (saved) say(`Saved the guide to ${guide.title} as a zip`)
     })
+  const remove = (guide: GuideSummary) =>
+    void window.cad.assembly.remove(project.id, guide.id).then((went) => {
+      say(
+        went
+          ? `Moved ${guide.title}, version ${guide.version}, to the ${BIN}`
+          : "That guide could not be moved away"
+      )
+    })
 
   return (
     <div className="absolute inset-0 overflow-hidden">
@@ -449,8 +556,10 @@ export function Assembly({
             place={index + (project.assembling ? 1 : 0)}
             parts={shown[index]}
             alone={alone}
+            busy={asking.busy}
             onOpen={() => open(guide)}
             onSave={() => save(guide)}
+            onRemove={() => remove(guide)}
           />
         ))}
         {none && <NoneYet asking={asking} />}
