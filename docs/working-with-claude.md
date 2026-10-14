@@ -266,3 +266,10 @@ machine and signed in there, once it is switched on: only Claude is on to begin 
 The [settings](settings.md) show which of them the app found (Providers), switch each on
 or off, and hold what each is started with. Grok cannot see
 [pictures](messages.md#pictures).
+
+The marks of all three are in a row over the [three choices](#model-effort-and-access)
+under the message. Click one and the next conversation is had with that agent, with its
+models to choose from. A conversation under way is carried on by the agent it began
+with, so there another's mark begins a new one, [from the model as it is](#versions),
+and keeps what you were writing. A mark drawn grey cannot be picked, and says why with
+the pointer on it: the agent is switched off, or was not found on the machine.

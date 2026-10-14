@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import type { ModelChoice, Provider, ProviderSettings } from "@shared/api"
 import {
   answering,
+  barred,
   listedModels,
   offeredModels,
   standing,
@@ -103,6 +104,34 @@ describe("answering", () => {
   it("stays with what is picked while none can be used, or none are known", () => {
     expect(answering([all[1]], "codex", null)).toBe("codex")
     expect(answering([], "grok", undefined)).toBe("grok")
+  })
+})
+
+describe("barred", () => {
+  const off = provider("codex", { settings: { enabled: false } })
+  const gone = provider("grok", { status: { path: null } })
+  const neither = provider("claude", {
+    settings: { enabled: false },
+    status: { path: null },
+  })
+  const unknown = provider("codex", { status: null })
+
+  it("is no one a message can be put to", () => {
+    expect(barred(provider("claude"))).toBeNull()
+    expect(barred(provider("grok"))).toBeNull()
+  })
+
+  it("says what is wanting of one that is off, or not on the machine", () => {
+    expect(barred(off)).toBe("Codex is switched off. Switch it on in Settings.")
+    expect(barred(gone)).toBe("Grok was not found on this machine.")
+    // not found comes first: switching it on would not be enough
+    expect(barred(neither)).toBe("Claude Code was not found on this machine.")
+    expect(barred(unknown)).toBe("Looking for Codex…")
+  })
+
+  it("is every one a message cannot be put to, and no other", () => {
+    for (const one of [provider("claude"), off, gone, neither, unknown])
+      expect(barred(one) === null).toBe(usable(one))
   })
 })
 

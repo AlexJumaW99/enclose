@@ -60,9 +60,9 @@ import { isPicture } from "@/lib/pictures"
 import { inLine } from "@/lib/quotes"
 import {
   answering,
+  barred,
   offeredModels,
   PROVIDER_WORDS,
-  usable,
 } from "@/lib/providers"
 import {
   askCommands,
@@ -274,7 +274,7 @@ function AccessChoice({ provider }: { provider: Provider }) {
  * How the next message will be answered, said in one line under it: by which model,
  * thinking how hard, asking how much. The line is a button: it opens onto the three
  * choices, under the makers whose models there are to choose from. A conversation under
- * way is carried on by the agent it began with, so there it is that one's alone.
+ * way is carried on by the agent it began with, so there another's begin a new one.
  */
 function Manner({
   conversation,
@@ -284,6 +284,8 @@ function Manner({
   const providers = useStore((state) => state.providers)
   const picked = useStore((state) => state.provider)
   const setProvider = useStore((state) => state.setProvider)
+  const project = useActiveProject()
+  const openConversation = useStore((state) => state.openConversation)
   const id = answering(providers, picked, conversation)
   const provider = providers.find((one) => one.id === id)
   const { name } = PROVIDER_WORDS[id]
@@ -304,13 +306,6 @@ function Manner({
       : []),
     ACCESS_WORDS[access].label,
   ].join(", ")
-  // whose models: every agent a message can be put to, or the one this is had with
-  const makers = conversation ? [] : providers.filter(usable)
-  const tabs = makers.some((one) => one.id === id)
-    ? makers
-    : provider
-      ? [provider]
-      : []
   return (
     <Popover
       onOpenChange={(open) => {
@@ -342,24 +337,44 @@ function Manner({
       >
         <Tabs
           value={id}
-          onValueChange={(value) => setProvider(value as ProviderId)}
+          onValueChange={(value) => {
+            setProvider(value as ProviderId)
+            // this one stays with the agent it began with: another answers a new one,
+            // which begins from the model as it is
+            if (conversation && project) openConversation(project.id, null)
+          }}
           className="gap-1.75"
         >
           <TabsList
             variant="line"
             className="h-11.5! w-full justify-start gap-0 border-b p-0"
           >
-            {tabs.map((one) => (
-              <TabsTrigger
-                key={one.id}
-                value={one.id}
-                title={PROVIDER_WORDS[one.id].name}
-                className="h-full w-11.5 flex-none p-0 after:-bottom-px! after:h-px!"
-              >
-                <ProviderIcon provider={one.id} className="size-6" />
-                <span className="sr-only">{PROVIDER_WORDS[one.id].name}</span>
-              </TabsTrigger>
-            ))}
+            {/* whose models: every agent there is. One a message cannot be put to is
+                drawn grey and says why; the one answering never is, whatever is to be
+                said of it */}
+            {providers.map((one) => {
+              const why = one.id === id ? null : barred(one)
+              const called = PROVIDER_WORDS[one.id].name
+              const says =
+                why ??
+                (conversation && one.id !== id
+                  ? `New conversation with ${called}`
+                  : called)
+              return (
+                // (a tab that cannot be picked hears nothing of the pointer: it is what
+                // it stands in that says why)
+                <span key={one.id} title={says} className="flex h-full">
+                  <TabsTrigger
+                    value={one.id}
+                    disabled={why !== null}
+                    className="h-full w-11.5 flex-none p-0 after:-bottom-px! after:h-px! aria-disabled:grayscale"
+                  >
+                    <ProviderIcon provider={one.id} className="size-6" />
+                    <span className="sr-only">{says}</span>
+                  </TabsTrigger>
+                </span>
+              )
+            })}
           </TabsList>
           {provider && (
             <TabsContent

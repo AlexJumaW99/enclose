@@ -93,6 +93,19 @@ export function answering(
   return (ready.find((one) => one.id === picked) ?? ready[0])?.id ?? picked
 }
 
+/**
+ * Why a message cannot be put to an agent, as a line says it, or null where one can be:
+ * it is switched off, or is not on the machine.
+ */
+export function barred(provider: Provider): string | null {
+  const { cli } = PROVIDER_WORDS[provider.id]
+  if (!provider.status) return `Looking for ${cli}…`
+  if (!provider.status.path) return `${cli} was not found on this machine.`
+  if (!provider.settings.enabled)
+    return `${cli} is switched off. Switch it on in Settings.`
+  return null
+}
+
 /** How an agent stands, as a line says it: what, and how much it wants looking at. */
 export type Standing = {
   /** off: not in use. wait: being looked at. ok, warn, bad: as they sound. */
