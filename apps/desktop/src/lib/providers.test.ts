@@ -9,6 +9,8 @@ import {
   PROVIDER_WORDS,
   standing,
   trouble,
+  updatable,
+  updatedSaid,
   usable,
 } from "./providers"
 
@@ -40,6 +42,8 @@ const provider = (
   checking: false,
   models: [model(null), model("opus"), model("sonnet"), model("haiku")],
   ...more,
+  update: more.update ?? null,
+  updating: more.updating ?? false,
   settings: { ...SETTINGS, ...more.settings },
   status:
     more.status === null
@@ -244,5 +248,39 @@ describe("trouble", () => {
     ).toBeNull()
     expect(trouble(provider("grok", { status: { path: null } }))).toBeNull()
     expect(trouble(provider("grok", { status: null }))).toBeNull()
+  })
+})
+
+describe("updatable", () => {
+  const newer = { version: "2.1.299", command: "claude update" }
+
+  it("is one in use with a newer version to put in", () => {
+    expect(updatable(provider("claude", { update: newer }))).toBe(true)
+    expect(updatable(provider("claude"))).toBe(false)
+  })
+
+  it("is not one that is switched off, whatever is newer", () => {
+    expect(
+      updatable(
+        provider("claude", { update: newer, settings: { enabled: false } })
+      )
+    ).toBe(false)
+  })
+})
+
+describe("updatedSaid", () => {
+  it("says what came of updating one, in a line", () => {
+    expect(
+      updatedSaid("claude", { outcome: "updated", version: "2.1.299" })
+    ).toBe("Claude Code is now 2.1.299")
+    expect(updatedSaid("codex", { outcome: "same", version: "0.161.0" })).toBe(
+      "Codex is still 0.161.0"
+    )
+    expect(updatedSaid("grok", { outcome: "failed", version: "1.0.52" })).toBe(
+      "Grok could not be updated"
+    )
+    expect(updatedSaid("claude", { outcome: "broken", version: null })).toBe(
+      "Claude Code was updated, and is not responding"
+    )
   })
 })

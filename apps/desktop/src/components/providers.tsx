@@ -4,6 +4,7 @@ import {
   CheckIcon,
   ChevronDownIcon,
   CopyIcon,
+  HistoryIcon,
   PlusIcon,
   RefreshCwIcon,
   XIcon,
@@ -20,16 +21,23 @@ import { ProviderIcon, StarIcon } from "@/components/icons"
 import { Row } from "@/components/setting"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
 import {
   listedModels,
   PROVIDER_WORDS,
   standing,
   trouble,
+  updatable,
   usable,
   type Standing,
 } from "@/lib/providers"
-import { changeProvider, checkProviders, useStore } from "@/lib/store"
+import {
+  changeProvider,
+  checkProviders,
+  updateProvider,
+  useStore,
+} from "@/lib/store"
 import { ago, useNow } from "@/lib/time"
 
 /**
@@ -558,7 +566,8 @@ function Body({ provider, id }: { provider: Provider; id: string }) {
 /**
  * One of them: its mark, what it is and how it stands, and at the far side its version,
  * the switch for whether it is in use, and an arrow. All of the line opens it, but for
- * the switch.
+ * the switch. Where there is a newer version of it, a button that puts it in stands in
+ * place of all three, until it is in.
  */
 function Entry({
   provider,
@@ -569,7 +578,7 @@ function Entry({
   open: boolean
   onOpen: () => void
 }) {
-  const { name } = PROVIDER_WORDS[provider.id]
+  const { name, cli } = PROVIDER_WORDS[provider.id]
   const { tone, headline, detail } = standing(provider)
   const { enabled } = provider.settings
   const body = React.useId()
@@ -588,7 +597,7 @@ function Entry({
           <ProviderIcon
             provider={provider.id}
             className={cn(
-              "size-8 shrink-0",
+              "size-6.5 shrink-0",
               !enabled && "opacity-50 grayscale"
             )}
           />
@@ -603,27 +612,50 @@ function Entry({
             </span>
           </span>
         </button>
-        {provider.status?.version && (
-          <span className="font-mono text-sm text-muted-foreground uppercase">
-            v{provider.status.version}
-          </span>
+        {updatable(provider) || provider.updating ? (
+          <Button
+            disabled={provider.updating}
+            title={
+              provider.update
+                ? `${cli} ${provider.update.version} is available, for the ${provider.status?.version} there is. This runs ${provider.update.command}.`
+                : undefined
+            }
+            onClick={() => void updateProvider(provider.id)}
+            className="relative z-10 h-9 shrink-0 gap-2 rounded-full px-4 disabled:opacity-100"
+          >
+            {provider.updating ? (
+              <Spinner />
+            ) : (
+              // (its arrow goes the way a clock does: on, to what is newer)
+              <HistoryIcon className="-scale-x-100" />
+            )}
+            {provider.updating ? "Updating…" : "Update available"}
+          </Button>
+        ) : (
+          <>
+            {provider.status?.version && (
+              <span className="font-mono text-sm text-muted-foreground uppercase">
+                v{provider.status.version}
+              </span>
+            )}
+            <Switch
+              aria-label={`Use ${name}`}
+              checked={enabled}
+              onCheckedChange={(on) =>
+                void changeProvider(provider.id, { enabled: on })
+              }
+              className="z-10"
+            />
+            <ChevronDownIcon
+              absoluteStrokeWidth
+              strokeWidth={1}
+              className={cn(
+                "size-6 shrink-0 text-muted-foreground transition-transform",
+                open && "rotate-180"
+              )}
+            />
+          </>
         )}
-        <Switch
-          aria-label={`Use ${name}`}
-          checked={enabled}
-          onCheckedChange={(on) =>
-            void changeProvider(provider.id, { enabled: on })
-          }
-          className="z-10"
-        />
-        <ChevronDownIcon
-          absoluteStrokeWidth
-          strokeWidth={1}
-          className={cn(
-            "size-6 shrink-0 text-muted-foreground transition-transform",
-            open && "rotate-180"
-          )}
-        />
       </div>
       {/* each has its own boxes, with nothing in them of another's */}
       {open && <Body id={body} provider={provider} />}

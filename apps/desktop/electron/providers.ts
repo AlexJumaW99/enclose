@@ -14,8 +14,17 @@ import {
   type ProviderId,
   type ProviderSettings,
   type ProviderStatus,
+  type ProviderUpdated,
 } from "../shared/api"
 import type { SettingsStore } from "./settings"
+import {
+  newer,
+  newestOf,
+  runUpdate,
+  updateCommand,
+  wayOf,
+  type Command,
+} from "./updates"
 
 const run = promisify(execFile)
 
@@ -197,7 +206,11 @@ export type ProvidersDeps = {
   look: Record<ProviderId, (launch: Launch) => Promise<Looked>>
   /** something of what is known of them changed: the window is to hear of it */
   onChange: () => void
+  /** how newer versions are found and put in: as they are, unless something stands in */
+  updates?: { newest: typeof newestOf; run: typeof runUpdate }
 }
+
+const UPDATES = { newest: newestOf, run: runUpdate }
 
 export class Providers {
   private readonly deps: ProvidersDeps
@@ -207,6 +220,10 @@ export class Providers {
   private queues = new Map<ProviderId, Promise<void>>()
   /** how many things are yet to be found out about each */
   private waiting = new Map<ProviderId, number>()
+  /** a newer version of each in use than the one installed, and what puts it in */
+  private newest = new Map<ProviderId, { version: string; command: Command }>()
+  /** the ones being updated now */
+  private updating = new Set<ProviderId>()
   /**
    * Each has been looked for once: what is installed is known, and the PATH a terminal
    * would have has been taken up if it was needed to find them.
@@ -218,9 +235,13 @@ export class Providers {
     this.found = Promise.all(
       PROVIDERS.map((id) => this.next(id, () => this.find(id)))
     ).then(() => {})
-    // who is signed in and what models there are takes longer, and is asked after
+    // who is signed in and what models there are takes longer, and is asked after; and
+    // after that, whether there is a newer version of it
     void this.found.then(() => {
-      for (const id of PROVIDERS) void this.next(id, () => this.ask(id))
+      for (const id of PROVIDERS) {
+        void this.next(id, () => this.ask(id))
+        void this.next(id, () => this.lookNewer(id, false))
+      }
     })
   }
 
@@ -297,15 +318,98 @@ export class Providers {
     this.deps.onChange()
   }
 
+  /**
+   * Whether there is a newer version of one in use than the one installed, and how it
+   * would be put in: by the way it was installed, which a newer one is only offered for
+   * where it can be told. What npm said is kept an hour, unless it is asked `fresh`.
+   */
+  private async lookNewer(id: ProviderId, fresh: boolean) {
+    const launch = this.launch(id)
+    const installed = this.statuses.get(id)?.version
+    const way = launch ? wayOf(id, launch.path) : null
+    const command =
+      launch && way
+        ? updateCommand(
+            id,
+            launch.path,
+            way,
+            way.kind === "brew" ? await locate("brew") : null
+          )
+        : null
+    const newest =
+      launch && way && command && installed
+        ? await (this.deps.updates ?? UPDATES).newest(
+            id,
+            launch.path,
+            way,
+            launch.env,
+            fresh
+          )
+        : null
+    if (command && installed && newest && newer(installed, newest))
+      this.newest.set(id, { version: newest, command })
+    else this.newest.delete(id)
+    this.deps.onChange()
+  }
+
+  /** Look again, for each in use, at whether there is a newer version of it. */
+  lookForUpdates() {
+    for (const id of PROVIDERS)
+      void this.next(id, () => this.lookNewer(id, false))
+  }
+
+  /**
+   * Put in the newest version of one, the way it was installed, and look at it all again
+   * after: whether it is the newer one now, and whether it answers.
+   */
+  async update(id: ProviderId): Promise<ProviderUpdated> {
+    const newest = this.newest.get(id)
+    const launch = this.launch(id)
+    if (!newest || !launch || this.updating.has(id))
+      return {
+        outcome: "same",
+        version: this.statuses.get(id)?.version ?? null,
+      }
+    this.updating.add(id)
+    this.deps.onChange()
+    const done = await (this.deps.updates ?? UPDATES).run(
+      newest.command,
+      launch.env
+    )
+    if (!done.ok)
+      console.error(`[${id}] ${newest.command.said}\n${done.output}`)
+    this.updating.delete(id)
+    await this.check(id)
+    const now = this.statuses.get(id)
+    const version = now?.version ?? null
+    return {
+      outcome: !done.ok
+        ? "failed"
+        : !now?.path || !version || now.trouble
+          ? "broken"
+          : version === newest.version || newer(newest.version, version)
+            ? "updated"
+            : "same",
+      version,
+    }
+  }
+
   /** Each of them, as the window has it. */
   list(): Provider[] {
-    return PROVIDERS.map((id) => ({
-      id,
-      settings: this.deps.settings.provider(id),
-      status: this.statuses.get(id) ?? null,
-      checking: (this.waiting.get(id) ?? 0) > 0,
-      models: this.models.get(id) ?? [],
-    }))
+    return PROVIDERS.map((id) => {
+      const newest = this.newest.get(id)
+      return {
+        id,
+        settings: this.deps.settings.provider(id),
+        status: this.statuses.get(id) ?? null,
+        checking: (this.waiting.get(id) ?? 0) > 0,
+        models: this.models.get(id) ?? [],
+        update: newest
+          ? { version: newest.version, command: newest.command.said }
+          : null,
+        updating: this.updating.has(id),
+      }
+    })
   }
 
   /** What to start an agent with: null if it is switched off, or is not installed. */
@@ -354,6 +458,7 @@ export class Providers {
         this.next(one, async () => {
           await this.find(one)
           await this.ask(one)
+          await this.lookNewer(one, true)
         })
       )
     ).then(() => {})

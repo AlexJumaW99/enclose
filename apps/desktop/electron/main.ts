@@ -132,6 +132,9 @@ const SHOWN = app.isPackaged
   : `${app.name.replace(/\s*\(.*\)$/, "")} (Dev)`
 app.setName("Enclose")
 
+/** How often the agents in use are looked at for a newer version, while the app is open. */
+const NEWER_EVERY_MS = 6 * 60 * 60 * 1000
+
 const ELSEWHERE = process.env.ENCLOSE_USER_DATA ?? null
 if (ELSEWHERE) app.setPath("userData", ELSEWHERE)
 
@@ -1398,6 +1401,16 @@ function wire() {
     await providers.check()
     return providers.list()
   })
+  ipcMain.handle(CHANNEL.providersUpdate, async (_, id: unknown) => {
+    const which = PROVIDERS.find((one) => one === id)
+    if (!which) return { outcome: "same", version: null }
+    const updated = await providers.update(which)
+    analytics?.record("provider updated", {
+      provider: which,
+      outcome: updated.outcome,
+    })
+    return updated
+  })
   // What Claude Code can be called on for is asked afresh each time: it changes with the
   // folder, and with what the user installs. One asking at a time for a project.
   const commands = new Map<string, Promise<Commands>>()
@@ -1619,6 +1632,8 @@ if (!app.requestSingleInstanceLock()) {
       },
     })
     wire()
+    // a newer version of an agent comes out while the app is open, too
+    setInterval(() => providers.lookForUpdates(), NEWER_EVERY_MS).unref()
 
     // Run from a checkout, the app is being worked on and not used, and nothing of that
     // is counted: unless it is told where to send it, which is how this is tried out.

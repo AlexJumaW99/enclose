@@ -14,6 +14,8 @@ import { ToolsPanel } from "@/components/custom-tools/panel"
 import { runTools, stopTools, useTools } from "@/lib/custom-tools/host"
 import type { PartFact } from "@/lib/custom-tools/types"
 import { Blueprint } from "@/components/blueprint/blueprint"
+import { Floating } from "@/components/floating"
+import { NewerAgent } from "@/components/newer-agent"
 import { Options } from "@/components/blueprint/options"
 import { Logo } from "@/components/mark"
 import { atWork } from "@/lib/steps"
@@ -379,14 +381,14 @@ function Saying() {
   }, [saying])
   if (!saying) return null
   return (
-    <div
+    <Floating
       key={saying.key}
       role="status"
-      className="glass max-w-[min(34rem,calc(100%-22rem))] animate-in truncate rounded-full bg-background/60 px-5 py-2.5 text-sm shadow-md ring-1 ring-foreground/10 duration-200 select-none fade-in slide-in-from-bottom-2"
+      className="max-w-[min(34rem,calc(100%-22rem))] truncate px-5 py-2.5"
       title={saying.text}
     >
       {saying.text}
-    </div>
+    </Floating>
   )
 }
 
@@ -504,7 +506,7 @@ function AtWork({
   return (
     // the button is as far from the end it is at as from the top and the bottom, and
     // the words have a good deal more room than that at theirs
-    <div className="glass pointer-events-auto flex animate-in items-center gap-3 rounded-full bg-background/60 py-2.5 pr-2.5 pl-6 text-sm shadow-md ring-1 ring-foreground/10 duration-200 select-none fade-in slide-in-from-bottom-2">
+    <Floating className="pointer-events-auto flex items-center gap-3 py-2.5 pr-2.5 pl-6">
       {/* room for two figures and what they count in, so that the words beside it stay
           where they are as it goes up, in the figures everything else is set in */}
       <span className="min-w-[3ch] text-foreground/45">{duration(taken)}</span>
@@ -524,7 +526,7 @@ function AtWork({
         <SquareIcon className="size-3 fill-current" />
         <span className="sr-only">Stop</span>
       </Button>
-    </div>
+    </Floating>
   )
 }
 
@@ -1695,54 +1697,60 @@ function Model({ project }: { project: Project }) {
             )}
           />
         )}
-      {/* at the foot of the view, in the middle: what to do with the parts picked out
-          together, and with the scene the model is set in, over how far apart the
-          parts are pulled */}
-      {loaded && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-5 flex flex-col items-center gap-2.5">
-          {lookingOver && (
-            <AtWork project={project} meanwhile="Understanding the model" />
-          )}
-          {project.assembling && !lookingOver && (
-            <AtWork
-              project={project}
-              // (short enough to be said whole: the words have only so much room)
-              meanwhile="Working out the steps"
-            />
-          )}
-          <Saying />
-          {!assembly && (
-            <AddToChat
-              listed={listed}
-              groups={loaded.model.groups}
-              projectId={project.id}
-            />
-          )}
-          {reference && !lookingOver && !blueprint && !assembly && (
-            <div className="flex items-center gap-2">
-              {reference.scene.figures.length > 0 && <ShowFigure />}
-              <ImproveReference
-                sceneId={reference.scene.id}
+      {/* at the foot of the view, in the middle: what the app has to tell, and what to
+          do with the parts picked out together and with the scene the model is set in,
+          over how far apart the parts are pulled. Each is a pill floating over the model;
+          a newer agent, and what was just done, are told with no model there as well */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-5 flex flex-col items-center gap-2.5">
+        <NewerAgent />
+        {loaded ? (
+          <>
+            {lookingOver && (
+              <AtWork project={project} meanwhile="Understanding the model" />
+            )}
+            {project.assembling && !lookingOver && (
+              <AtWork
+                project={project}
+                // (short enough to be said whole: the words have only so much room)
+                meanwhile="Working out the steps"
+              />
+            )}
+            <Saying />
+            {!assembly && (
+              <AddToChat
+                listed={listed}
+                groups={loaded.model.groups}
                 projectId={project.id}
               />
-            </div>
-          )}
-          {/* how far apart the parts are pulled: which a blueprint has beside its own
+            )}
+            {reference && !lookingOver && !blueprint && !assembly && (
+              <div className="flex items-center gap-2">
+                {reference.scene.figures.length > 0 && <ShowFigure />}
+                <ImproveReference
+                  sceneId={reference.scene.id}
+                  projectId={project.id}
+                />
+              </div>
+            )}
+            {/* how far apart the parts are pulled: which a blueprint has beside its own
               bar, with the rest of how its sheets show the model */}
-          {blueprint ? (
-            <Options further={loaded.further} />
-          ) : assembly ? (
-            // and the guides have what asks for another of them
-            <AskForGuide
-              project={project}
-              listed={listed}
-              groups={loaded.model.groups}
-            />
-          ) : (
-            view.exploded && <ExplodeSlider further={loaded.further} />
-          )}
-        </div>
-      )}
+            {blueprint ? (
+              <Options further={loaded.further} />
+            ) : assembly ? (
+              // and the guides have what asks for another of them
+              <AskForGuide
+                project={project}
+                listed={listed}
+                groups={loaded.model.groups}
+              />
+            ) : (
+              view.exploded && <ExplodeSlider further={loaded.further} />
+            )}
+          </>
+        ) : (
+          <Saying />
+        )}
+      </div>
       {loaded && middle && !lookingOver && !blueprint && !assembly && (
         <div className="pointer-events-none absolute right-3 bottom-3 flex items-center gap-1">
           <SectionPlanes middle={middle} />

@@ -28,6 +28,7 @@ Each thing counted is an event: its name, and a few words and numbers that say w
 | `assembly guide removed` | |
 | `feature used` | Which of these the view was put into: a section, the exploded view, parts shown alone, parts hidden, the blueprint, the assembly guides, a reference scene, or a project's own tools. Each is counted once for a run of the app |
 | `provider switched` | Which agent, and whether on or off |
+| `provider updated` | Which agent, and what came of it: updated, the same as it was, failed, or not answering after |
 | `update fetched` | The version |
 
 With every event go the app's version, whether it is the installed app, your system

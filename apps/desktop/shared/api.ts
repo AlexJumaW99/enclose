@@ -427,6 +427,23 @@ export type Provider = {
    * one that is switched off, which is not asked.
    */
   models: ModelChoice[]
+  /**
+   * A newer version of it than the one installed, for one in use, and what the app runs
+   * to put it in, as that would be typed. Null where there is none, or none it can.
+   */
+  update: { version: string; command: string } | null
+  /** it is being updated now */
+  updating: boolean
+}
+
+/**
+ * What came of updating one. updated: it is the newer version now. same: it is the one
+ * it was. failed: the update did not go through. broken: it went through, and what was
+ * put in does not answer. `version` is the one installed after.
+ */
+export type ProviderUpdated = {
+  outcome: "updated" | "same" | "failed" | "broken"
+  version: string | null
 }
 
 export type ModelSource = {
@@ -806,6 +823,8 @@ export type CadApi = {
     ): Promise<Provider[]>
     /** look at them again: what is installed, who is signed in, what models there are */
     check(): Promise<Provider[]>
+    /** put in the newest version of one, the way it was installed */
+    update(id: ProviderId): Promise<ProviderUpdated>
     onChange(listener: (providers: Provider[]) => void): () => void
   }
   claude: {
@@ -893,6 +912,7 @@ export const CHANNEL = {
   providersList: "providers:list",
   providersChange: "providers:change",
   providersCheck: "providers:check",
+  providersUpdate: "providers:update",
   providersChanged: "providers:changed",
   claudeCommands: "claude:commands",
   settingsGet: "settings:get",

@@ -132,6 +132,7 @@ const api: CadApi = {
     change: (id, patch) =>
       ipcRenderer.invoke(CHANNEL.providersChange, id, patch),
     check: () => ipcRenderer.invoke(CHANNEL.providersCheck),
+    update: (id) => ipcRenderer.invoke(CHANNEL.providersUpdate, id),
     onChange: (listener) => on(CHANNEL.providersChanged, listener),
   },
   claude: {

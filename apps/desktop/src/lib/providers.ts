@@ -5,6 +5,7 @@ import type {
   ModelChoice,
   Provider,
   ProviderId,
+  ProviderUpdated,
 } from "@shared/api"
 
 /**
@@ -208,4 +209,18 @@ export function trouble(
         command,
         after: " to see that it works, then check again.",
       }
+}
+
+/** Whether there is a newer version of one to put in: which is only ever of one in use. */
+export const updatable = (provider: Provider) =>
+  provider.settings.enabled && provider.update !== null
+
+/** What came of updating one, as the app says it at the foot of the view. */
+export function updatedSaid(id: ProviderId, updated: ProviderUpdated): string {
+  const { cli } = PROVIDER_WORDS[id]
+  const { outcome, version } = updated
+  if (outcome === "updated") return `${cli} is now ${version}`
+  if (outcome === "failed") return `${cli} could not be updated`
+  if (outcome === "broken") return `${cli} was updated, and is not responding`
+  return version ? `${cli} is still ${version}` : `${cli} was not updated`
 }

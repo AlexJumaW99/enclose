@@ -163,4 +163,102 @@ describe("Providers", () => {
     )
     expect(asked.filter((one) => one === "claude")).toHaveLength(2)
   })
+
+  it("offers a newer version of one in use, puts it in the way it was installed, and looks again", async () => {
+    // a Claude Code installed with the npm of a Node of its own
+    const prefix = path.join(dir, "node")
+    const pkg = path.join(prefix, "lib/node_modules/@anthropic-ai/claude-code")
+    fs.mkdirSync(path.join(pkg, "bin"), { recursive: true })
+    fs.mkdirSync(path.join(prefix, "bin"))
+    fs.writeFileSync(path.join(prefix, "bin", "npm"), "", { mode: 0o755 })
+    const claude = path.join(pkg, "bin", "claude")
+    const says = (version: string) =>
+      fs.writeFileSync(
+        claude,
+        `#!/bin/sh
+echo "${version} (Claude Code)"
+`,
+        {
+          mode: 0o755,
+        }
+      )
+    says("2.1.296")
+    process.env.PATH = dir
+    process.env.SHELL = "/nonexistent"
+    const settings = new SettingsStore(path.join(dir, "settings.json"), {
+      projectsFolder: dir,
+      lookOver: true,
+      analytics: true,
+      versions: true,
+    })
+    settings.setProvider("claude", { binary: claude })
+    const ran: string[][] = []
+    const providers = new Providers({
+      settings,
+      look: {
+        claude: async () => ({
+          signedIn: true,
+          account: "Claude Max",
+          trouble: null,
+          models: [],
+        }),
+        codex: async () => ({
+          signedIn: null,
+          account: null,
+          trouble: null,
+          models: [],
+        }),
+        grok: async () => ({
+          signedIn: null,
+          account: null,
+          trouble: null,
+          models: [],
+        }),
+      },
+      onChange: () => {},
+      updates: {
+        newest: async () => "2.1.299",
+        run: async (command) => {
+          ran.push([command.file, ...command.args])
+          says("2.1.299")
+          return { ok: true, output: "" }
+        },
+      },
+    })
+    await providers.found
+    await settled(providers)
+    const claudeOf = () => providers.list().find((one) => one.id === "claude")
+    expect(claudeOf()).toMatchObject({
+      update: {
+        version: "2.1.299",
+        command: "npm install -g @anthropic-ai/claude-code@latest",
+      },
+      updating: false,
+    })
+
+    expect(await providers.update("claude")).toEqual({
+      outcome: "updated",
+      version: "2.1.299",
+    })
+    // by the npm of its own Node, into that Node's folder
+    const real = fs.realpathSync(prefix)
+    expect(ran).toEqual([
+      [
+        path.join(real, "bin", "npm"),
+        "install",
+        "-g",
+        "--prefix",
+        real,
+        "@anthropic-ai/claude-code@latest",
+      ],
+    ])
+    expect(claudeOf()).toMatchObject({
+      status: { version: "2.1.299" },
+      update: null,
+      updating: false,
+    })
+    // nothing newer is offered for one switched off
+    await providers.change("claude", { enabled: false })
+    expect(claudeOf()?.update).toBeNull()
+  })
 })

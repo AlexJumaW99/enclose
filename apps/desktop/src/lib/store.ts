@@ -12,7 +12,7 @@ import { finishedNow, follows, stackOf, type Stack } from "@/lib/conversations"
 import { asideFor, carried } from "@/lib/versions"
 import { cutsOf, readCuts } from "@/lib/cuts"
 import { mannerOf, savedAccess } from "@/lib/manner"
-import { answering, offeredModels, usable } from "@/lib/providers"
+import { answering, offeredModels, updatedSaid, usable } from "@/lib/providers"
 import { callingOn, notCalledOn } from "@/lib/mentions"
 import { fitted } from "@/lib/pictures"
 import { usePreferences } from "@/lib/preferences"
@@ -1693,6 +1693,15 @@ export async function changeProvider(
 /** Have the agents looked at again: what is installed, who is signed in, what models. */
 export async function checkProviders() {
   useStore.setState({ providers: await window.cad.providers.check() })
+}
+
+/**
+ * Put in the newest version of one of the agents, and say what came of it. How it stands
+ * meanwhile, and after, the window hears as the app finds it out.
+ */
+export async function updateProvider(id: ProviderId) {
+  const updated = await window.cad.providers.update(id)
+  useStore.getState().say(updatedSaid(id, updated))
 }
 
 /** The agents are being looked at again, for one that had not said what models it has. */
