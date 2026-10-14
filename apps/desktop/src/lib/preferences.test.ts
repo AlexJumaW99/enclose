@@ -38,6 +38,7 @@ describe("the preferences", () => {
       settleDays: SETTLE_DAYS.initial,
       units: "mm",
       datedFiles: true,
+      format: "step",
     })
   })
 
@@ -53,6 +54,7 @@ describe("the preferences", () => {
       settleDays: 14,
       units: "in",
       datedFiles: false,
+      format: "obj",
     }
     expect((await started(chosen)).getState()).toMatchObject(chosen)
   })
@@ -69,6 +71,7 @@ describe("the preferences", () => {
         units: "cm",
         wheelReversed: "yes",
         datedFiles: 0,
+        format: "3mf",
       })
     ).getState()
     expect(preferences).toMatchObject({
@@ -81,6 +84,7 @@ describe("the preferences", () => {
       units: "mm",
       wheelReversed: false,
       datedFiles: true,
+      format: "step",
     })
   })
 

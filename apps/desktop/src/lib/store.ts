@@ -211,6 +211,10 @@ const ARRANGED_KEY = "enclose:arranged"
 const REFERENCE_KEY = "enclose:reference"
 const FIGURE_KEY = "enclose:figure"
 const WAITING_KEY = "enclose:waiting"
+const KEPT_MESHES_KEY = "enclose:kept-meshes"
+
+/** What is asked of the agent when a model made of a mesh is to be built again as code. */
+export const REBUILD = "Rebuild this model as an editable design."
 
 /** What was saved under a key. */
 const saved = (key: string) => localStorage.getItem(key)
@@ -227,6 +231,16 @@ const savedMode = (): DisplayMode => {
 const savedThreadWidth = (): number => {
   const width = Number(saved(THREAD_WIDTH_KEY))
   return width >= THREAD_WIDTH.min ? width : THREAD_WIDTH.initial
+}
+const savedKeptMeshes = (): string[] => {
+  try {
+    const kept: unknown = JSON.parse(saved(KEPT_MESHES_KEY) ?? "[]")
+    return Array.isArray(kept)
+      ? kept.filter((id): id is string => typeof id === "string")
+      : []
+  } catch {
+    return []
+  }
 }
 const savedColours = (): Record<string, Record<string, PaletteName>> => {
   try {
@@ -626,6 +640,13 @@ type State = {
    */
   colours: Record<string, Record<string, PaletteName>>
   /**
+   * Whether the model on screen has parts made of a mesh (an STL or OBJ file), by
+   * project, as the view last loaded it: what is offered to be built again as code.
+   */
+  meshes: Record<string, boolean>
+  /** the projects whose user would rather keep the mesh: it is not offered again */
+  keptMeshes: string[]
+  /**
    * How the user has put each project's parts into groups by hand, over what its model
    * says: groups made, parts taken out of theirs, groups called something else.
    */
@@ -779,6 +800,15 @@ type State = {
    * shows of it: answered the way a message would be, as far as that is chosen.
    */
   lookOver(projectId: string, seen: Seen): Promise<void>
+  /** Say whether the model the view has loaded of a project has parts made of a mesh. */
+  setMeshes(projectId: string, any: boolean): void
+  /**
+   * Have the agent build a model made of a mesh again, as code whose sizes can be
+   * changed: asked in the conversation the panel shows, the way a message would be.
+   */
+  rebuild(projectId: string): void
+  /** Keep a project's mesh as it is: building it again is not offered for it any more. */
+  keepMesh(projectId: string): void
   /**
    * Have an assembly guide made for the open project: of all of its model, or of the
    * one thing picked out of it. It is asked in the conversation the panel shows, the
@@ -941,6 +971,8 @@ export const useStore = create<State>()((set, get) => ({
   noted: null,
   pictureTrouble: null,
   colours: savedColours(),
+  meshes: {},
+  keptMeshes: savedKeptMeshes(),
   ...savedArranged(),
   naming: NONE,
   history: {},
@@ -1631,6 +1663,49 @@ export const useStore = create<State>()((set, get) => ({
         if (id)
           set((state) => ({ picked: { ...state.picked, [project.id]: id } }))
       })
+  },
+
+  setMeshes(projectId, any) {
+    if ((get().meshes[projectId] ?? false) !== any)
+      set((state) => ({ meshes: { ...state.meshes, [projectId]: any } }))
+  },
+
+  rebuild(projectId) {
+    const { projects, picked } = get()
+    const project = projects.find((p) => p.id === projectId)
+    if (!project) return
+    const { open } = stackOf(
+      project.conversations,
+      picked[project.id],
+      usePreferences.getState().settleDays,
+      Date.now()
+    )
+    set({ threadOpen: true })
+    void window.cad.thread
+      .send(
+        project.id,
+        open?.id ?? null,
+        REBUILD,
+        [],
+        [],
+        mannerIn(get(), open),
+        null,
+        [],
+        []
+      )
+      .then((id) => {
+        if (id)
+          set((state) => ({ picked: { ...state.picked, [project.id]: id } }))
+      })
+  },
+
+  keepMesh(projectId) {
+    const keptMeshes = [
+      ...get().keptMeshes.filter((id) => id !== projectId),
+      projectId,
+    ]
+    localStorage.setItem(KEPT_MESHES_KEY, JSON.stringify(keptMeshes))
+    set({ keptMeshes })
   },
 
   async lookOver(projectId, seen) {

@@ -575,6 +575,15 @@ const NO_VERSION = {
   big: "No new version can be begun: there is too much in this project's folder for the app to keep versions of it (more than 20,000 files, or 4 GB), so every conversation changes the one model there is. Change nothing. Tell the user that, and ask whether the change is to be made here instead.",
 }
 
+/**
+ * What an agent is told of parts made of a mesh, and of building one again as code: what
+ * the app offers for a model made of one, in the words `REBUILD` has in the window.
+ */
+const MESHES = [
+  '- A part with "mesh": true in the manifest is made of a mesh\'s triangles: an STL or OBJ file in source/, read with enclose.read_files, and handed over with mesh=True. It is a solid all the same, and can be cut into, added to and cut in two as any other is. But what was curved in it is only a run of flat faces, and nothing of it is a size any more: a hole cannot be made wider, a wall thicker, an edge rounded (rounding its edges takes minutes and fails). Say so when that is what is asked, and offer to rebuild it.',
+  "- To rebuild a model as an editable design is to build each mesh part again in model.py with build123d, as its designer would have drawn it, so that its sizes can be changed from then on. Read the mesh to measure it: its bounding box, its volume, sections through it at several heights (shape & a thin box, then the faces and edges of that), and where its flat faces are and which way they face. Take the sizes from what you measure, rounded as a designer would have chosen them, and name each as a variable at the top of model.py. Build it where the mesh is, then check it against the mesh before you go on: the volume of each difference, (rebuilt - mesh) and (mesh - rebuilt), small beside the part's own, and a screenshot of the two together. Then hand over the rebuilt part in place of the mesh, under the same id and without mesh=True, and leave the file in source/ as it is. Do it part by part where there are several. A shape that no designer would have drawn (a scan, a sculpted figure) cannot be rebuilt so: say that, and leave it a mesh. Say at the end what you matched, how closely, and what you were unsure of.",
+]
+
 /** What an agent is told about where it is, on top of its own instructions. */
 function guide(
   provider: ProviderId,
@@ -591,7 +600,9 @@ function guide(
   /** it has the tool that asks the user things: not so when it only looks a model over */
   canAsk: boolean,
   /** it can make the project tools of its own, and try them: not so on looking over, either */
-  trying: boolean
+  trying: boolean,
+  /** its model has parts made of a mesh */
+  meshes = false
 ): string {
   const tool = knownAs(provider)
   const lines = [
@@ -641,9 +652,10 @@ function guide(
         ? `- The build command is: ${build}`
         : "- Find how the model is built from the project's README or scripts before changing geometry.",
       "- If the project has an enclose.py, that is the app's exporter, copied in: read its docstring for how parts and groups are declared, and do not edit it.",
-      "- If the project has a source/ folder, the app made the project of CAD files the user opened: they are kept there, and model.py reads every body in them as a part (enclose.read_step). That model.py is the project's own, to change as the user asks: change a body after it is read, add parts of your own beside the ones read. Leave the files in source/ as they are. Where model.py has a table of names (PARTS), the parts were named and grouped when the files were opened, by you, from how the model looked: the table is where a part is renamed or moved to another group. Where it has none, the names and groups are only what the files happened to give, which is often no grouping at all: the first time you change such a model, put its parts in the groups a person would look for them in, as above.",
+      "- If the project has a source/ folder, the app made the project of CAD files the user opened: they are kept there, and model.py reads every body in them as a part (enclose.read_step, or enclose.read_files where some are meshes). That model.py is the project's own, to change as the user asks: change a body after it is read, add parts of your own beside the ones read. Leave the files in source/ as they are. Where model.py has a table of names (PARTS), the parts were named and grouped when the files were opened, by you, from how the model looked: the table is where a part is renamed or moved to another group. Where it has none, the names and groups are only what the files happened to give, which is often no grouping at all: the first time you change such a model, put its parts in the groups a person would look for them in, as above.",
       '- The groups are what the manifest says they are: its "groups" list, and the "group" each part names. Like the rest of the manifest they are written by the build.',
       `- The user can also arrange the parts by hand in the app: make a group of some (Cmd+G), take some out of their groups (Shift+Cmd+G), call a group something else. That is kept by the app and not in the project's files, and it is how the model is listed and handled from then on, whatever the manifest says. ${tool(VIEWPORT, "parts")} gives each part's group as the user has it, with what the group goes by, and marks with byHand the parts they moved. Take that as how the user wants the model arranged: never put it back as it was unless asked, and when you next change the model's script for some other reason, give it the same groups and names, so that what is built agrees with what the user sees.`,
+      ...(meshes ? MESHES : []),
       "- After a change to geometry: rebuild, take a screenshot, and check the result yourself before you report it."
     )
   } else if (build) {
@@ -659,7 +671,7 @@ function guide(
       "- This folder has no model the app can show yet. Until it has, the view shows a plain cube as a stand-in: it is in no file and is nothing the user made, so take no account of it, and expect to see it in a screenshot taken before the first build.",
       "- When the user asks for something to be made, set the project up yourself, in this way, without asking them how:",
       `  1. Copy the app's exporter into the folder as enclose.py: cp "${kit}" enclose.py. Leave the copy as it is. Its docstring shows how it is used.`,
-      "  2. Write model.py. Build each part with build123d, in millimetres with Z up, each part where it sits in the assembly, and hand the parts to enclose.Model as the docstring shows: one part for each separate component, in groups. If the folder already holds CAD files (STEP), start from them: enclose.read_step gives every body in them as a part, named and placed as the file has it.",
+      "  2. Write model.py. Build each part with build123d, in millimetres with Z up, each part where it sits in the assembly, and hand the parts to enclose.Model as the docstring shows: one part for each separate component, in groups. If the folder already holds CAD files (STEP), start from them: enclose.read_step gives every body in them as a part, named and placed as the file has it. Meshes (STL, OBJ) are read with enclose.read_files, and handed over with mesh=True.",
       '  3. Find a Python that has build123d: try python3 -c "import build123d". If it has not, make a virtual environment in the folder (python3 -m venv .venv, then .venv/bin/pip install build123d; or uv if it is installed) and use that one.',
       '  4. Write enclose.json at the top of the folder, naming the model and the build command: { "model": "build/enclose.model.json", "build": "python3 model.py" }, with the Python you found. Paths in it are relative to the folder, never absolute.',
       "  5. Run the build. The model shows in the app by itself once build/enclose.model.json is written. Then take a screenshot and check the result before you report it.",
@@ -1571,7 +1583,8 @@ export class Threads {
       // The tool that asks the user things is Claude Code's, and the app has a form for
       // it. Codex and Grok ask in what they say; and nothing is asked on looking over.
       provider === "claude" && asked.arrange === undefined,
-      asked.arrange === undefined
+      asked.arrange === undefined,
+      this.deps.projects.hasMeshes(projectId)
     )
     const guided = createHash("sha1").update(told).digest("hex")
 

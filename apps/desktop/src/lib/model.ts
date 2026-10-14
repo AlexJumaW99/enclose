@@ -28,6 +28,11 @@ export type Part = {
    * is behind it shows, however the rest of the model is drawn.
    */
   clear: boolean
+  /**
+   * Made of a mesh's triangles (an STL or OBJ file): its file is one mesh, not one for
+   * each face, and what was curved is drawn smooth from flats that meet at a slight angle
+   */
+  mesh: boolean
 }
 
 export type Keepout = {
@@ -119,6 +124,7 @@ export function readModel(manifest: unknown): Model {
       explode: vec3(raw.explode) ?? [0, 0, 0],
       metal: raw.finish === "metal" || (!declared && group === "screws"),
       clear: raw.finish === "glass",
+      mesh: raw.mesh === true,
     }
   })
   if (parts.length === 0) throw new Error("The manifest lists no parts.")

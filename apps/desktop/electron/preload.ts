@@ -41,6 +41,15 @@ const api: CadApi = {
       ipcRenderer.invoke(CHANNEL.modelSaveCopies, projectId, files, folder),
     saveArchive: (projectId, files, name) =>
       ipcRenderer.invoke(CHANNEL.modelSaveArchive, projectId, files, name),
+    saveMeshes: (projectId, format, sets, how, called) =>
+      ipcRenderer.invoke(
+        CHANNEL.modelSaveMeshes,
+        projectId,
+        format,
+        sets,
+        how,
+        called
+      ),
     saveDrawing: (name, svg) =>
       ipcRenderer.invoke(CHANNEL.modelSaveDrawing, name, svg),
     saveDrawings: (folder, drawings) =>

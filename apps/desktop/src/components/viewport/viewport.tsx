@@ -622,6 +622,15 @@ function useLoadedModel(
 function Model({ project }: { project: Project }) {
   const arrivals = useArrivals(project)
   const { loaded: base, state } = useLoadedModel(project, arrivals.loading)
+  // a model made of a mesh is offered to be built again as code, beside the conversation
+  const setMeshes = useStore((s) => s.setMeshes)
+  React.useEffect(() => {
+    if (base && !base.standIn)
+      setMeshes(
+        project.id,
+        base.model.parts.some((part) => part.mesh)
+      )
+  }, [base, project.id, setMeshes])
   // The model as the user has its parts in groups, where they have put them in others
   // than the model says, by hand (see lib/arrange): the same model, as it was loaded,
   // but for its groups and what follows from them.

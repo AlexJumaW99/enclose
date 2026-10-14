@@ -12,7 +12,7 @@ click on the app puts them away.
 | | Whether each conversation has [a version of the project](working-with-claude.md#versions) of its own |
 | | After how many days a [conversation](working-with-claude.md#conversations) left alone goes under its project's card |
 | | What a [blueprint](blueprints.md#exploded-dimensions-and-labels)'s dimensions are in, millimetres or inches |
-| | Whether what you [download](parts.md#saving-step) has the day before its name: `2026_10_11_table-clock.step` |
+| | Whether what you [download](parts.md#saving-the-model) has the day before its name: `2026_10_11_table-clock.step` |
 | | Whether the app sends [usage data](usage-data.md) |
 | Navigation | How a scroll is read (automatic, trackpad or mouse), how fast the view turns and zooms, and whether a wheel zooms the other way round |
 | | What the view [turns about](view.md#moving-around) (the middle of the view, the selection or the pointer), and whether turning stops straight above and below |

@@ -1,8 +1,8 @@
 # Projects
 
 A project is a folder. Drop one on the window, or use the + under the project cards to
-open one (Cmd+O) or to start a new project (Cmd+N). STEP files can be dropped and opened
-the same way: see [Starting from CAD files](#starting-from-cad-files).
+open one (Cmd+O) or to start a new project (Cmd+N). STEP, STL and OBJ files can be
+dropped and opened the same way: see [Starting from CAD files](#starting-from-cad-files).
 
 The cards are in the order the projects were added, the newest at the top. With more of
 them than the window has room for, the cards scroll and the + stays where it can be
@@ -67,18 +67,42 @@ app.
 
 ## Starting from CAD files
 
-Open a STEP file (`.step`, `.stp`), several at once, or a folder that has some in it,
-and the app makes a project of them. It does not work in the folder they came from,
+Open a STEP file (`.step`, `.stp`), a mesh (`.stl`, `.obj`), several at once, or a
+folder that has some in it, and the app makes a project of them. It does not work in the folder they came from,
 which could be laid out any way at all: it copies the files into a new folder beside its
 other projects, named for the file or the folder, and sets that up the way its own
 projects are. The copies go in `source/`; a `model.py` reads every body in them as a
-part with `read_step`, from the same [`kit/enclose.py`](../kit/enclose.py); and the
-build runs by itself, so the model is on screen a few seconds later.
+part with `read_step` (or `read_files`, where there are meshes), from the same
+[`kit/enclose.py`](../kit/enclose.py); and the build runs by itself, so the model is on
+screen a few seconds later.
 
 A file that is an assembly gives a part for each component, and a component that is
 several solids (how Shapr3D exports its bodies) gives a part for each, under the names
 the file has for them. From there it is a project like any other: ask Claude for a
 change and it edits `model.py`. What was opened is left as it was.
+
+### Meshes
+
+An STL or OBJ file is only triangles. Each body in one that closes on itself is made a
+solid as it is read, so it can be cut into, added to and cut in two like any other part;
+its flat faces are whole faces again. An OBJ file's objects, an STL file's solids, and
+pieces that do not touch the rest are parts of their own. A mesh says nothing of its
+units: it is taken to be in millimetres, unless the whole of it is less than one across,
+when it is taken to be in metres, as 3D programs write it.
+
+What was curved in it stays a run of flat faces, though, and nothing of it is a size any
+more: a hole cannot be made wider, nor an edge rounded. So beside the conversation the
+app offers to **Rebuild as editable design**. Claude then builds each part again with
+build123d, as its designer would have drawn it: it measures the mesh, takes its sizes
+from that, checks the new part against the mesh, and puts it in the mesh's place. From
+then on its sizes are in `model.py`, to be changed like any other project's. A scan or
+a sculpted figure is no shape a designer drew, and is left a mesh. **Keep the mesh**
+puts the offer away for that project.
+
+A part made of a mesh is drawn smooth where its triangles meet at a slight angle, and
+with an edge where they meet at more. It is in no STEP file, where its many faces would
+come to hundreds of megabytes: it is saved as STL or OBJ (see
+[Saving the model](parts.md#saving-the-model)).
 
 A folder that already holds a model the app can show, or an `enclose.json`, is a project
 as it stands and is opened where it is. So is a folder with no CAD file in it.

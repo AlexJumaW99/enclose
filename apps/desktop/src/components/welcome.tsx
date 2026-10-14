@@ -89,7 +89,7 @@ function Start() {
         )}
       </div>
       <p className="mt-5.5 text-[11px]/4 whitespace-nowrap text-foreground/80">
-        Only STEP files are compatible at the moment
+        Opens STEP, STL and OBJ files
       </p>
     </div>
   )

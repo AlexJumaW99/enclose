@@ -3,8 +3,8 @@
 ## The list of parts
 
 **Parts** (P) lists what the model is made of: a card for each group the model puts its
-parts in, and in it a row of the group's parts, each a picture with its name and the
-size of its STEP file. A row with more parts than fit scrolls sideways.
+parts in, and in it a row of the group's parts, each a picture with its name and, where
+STEP is what is [saved](#saving-the-model), the size of its STEP file. A row with more parts than fit scrolls sideways.
 
 Pick a part or a group and the view shows it on its own, with the camera brought to it,
 in the middle of what the list leaves of the view; pick it again and the rest comes
@@ -16,17 +16,27 @@ A part put out of sight with H is dim in the list, as is a group all of whose pa
 and picking it there brings it back; the button stays lit while anything is out of
 sight.
 
-## Saving STEP
+## Saving the model
 
 - **Download**, at the top of the right-hand edge, brings up the two ways there are to
-  have the whole model, each with how big its STEP is. **Full model** saves it as one
-  STEP file, with every part in its place. **Zip with parts** saves one zip archive with
-  a STEP file of each part in it; the size it gives is what those files come to, and the
-  archive is smaller. A model of a single part has only the first.
-- The arrow that comes up beside a part's name, in the list, saves that part as STEP.
-- The arrow beside a group's name saves the STEP files of all its parts, in a folder
-  named after the group, inside one you choose. A group of one part saves that part's
-  file, as the part's own arrow does.
+  have the whole model. **Full model** saves it as one file, with every part in its
+  place. **Zip with parts** saves one zip archive with a file of each part in it. A
+  model of a single part has only the first.
+- At the top of it, choose what they are saved as:
+  - **STEP**, for CAD programs: the files the build wrote, with how big each is. The size
+    given for the zip is what the files in it come to; the archive is smaller.
+  - **STL**, for a slicer: one mesh of all that is saved, in millimetres with Z up.
+  - **OBJ**, for a 3D program: each part an object of its own, under its name, in
+    millimetres with Z up.
+
+  STL and OBJ are made of what the view draws, which keeps within a fiftieth of a
+  millimetre of every curve, and every part has them. A part made of a mesh has no STEP
+  file (see [Meshes](projects.md#meshes)).
+- The arrow that comes up beside a part's name, in the list, saves that part, in what
+  was chosen there.
+- The arrow beside a group's name saves the files of all its parts, in a folder named
+  after the group, inside one you choose. A group of one part saves that part's file,
+  as the part's own arrow does.
 
 What is saved has the day it was saved before its name, the year, the month and the
 day: `2026_10_11_table-clock.step`. So do the folder a group's files go in, the zip

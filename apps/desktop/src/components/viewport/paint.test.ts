@@ -20,6 +20,7 @@ const part = (said: Partial<Part> = {}) => ({
     explode: [0, 0, 0] as [number, number, number],
     metal: false,
     clear: false,
+    mesh: false,
     ...said,
   },
   turn: 1,

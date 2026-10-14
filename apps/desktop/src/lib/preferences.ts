@@ -19,6 +19,9 @@ export type Pivot = "view" | "selection" | "pointer"
 /** What a length is said in: millimetres, or inches. */
 export type Unit = "mm" | "in"
 
+/** What the model's files are saved as: STEP, for CAD; or a mesh, STL or OBJ. */
+export type Format = "step" | "stl" | "obj"
+
 export type Preferences = Buttons & {
   /** what a scroll is taken to come from */
   scrolling: Scrolling
@@ -38,6 +41,8 @@ export type Preferences = Buttons & {
   units: Unit
   /** a file that is saved has the day before its name: 2026_10_11_table-clock.step */
   datedFiles: boolean
+  /** what the model's files are saved as, as last chosen where they are downloaded */
+  format: Format
 }
 
 export const TURN_SPEED = { min: 0.4, max: 2.5 }
@@ -53,6 +58,7 @@ const DEFAULTS: Preferences = {
   settleDays: SETTLE_DAYS.initial,
   units: "mm",
   datedFiles: true,
+  format: "step",
 }
 const KEY = "enclose:preferences"
 
@@ -97,6 +103,10 @@ function saved(): Preferences {
       settleDays,
       units: read.units === "in" ? "in" : DEFAULTS.units,
       datedFiles: read.datedFiles !== false,
+      format:
+        read.format === "stl" || read.format === "obj"
+          ? read.format
+          : DEFAULTS.format,
     }
   } catch {
     return DEFAULTS

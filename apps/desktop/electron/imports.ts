@@ -18,8 +18,10 @@ import {
   type Written,
 } from "./projects"
 
+/** The meshes that can be brought in: triangles only, which are made solids as they are read. */
+export const MESH_ENDINGS = [".stl", ".obj"]
 /** The files that can be brought in, by how their names end. */
-export const CAD_ENDINGS = [".step", ".stp"]
+export const CAD_ENDINGS = [".step", ".stp", ...MESH_ENDINGS]
 
 /** Where in a project the files it was made from are kept. */
 const SOURCE = "source"
@@ -31,6 +33,10 @@ const MAX_FOLDERS = 4000
 
 const isCad = (file: string) =>
   CAD_ENDINGS.includes(path.extname(file).toLowerCase())
+
+/** Whether a file brought in is a mesh, by its name. */
+export const isMesh = (file: string) =>
+  MESH_ENDINGS.includes(path.extname(file).toLowerCase())
 
 /** In the order a person would list them: "part 2" before "part 10". */
 const byName = (a: string, b: string) =>
@@ -266,11 +272,16 @@ export function modelScript(
 ): string {
   // (what JSON writes for a string is a string to Python too)
   const py = (text: string) => JSON.stringify(text)
+  // STEP files alone are read as they always were; with a mesh among them, by what
+  // reads both, and the parts made of a mesh are said to be
+  const meshes = files.some(isMesh)
+  const reader = meshes ? "read_files" : "read_step"
   const reading = [
-    "for found in read_step(",
+    `for found in ${reader}(`,
     ...files.map((file) => `    ${py(file)},`),
     "):",
   ]
+  const mesh = meshes ? ["        mesh=found.mesh,"] : []
   if (!arranged)
     return [
       `"""Builds this project's model from the CAD files in ${SOURCE}/.`,
@@ -279,7 +290,7 @@ export function modelScript(
       "change it to change the model, and run it again to see the change.",
       '"""',
       "",
-      "from enclose import Model, read_step",
+      `from enclose import Model, ${reader}`,
       "",
       `model = Model(${py(title)})`,
       "",
@@ -294,6 +305,7 @@ export function modelScript(
       "        label=found.label,",
       "        group=groups[found.group],",
       "        color=found.color,",
+      ...mesh,
       "    )",
       "",
       "model.write()",
@@ -312,7 +324,7 @@ export function modelScript(
     "to see the change.",
     '"""',
     "",
-    "from enclose import Model, read_step",
+    `from enclose import Model, ${reader}`,
     "",
     arranged.reference
       ? `model = Model(${py(title)}, reference=${py(arranged.reference)})`
@@ -346,6 +358,7 @@ export function modelScript(
     "        label=label,",
     "        group=groups[group],",
     "        color=found.color,",
+    ...mesh,
     "    )",
     "",
     "model.write()",

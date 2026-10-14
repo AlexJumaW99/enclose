@@ -624,6 +624,7 @@ on("turn/interrupt", () => {
     projects: {
       get: () => ({ path: dir, manifest: null, build: null, name: "Box" }),
       takeSession: () => null,
+      hasMeshes: () => false,
       refresh: () => {},
       christen: () => {},
     } as unknown as ThreadsDeps["projects"],

@@ -26,7 +26,9 @@ const write = (file: string, content: unknown = "") => {
 const MANIFEST = { parts: [{ id: "a", file: "a.glb" }] }
 
 beforeEach(() => {
-  root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "enclose-test-")))
+  root = fs.realpathSync(
+    fs.mkdtempSync(path.join(os.tmpdir(), "enclose-test-"))
+  )
 })
 afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true })
@@ -118,13 +120,31 @@ describe("sortOpened", () => {
     ])
   })
 
+  it("brings meshes in as CAD files", () => {
+    const stl = write("prints/Bracket.STL")
+    const obj = write("prints/knob.obj")
+    expect(sortOpened([stl, obj]).bundles).toEqual([
+      {
+        name: "prints",
+        files: [
+          { from: stl, as: "Bracket.STL" },
+          { from: obj, as: "knob.obj" },
+        ],
+      },
+    ])
+    expect(cadFilesIn(path.join(root, "prints"))).toEqual([
+      "Bracket.STL",
+      "knob.obj",
+    ])
+  })
+
   it("refuses what is neither a folder nor a CAD file", () => {
-    const stl = write("thing.stl")
+    const dwg = write("thing.dwg")
     const gone = path.join(root, "gone.step")
-    expect(sortOpened([stl, gone])).toEqual({
+    expect(sortOpened([dwg, gone])).toEqual({
       folders: [],
       bundles: [],
-      refused: [stl, gone],
+      refused: [dwg, gone],
     })
   })
 })
@@ -183,6 +203,36 @@ describe("bringIn", () => {
 })
 
 describe("modelScript", () => {
+  it("reads STEP files alone as it always has", () => {
+    const script = modelScript("Clock", ["source/clock.step"])
+    expect(script).toContain("from enclose import Model, read_step\n")
+    expect(script).toContain("for found in read_step(\n")
+    expect(script).not.toContain("mesh=")
+  })
+
+  it("reads meshes, with STEP files or without, and says which parts are made of one", () => {
+    for (const files of [
+      ["source/bracket.stl"],
+      ["source/clock.step", "source/knob.OBJ"],
+    ]) {
+      const script = modelScript("Clock", files)
+      expect(script).toContain("from enclose import Model, read_files\n")
+      expect(script).toContain("for found in read_files(\n")
+      expect(script).toContain("        mesh=found.mesh,\n")
+    }
+    const arranged = modelScript("Bracket", ["source/bracket.stl"], {
+      what: "a shelf bracket",
+      name: null,
+      reference: null,
+      groups: [{ label: "Bracket", shell: false }],
+      parts: [
+        { from: "bracket", id: "bracket", label: "Bracket", group: "Bracket" },
+      ],
+    })
+    expect(arranged).toContain("for found in read_files(\n")
+    expect(arranged).toContain("        mesh=found.mesh,\n")
+  })
+
   it("writes names that Python reads as they are", () => {
     const script = modelScript('6" rack "A"\\b', ["source/it's.step"])
     expect(script).toContain('model = Model("6\\" rack \\"A\\"\\\\b")')

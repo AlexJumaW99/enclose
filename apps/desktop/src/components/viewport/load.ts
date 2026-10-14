@@ -6,7 +6,10 @@
 // face each triangle came from is kept, so a click can still be traced to a face.
 import * as THREE from "three"
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js"
+import {
+  mergeGeometries,
+  toCreasedNormals,
+} from "three/addons/utils/BufferGeometryUtils.js"
 import { MeshBVH } from "three-mesh-bvh"
 
 import type { Group, Model, Part } from "@/lib/model"
@@ -117,6 +120,19 @@ function plain(source: THREE.BufferGeometry, matrix: THREE.Matrix4) {
   return geometry
 }
 
+/**
+ * A mesh's triangles, shaded smooth where they meet at no more than a slight angle, as
+ * the flats a curve was cut into do, and sharp where they meet at more, as at a corner.
+ * Each triangle has corners of its own then, and is counted in order, as before.
+ */
+function creased(geometry: THREE.BufferGeometry) {
+  const out = toCreasedNormals(geometry, (CREASE * Math.PI) / 180)
+  geometry.dispose()
+  const count = out.attributes.position.count
+  out.setIndex(Array.from({ length: count }, (_, i) => i))
+  return out
+}
+
 /** The colour a face came with, unless it is the loader's stand-in for "none given". */
 function fileColor(
   material: THREE.Material | THREE.Material[]
@@ -147,10 +163,11 @@ function join(
     const key = color ? color.getHexString() : "none"
     let bucket = buckets.get(key)
     if (!bucket) buckets.set(key, (bucket = { color, faces: [], faceOf: [] }))
-    const geometry = plain(
+    const flat = plain(
       mesh.geometry,
       TO_MODEL.clone().multiply(mesh.matrixWorld)
     )
+    const geometry = part.mesh ? creased(flat) : flat
     const triangles = (geometry.index?.count ?? 0) / 3
     for (let i = 0; i < triangles; i++) bucket.faceOf.push(faces)
     bucket.faces.push(geometry)
@@ -619,6 +636,7 @@ export function standInModel(): LoadedModel {
     explode: [0, 0, 0],
     metal: false,
     clear: false,
+    mesh: false,
   }
   const box = geometry.boundingBox!.clone()
   const nowhere = new THREE.Vector3()

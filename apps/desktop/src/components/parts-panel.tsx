@@ -3,9 +3,10 @@ import { cn } from "cn"
 import { DownloadIcon, EyeOffIcon, SquareDashedIcon } from "lucide-react"
 
 import { LOOSE } from "@/lib/arrange"
-import { partFile, sizeOf, type Download } from "@/lib/model"
+import { sizeOf } from "@/lib/model"
+import { usePreferences } from "@/lib/preferences"
 import { NO_SWEEP, sweptTo, toggled, toggledAll } from "@/lib/several"
-import { savedAs } from "@/lib/saved"
+import { savingParts } from "@/lib/saved"
 import { useStore, type Only } from "@/lib/store"
 import type { LoadedModel } from "./viewport/load"
 
@@ -158,7 +159,8 @@ function Title({
  * what was picked stays picked.
  *
  * A part's file is saved from the arrow that comes up beside its name, and the files of
- * all a group's parts, together in a folder, from the arrow beside the group's.
+ * all a group's parts, together in a folder, from the arrow beside the group's: as STEP,
+ * STL or OBJ, whichever was last chosen where the model is downloaded.
  *
  * A part that was put out of sight in the view (H) is dim here, and so is a group all
  * of whose parts were. Picking one of those brings it back, and does no more than that.
@@ -188,6 +190,7 @@ export function PartsPanel({
   const panel = React.useRef<HTMLDivElement>(null)
   const scroller = React.useRef<HTMLDivElement>(null)
   const { model } = loaded
+  const format = usePreferences((state) => state.format)
 
   // what is picked is shown on its own, and the camera brought to it; picked again,
   // the rest comes back and the camera goes back to where it was
@@ -248,9 +251,6 @@ export function PartsPanel({
   const show = (ids: string[]) =>
     setView({ hidden: hidden.filter((id) => !ids.includes(id)) })
 
-  const save = (file: Download) =>
-    void window.cad.model.saveCopy(projectId, file.file, savedAs(file.name))
-
   React.useEffect(() => {
     const away = (event: PointerEvent) => {
       const on = event.target as Element | null
@@ -309,16 +309,15 @@ export function PartsPanel({
           // parts in no group are listed as one, but are not one to pick or to name
           const loose = group.id === LOOSE
           const awaited = naming.includes(group.id)
-          // the files of its parts, each once, and how big they are together
-          const files = [
-            ...new Map(
-              parts.flatMap((part) => {
-                const file = partFile(model.downloads, part.id, part.label)
-                return file ? [[file.file, file] as const] : []
-              })
-            ).values(),
-          ]
-          const size = sizeOf(files.reduce((sum, file) => sum + file.bytes, 0))
+          // the files of its parts, and how big they are together where that is known
+          const saving = savingParts(
+            projectId,
+            model.downloads,
+            format,
+            parts,
+            group.label
+          )
+          const size = saving?.bytes ? sizeOf(saving.bytes) : null
           const pickAll = (too: boolean) => {
             const ids = parts.map((part) => part.id)
             if (gone) return show(ids)
@@ -367,28 +366,20 @@ export function PartsPanel({
                   onRename={loose ? null : (label) => onRename(group.id, label)}
                 />
                 {gone && <EyeOffIcon className={HIDDEN} />}
-                {files.length > 0 && (
+                {saving && (
                   <>
                     <span className="ml-auto shrink-0 pl-1.5 text-xs text-muted-foreground tabular-nums">
                       {size}
                     </span>
                     <Save
                       label={
-                        files.length === 1
+                        saving.files === 1
                           ? `Download ${group.label}`
-                          : `Download the ${files.length} parts of ${group.label}`
+                          : `Download the ${saving.files} parts of ${group.label}`
                       }
                       // its arrow stands where the card's room begins
                       className="-mr-1.5"
-                      onClick={() =>
-                        files.length === 1
-                          ? save(files[0])
-                          : void window.cad.model.saveCopies(
-                              projectId,
-                              files.map(({ file, name }) => ({ file, name })),
-                              savedAs(group.label)
-                            )
-                      }
+                      onClick={() => void saving.save()}
                     />
                   </>
                 )}
@@ -401,7 +392,13 @@ export function PartsPanel({
                   const lit =
                     !picked && (same(only, one) || among.includes(part.id))
                   const out = hidden.includes(part.id)
-                  const file = partFile(model.downloads, part.id, part.label)
+                  const file = savingParts(
+                    projectId,
+                    model.downloads,
+                    format,
+                    [part],
+                    part.label
+                  )
                   const url = thumbs[part.id]
                   return (
                     <div
@@ -471,7 +468,7 @@ export function PartsPanel({
                             {part.label}
                           </span>
                           <span className="text-muted-foreground tabular-nums">
-                            {(file && sizeOf(file.bytes)) || " "}
+                            {(file?.bytes && sizeOf(file.bytes)) || " "}
                           </span>
                         </span>
                       </button>
@@ -480,7 +477,7 @@ export function PartsPanel({
                           label={`Download ${part.label}`}
                           // there when the part is pointed at, or the keys are on it
                           className="absolute right-0 bottom-0.5 -mr-1.5 opacity-0 group-hover/part:opacity-100 focus-visible:opacity-100"
-                          onClick={() => save(file)}
+                          onClick={() => void file.save()}
                         />
                       )}
                     </div>

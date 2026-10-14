@@ -54,6 +54,7 @@ import { fileGuide, guideOf, guidesIn, removeGuide } from "./assembly"
 import { Changes } from "./changes"
 import { Versions } from "./versions"
 import { zipOf } from "./zip"
+import { MESH_FORMATS, meshFile, trianglesOf, type MeshFormat } from "./meshes"
 import { followRename, listCommands, lookAtClaude } from "./claude"
 import { lookAtCodex } from "./codex"
 import { readTools } from "./custom-tools"
@@ -156,6 +157,8 @@ const MIME: Record<string, string> = {
   ".json": "application/json",
   ".step": "model/step",
   ".stp": "model/step",
+  ".stl": "model/stl",
+  ".obj": "model/obj",
   // (the pictures put with messages: see shared/pictures.ts)
   ...Object.fromEntries(
     Object.entries(PICTURE_TYPES).map(([type, ending]) => [ending, type])
@@ -804,7 +807,7 @@ async function openFor(paths: string[]): Promise<Project | null> {
     const { id: last, refused } = open(paths)
     id = last
     if (!id && refused.length > 0)
-      trouble = `Enclose opens folders, and CAD files in STEP format (${CAD_ENDINGS.join(", ")}). ${
+      trouble = `Enclose opens folders, and CAD files: STEP, STL and OBJ (${CAD_ENDINGS.join(", ")}). ${
         refused.length === 1
           ? `“${path.basename(refused[0])}” is neither.`
           : "What was given is neither."
@@ -1211,6 +1214,104 @@ function wire() {
       )
       await fs.promises.writeFile(picked.filePath, archive)
       analytics?.record("model saved", { as: "files", files: wanted.length })
+      return true
+    }
+  )
+  ipcMain.handle(
+    CHANNEL.modelSaveMeshes,
+    async (
+      _,
+      id: string,
+      format: unknown,
+      sets: unknown,
+      how: unknown,
+      called: unknown
+    ) => {
+      const manifest = projects.get(id)?.manifest
+      if (
+        !win ||
+        !manifest ||
+        !MESH_FORMATS.includes(format as MeshFormat) ||
+        !Array.isArray(sets) ||
+        (how !== "file" && how !== "folder" && how !== "zip")
+      )
+        return false
+      const from = path.dirname(manifest)
+      const { parts } = JSON.parse(fs.readFileSync(manifest, "utf8")) as {
+        parts: { id: string; label?: string; file: string; matrix?: unknown }[]
+      }
+      const wanted = (sets as { name?: unknown; parts?: unknown }[]).flatMap(
+        (set) => {
+          const ids = Array.isArray(set?.parts) ? set.parts : []
+          const of = parts.filter((part) => ids.includes(part.id))
+          return of.length > 0
+            ? [{ name: path.basename(String(set?.name)), parts: of }]
+            : []
+        }
+      )
+      if (wanted.length === 0 || (how === "file" && wanted.length > 1))
+        return false
+      const name = path.basename(String(called))
+      let into: string
+      if (how === "folder") {
+        const picked = await dialog.showOpenDialog(win, {
+          message: `Choose where the folder "${name}" goes, with its ${wanted.length} ${String(format).toUpperCase()} files`,
+          buttonLabel: "Save here",
+          defaultPath: app.getPath("downloads"),
+          properties: ["openDirectory", "createDirectory"],
+        })
+        if (picked.canceled || !picked.filePaths[0]) return false
+        into = picked.filePaths[0]
+      } else {
+        const picked = await dialog.showSaveDialog(win, {
+          defaultPath: path.join(app.getPath("downloads"), name),
+        })
+        if (picked.canceled || !picked.filePath) return false
+        into = picked.filePath
+      }
+      // each part read once, however many of the files have it
+      const read = new Map<string, Float32Array>()
+      const triangles = async (part: (typeof parts)[number]) => {
+        let found = read.get(part.id)
+        if (!found) {
+          const source = resolveInside(from, part.file)
+          if (!source)
+            throw new Error(`"${part.file}" is not in the model's folder`)
+          const matrix = Array.isArray(part.matrix)
+            ? (part.matrix as number[])
+            : null
+          found = trianglesOf(await fs.promises.readFile(source), matrix)
+          read.set(part.id, found)
+        }
+        return found
+      }
+      const files = []
+      for (const set of wanted)
+        files.push({
+          name: set.name,
+          data: meshFile(
+            format as MeshFormat,
+            await Promise.all(
+              set.parts.map(async (part) => ({
+                label: part.label ?? part.id,
+                triangles: await triangles(part),
+              }))
+            )
+          ),
+        })
+      if (how === "file") await fs.promises.writeFile(into, files[0].data)
+      else if (how === "zip") await fs.promises.writeFile(into, zipOf(files))
+      else {
+        // a folder of its own, numbered where the name is taken: nothing is written over
+        const folder = makeFolder(into, name.replace(/^\.+/, "") || "parts")
+        for (const file of files)
+          await fs.promises.writeFile(path.join(folder, file.name), file.data)
+      }
+      analytics?.record("model saved", {
+        as: "files",
+        format: String(format),
+        files: files.length,
+      })
       return true
     }
   )

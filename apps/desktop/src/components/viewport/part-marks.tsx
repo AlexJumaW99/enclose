@@ -17,8 +17,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { Writing } from "@/components/writing"
-import { partFile, type Model } from "@/lib/model"
-import { savedAs } from "@/lib/saved"
+import type { Model } from "@/lib/model"
+import { usePreferences } from "@/lib/preferences"
+import { savingParts } from "@/lib/saved"
 import { goesBy, useStore, type Note, type Selection } from "@/lib/store"
 import type { LoadedPart } from "./load"
 
@@ -208,9 +209,10 @@ export function PartMarks({
       ? (state.notes[projectId]?.find((one) => one.id === writing) ?? null)
       : null
   )
+  const format = usePreferences((state) => state.format)
   const download = piece
-    ? undefined
-    : partFile(model.downloads, part.id, part.label)
+    ? null
+    : savingParts(projectId, model.downloads, format, [part], part.label)
   const written = writing !== null
   const at = React.useMemo(() => placeOn(loaded, point), [loaded, point])
   // a colour is being chosen, here: clicking anywhere else on the part is done with that
@@ -326,16 +328,7 @@ export function PartMarks({
             />
           </Does>
           {download && (
-            <Does
-              label="Download part"
-              onClick={() =>
-                void window.cad.model.saveCopy(
-                  projectId,
-                  download.file,
-                  savedAs(download.name)
-                )
-              }
-            >
+            <Does label="Download part" onClick={() => void download.save()}>
               <DownloadIcon />
             </Does>
           )}

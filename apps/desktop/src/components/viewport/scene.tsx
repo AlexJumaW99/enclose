@@ -1751,8 +1751,11 @@ function Picker({
         label: part.part.label,
         point: round(point),
         normal: normal && round(normal),
+        // (a part made of a mesh is all one face, as far as its file says)
         face:
-          hit.faceIndex == null ? null : (skin?.faceOf[hit.faceIndex] ?? null),
+          hit.faceIndex == null || part.part.mesh
+            ? null
+            : (skin?.faceOf[hit.faceIndex] ?? null),
       }
     }
 

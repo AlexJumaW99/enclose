@@ -34,6 +34,11 @@ gives every body in them as a part to hand over, or to change first:
         model.part(found.id, found.shape, label=found.label, group=groups[found.group])
     model.write()
 
+Meshes, STL and OBJ files, are read with `read_files`, which reads STEP files as well.
+A mesh's bodies are made solids, which can be cut into and added to, but whose curves
+are runs of flat faces: hand each over with `mesh=found.mesh`, which draws it smooth and
+keeps it out of the STEP files.
+
 Screws are not drawn by hand. Enclose has them in a file of its own beside this one,
 screws.py, which a project copies in as it does this: metric screws, nuts and washers
 in their standard sizes, each with its thread and with the holes that fit it. Its
@@ -75,13 +80,19 @@ import os
 import re
 import struct
 import sys
+import tempfile
 import time
 from dataclasses import dataclass
+
+import numpy as np
 
 from build123d import Color, Compound, Solid, export_gltf, export_step
 from OCP.BRep import BRep_Builder, BRep_Tool
 from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
 from OCP.BRepBndLib import BRepBndLib
+from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeSolid, BRepBuilderAPI_Sewing
+from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+from OCP.BRepLib import BRepLib
 from OCP.BRepGProp import BRepGProp
 from OCP.BRepMesh import BRepMesh_IncrementalMesh
 from OCP.Bnd import Bnd_Box
@@ -92,15 +103,24 @@ from OCP.IFSelect import IFSelect_RetDone
 from OCP.Quantity import Quantity_ColorRGBA
 from OCP.STEPCAFControl import STEPCAFControl_Reader
 from OCP.STEPConstruct import STEPConstruct
+from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
 from OCP.StepShape import StepShape_SolidModel
+from OCP.StlAPI import StlAPI_Reader, StlAPI_Writer
 from OCP.TCollection import TCollection_ExtendedString
 from OCP.TDataStd import TDataStd_Name
 from OCP.TDF import TDF_Label
 from OCP.TDocStd import TDocStd_Document
-from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_SHELL, TopAbs_SOLID
+from OCP.TopAbs import (
+    TopAbs_EDGE,
+    TopAbs_FACE,
+    TopAbs_IN,
+    TopAbs_SHELL,
+    TopAbs_SOLID,
+    TopAbs_VERTEX,
+)
 from OCP.TopExp import TopExp, TopExp_Explorer
 from OCP.TopLoc import TopLoc_Location
-from OCP.TopoDS import TopoDS, TopoDS_Compound
+from OCP.TopoDS import TopoDS, TopoDS_Compound, TopoDS_Shape
 from OCP.XCAFDoc import (
     XCAFDoc_ColorCurv,
     XCAFDoc_ColorGen,
@@ -135,14 +155,16 @@ def _as(kind: str):
     return getattr(TopoDS, f"{kind}_s", None) or getattr(TopoDS, kind)
 
 
-_as_compound, _as_edge, _as_face, _as_solid = (
+_as_compound, _as_edge, _as_face, _as_shell, _as_solid, _as_vertex = (
     _as("Compound"),
     _as("Edge"),
     _as("Face"),
+    _as("Shell"),
     _as("Solid"),
+    _as("Vertex"),
 )
 
-__all__ = ["Model", "Reference", "read_step"]
+__all__ = ["Model", "Reference", "read_files", "read_step"]
 
 MANIFEST = "enclose.model.json"
 REFERENCE = "enclose.reference.json"
@@ -212,6 +234,89 @@ def _write_mesh(shape, id: str, path: str, fine: bool) -> None:
         linear_deflection=1e6,
         angular_deflection=angular,
     )
+
+
+def _write_triangles(shape, path: str, fine: bool) -> None:
+    """Write a shape as one mesh, all its faces in one: for a shape of many thousands of
+    faces, as one made of a mesh is, which as a mesh of its own for each face would be
+    a file many times the size. The corners the faces share are written once, so that
+    the app finds the part closed."""
+    linear, angular = _FLATS[bool(fine)]
+    BRepMesh_IncrementalMesh(shape.wrapped, linear, False, angular, True)
+    with tempfile.TemporaryDirectory() as dir:
+        # (it is quickest had from what writes an STL file, which is all one mesh)
+        written = os.path.join(dir, "mesh.stl")
+        writer = StlAPI_Writer()
+        writer.ASCIIMode = False
+        if not writer.Write(shape.wrapped, written):
+            raise ValueError("the shape could not be cut into triangles")
+        _, triangles = _stl_triangles(written)[0]
+    corners, index = np.unique(
+        triangles.reshape(-1, 3).astype(np.float32), axis=0, return_inverse=True
+    )
+    # glTF is in metres with Y up: its upright is the model's Z, its front the model's
+    # -Y
+    corners = np.ascontiguousarray(
+        np.column_stack([corners[:, 0], corners[:, 2], -corners[:, 1]]) / 1000,
+        dtype=np.float32,
+    )
+    index = index.reshape(-1).astype(np.uint32)
+    _write_glb(corners, index, path)
+
+
+def _write_glb(corners: np.ndarray, index: np.ndarray, path: str) -> None:
+    """A binary glTF file of one mesh: its corners, and the triangles, three to a row of
+    `index`. It wears no colour of its own, so the app gives it the part's."""
+    data = corners.tobytes()
+    data += index.tobytes()
+    data += b"\0" * (-len(data) % 4)
+    doc = {
+        "asset": {"version": "2.0", "generator": "enclose.py"},
+        "scene": 0,
+        "scenes": [{"nodes": [0]}],
+        "nodes": [{"mesh": 0}],
+        "meshes": [{"primitives": [{"attributes": {"POSITION": 0}, "indices": 1}]}],
+        "buffers": [{"byteLength": len(data)}],
+        "bufferViews": [
+            {
+                "buffer": 0,
+                "byteOffset": 0,
+                "byteLength": corners.nbytes,
+                "target": 34962,
+            },
+            {
+                "buffer": 0,
+                "byteOffset": corners.nbytes,
+                "byteLength": index.nbytes,
+                "target": 34963,
+            },
+        ],
+        "accessors": [
+            {
+                "bufferView": 0,
+                "componentType": 5126,
+                "count": len(corners),
+                "type": "VEC3",
+                "min": corners.min(axis=0).tolist() if len(corners) else [0, 0, 0],
+                "max": corners.max(axis=0).tolist() if len(corners) else [0, 0, 0],
+            },
+            {
+                "bufferView": 1,
+                "componentType": 5125,
+                "count": len(index),
+                "type": "SCALAR",
+            },
+        ],
+    }
+    body = json.dumps(doc, separators=(",", ":")).encode()
+    body += b" " * (-len(body) % 4)
+    with open(path, "wb") as file:
+        file.write(b"glTF")
+        file.write(struct.pack("<II", 2, 12 + 8 + len(body) + 8 + len(data)))
+        file.write(struct.pack("<II", len(body), 0x4E4F534A))
+        file.write(body)
+        file.write(struct.pack("<II", len(data), 0x004E4942))
+        file.write(data)
 
 
 def _wound_fine(points, faces) -> bool:
@@ -285,6 +390,8 @@ class Found:
     group: str
     color: str | None
     shape: object
+    # made of a mesh's triangles (see `read_files`)
+    mesh: bool = False
 
 
 # what a CAD program calls a thing it was given no name for
@@ -451,14 +558,219 @@ def read_step(*files: str) -> list[Found]:
     or "Parts" where there is nothing of the kind. `color` is its colour in the file,
     as "#rrggbb", unless every body wears the same one, which then says nothing about
     any of them: it is left out, and the app gives each group a colour of its own."""
+    return read_files(*files)
+
+
+# What a mesh file is known by: its ending. A mesh is triangles and nothing more.
+_MESH_ENDINGS = (".stl", ".obj")
+
+# A triangle as a binary STL file keeps it: the way it faces, its three corners, and two
+# bytes nothing reads.
+_STL_TRIANGLE = np.dtype(
+    [("normal", "<f4", 3), ("corners", "<f4", (3, 3)), ("spare", "<u2")]
+)
+
+
+def _stl_triangles(path: str) -> list[tuple[str | None, np.ndarray]]:
+    """The triangles in an STL file, in each solid the file has, with the solid's name
+    if it gave one. A binary file is had by its size, which its count of triangles makes
+    exact: the word "solid" at its start, where an ASCII file has it, proves nothing."""
+    with open(path, "rb") as file:
+        data = file.read()
+    if len(data) >= 84:
+        (count,) = struct.unpack_from("<I", data, 80)
+        if 84 + 50 * count == len(data):
+            read = np.frombuffer(data, _STL_TRIANGLE, count, 84)
+            return [(None, read["corners"].astype(np.float64))]
+    text = data.decode("latin-1")
+    solids = []
+    solid = re.compile(r"^\s*solid\b([^\r\n]*)(.*?)^\s*endsolid", re.M | re.S)
+    for found in solid.finditer(text):
+        corners = re.findall(r"vertex\s+(\S+)\s+(\S+)\s+(\S+)", found.group(2))
+        if corners:
+            solids.append(
+                (_name(found.group(1)), np.array(corners, float).reshape(-1, 3, 3))
+            )
+    return solids
+
+
+def _obj_triangles(path: str) -> list[tuple[str | None, np.ndarray]]:
+    """The triangles in an OBJ file, in each object the file has, with its name. A file
+    that names no objects (o) but does name groups (g) is taken group by group. A face
+    of more than three corners is cut into triangles from its first corner."""
+    corners: list[list[float]] = []
+    # each face's corners, by the object and the group it is in
+    faces: dict[tuple[str | None, str | None], list[list[int]]] = {}
+    within: str | None = None
+    group: str | None = None
+    named_objects = False
+    with open(path, encoding="latin-1") as file:
+        for line in file:
+            words = line.split()
+            if not words:
+                continue
+            if words[0] == "v":
+                corners.append([float(v) for v in words[1:4]])
+            elif words[0] == "f":
+                # v, v/vt, v//vn or v/vt/vn; counted from 1, or back from the end
+                at = [int(word.split("/")[0]) for word in words[1:]]
+                at = [i - 1 if i > 0 else len(corners) + i for i in at]
+                faces.setdefault((within, group), []).extend(
+                    [at[0], at[k], at[k + 1]] for k in range(1, len(at) - 1)
+                )
+            elif words[0] == "o":
+                within, named_objects = " ".join(words[1:]), True
+            elif words[0] == "g":
+                group = " ".join(words[1:])
+    if not corners:
+        return []
+    every = np.array(corners, float)
+    lots: dict[str | None, list[list[int]]] = {}
+    for (obj, grp), triangles in faces.items():
+        lots.setdefault(obj if named_objects else grp, []).extend(triangles)
+    return [
+        (_name(name), every[np.array(triangles, dtype=np.int64)])
+        for name, triangles in lots.items()
+    ]
+
+
+def _solids_of(triangles: np.ndarray) -> list[object]:
+    """The bodies that triangles make: each that closes on itself a solid, with any it
+    holds inside as a hollow in it; what closes nothing, all together, a body of loose
+    surfaces. Each flat that was cut into triangles is one face again; what was curved
+    stays a run of flat faces, which is all a mesh has to say of it."""
+    with tempfile.TemporaryDirectory() as dir:
+        path = os.path.join(dir, "mesh.stl")
+        written = np.zeros(len(triangles), _STL_TRIANGLE)
+        written["corners"] = triangles
+        with open(path, "wb") as file:
+            # (the reader takes a file for ASCII unless something near its start is no
+            # letter at all, which the numbers that follow may not have)
+            file.write(b"\xff" * 80 + struct.pack("<I", len(triangles)))
+            file.write(written.tobytes())
+        raw = TopoDS_Shape()
+        if not StlAPI_Reader().Read(raw, path):
+            return []
+    # (the reader shares the corners the triangles share; this joins their edges too)
+    across = float(np.ptp(triangles.reshape(-1, 3), axis=0).max())
+    sewing = BRepBuilderAPI_Sewing(max(1e-4, across * 1e-6))
+    sewing.Add(raw)
+    sewing.Perform()
+    sewn = sewing.SewedShape()
+
+    closed, loose, builder, any_loose = [], TopoDS_Compound(), BRep_Builder(), False
+    builder.MakeCompound(loose)
+    shells = TopExp_Explorer(sewn, TopAbs_SHELL)
+    while shells.More():
+        shell = shells.Current()
+        if BRep_Tool.IsClosed_s(shell):
+            made = BRepBuilderAPI_MakeSolid(_as_shell(shell)).Solid()
+            BRepLib.OrientClosedSolid_s(made)
+            closed.append(made)
+        else:
+            builder.Add(loose, shell)
+            any_loose = True
+        shells.Next()
+    faces = TopExp_Explorer(sewn, TopAbs_FACE, TopAbs_SHELL)
+    while faces.More():
+        builder.Add(loose, faces.Current())
+        any_loose = True
+        faces.Next()
+
+    # The biggest first: one that is inside another is a hollow in it, as a cavity in a
+    # casting is, and not a body of its own.
+    def volume(shape) -> float:
+        props = GProp_GProps()
+        BRepGProp.VolumeProperties_s(shape, props)
+        return props.Mass()
+
+    closed.sort(key=volume, reverse=True)
+    outer: list[list] = []
+    for solid in closed:
+        vertex = TopExp_Explorer(solid, TopAbs_VERTEX).Current()
+        corner = BRep_Tool.Pnt_s(_as_vertex(vertex))
+        host = next(
+            (
+                one
+                for one in outer
+                if BRepClass3d_SolidClassifier(one[0], corner, 1e-6).State() == TopAbs_IN
+            ),
+            None,
+        )
+        if host is None:
+            outer.append([solid])
+        else:
+            host.append(solid)
+    bodies = []
+    for solid, *hollows in outer:
+        if hollows:
+            make = BRepBuilderAPI_MakeSolid(solid)
+            for hollow in hollows:
+                shell = TopExp_Explorer(hollow, TopAbs_SHELL).Current()
+                make.Add(_as_shell(shell.Reversed()))
+            solid = make.Solid()
+            BRepLib.OrientClosedSolid_s(solid)
+        unify = ShapeUpgrade_UnifySameDomain(solid, True, True, True)
+        unify.Build()
+        bodies.append(Solid(_as_solid(unify.Shape())))
+    if any_loose:
+        bodies.append(Compound(_as_compound(loose)))
+    return bodies
+
+
+def _read_mesh(file: str) -> list[tuple[str | None, object]]:
+    """The bodies in one mesh file, each with the name the file gives it if any."""
+    lots = (
+        _obj_triangles(file)
+        if file.lower().endswith(".obj")
+        else _stl_triangles(file)
+    )
+    lots = [(name, triangles) for name, triangles in lots if len(triangles) > 0]
+    if not lots:
+        return []
+    # A mesh says nothing of what it is measured in. Millimetres, as a printer takes it,
+    # unless the whole of it is less than one across: then metres, as a 3D program
+    # writes it, since nothing made is that small.
+    corners = np.concatenate([triangles.reshape(-1, 3) for _, triangles in lots])
+    if float(np.ptp(corners, axis=0).max()) < 1:
+        lots = [(name, triangles * 1000) for name, triangles in lots]
+    bodies = []
+    for name, triangles in lots:
+        solids = _solids_of(triangles)
+        bodies.extend(
+            (f"{name} {k}" if name and len(solids) > 1 else name, shape)
+            for k, shape in enumerate(solids, 1)
+        )
+    return bodies
+
+
+def read_files(*files: str) -> list[Found]:
+    """Every body in one or more CAD files, each as a part to hand to `Model.part`:
+    STEP files as `read_step` reads them, and meshes, STL and OBJ files, too.
+
+    A mesh is only triangles. Each part of one that closes on itself is made a solid,
+    so that it can be changed as any other is: cut into, added to, cut in two. Its flat
+    faces are whole faces again, but what is curved stays a run of flat faces, so what
+    was once a size of it (how wide a hole is) is no longer anything to change: a part
+    whose sizes are to change is built again with build123d, with the mesh to measure.
+    Such a part is `mesh`, which `Model.part` is to be told. A file's objects (OBJ) or
+    solids (STL) are parts, and so is each piece of one that does not touch the rest.
+    A mesh that is less than a millimetre across is taken to be in metres."""
     here = os.path.dirname(os.path.abspath(sys.argv[0] or "."))
     found: list[Found] = []
     taken: set[str] = set()
+    steps = [file for file in files if not file.lower().endswith(_MESH_ENDINGS)]
     for file in files:
         stem = os.path.splitext(os.path.basename(file))[0]
-        bodies = _read(file if os.path.isabs(file) else os.path.join(here, file))
-        if bodies is None:
-            raise ValueError(f"{file} could not be read as a STEP file.")
+        path = file if os.path.isabs(file) else os.path.join(here, file)
+        if file in steps:
+            bodies = _read(path)
+            if bodies is None:
+                raise ValueError(f"{file} could not be read as a STEP file.")
+            mesh = False
+        else:
+            bodies = [([], name, None, shape) for name, shape in _read_mesh(path)]
+            mesh = True
         if not bodies:
             raise ValueError(f"{file} has nothing in it that can be shown.")
         counted: dict[str, int] = {}
@@ -475,7 +787,9 @@ def read_step(*files: str) -> list[Found]:
                 n += 1
                 id = f"{base}_{n}"
             taken.add(id)
-            found.append(Found(id, name, within[0] if within else "Parts", colour, shape))
+            found.append(
+                Found(id, name, within[0] if within else "Parts", colour, shape, mesh)
+            )
     if len({body.color for body in found}) == 1:
         for body in found:
             body.color = None
@@ -539,6 +853,7 @@ class Model:
         finish: str | None = None,
         explode: tuple[float, float, float] | None = None,
         glass: bool | None = None,
+        mesh: bool = False,
     ) -> None:
         """One part: a thing made, bought or fitted on its own. `id` is short, unique and
         stays the same between builds. `shape` is the build123d shape, already where it
@@ -552,7 +867,11 @@ class Model:
         `explode` is where the part goes when the model is pulled apart, in mm; leave
         it out and the app works one out. (`glass` did something once and does nothing
         now: the app's glass view sees through every part. It is taken so that a model
-        written with it still builds.)"""
+        written with it still builds.)
+        `mesh=True` is for a shape made of a mesh's triangles, as `read_files` gives
+        one, whatever has been done to it since: it is drawn smooth where its flat
+        faces meet at a slight angle, as a curve that was cut into them, and it is in
+        no STEP file, where its many faces would come to hundreds of megabytes."""
         if id in self._shapes:
             raise ValueError(f'two parts share the id "{id}"')
         if group is None:
@@ -566,6 +885,8 @@ class Model:
             entry["finish"] = finish
         if explode:
             entry["explode"] = [float(v) for v in explode]
+        if mesh:
+            entry["mesh"] = True
         self._shapes[id] = _shape(shape)
         self._parts.append(entry)
 
@@ -589,10 +910,16 @@ class Model:
         for entry in self._parts:
             started = time.time()
             id, shape = entry["id"], self._shapes[entry["id"]]
-            _write_mesh(shape, id, os.path.join(self.out, f"{id}.glb"), self.fine)
-            _write_edges(shape, os.path.join(self.out, f"{id}.edges.bin"))
-            entry.update(file=f"{id}.glb", edges=f"{id}.edges.bin")
-            if self.downloads:
+            if entry.get("mesh"):
+                # the app draws its edges where its faces meet at more than a slight
+                # angle: what a CAD program would draw, of a curve cut into flats
+                _write_triangles(shape, os.path.join(self.out, f"{id}.glb"), self.fine)
+                entry.update(file=f"{id}.glb")
+            else:
+                _write_mesh(shape, id, os.path.join(self.out, f"{id}.glb"), self.fine)
+                _write_edges(shape, os.path.join(self.out, f"{id}.edges.bin"))
+                entry.update(file=f"{id}.glb", edges=f"{id}.edges.bin")
+            if self.downloads and not entry.get("mesh"):
                 step = os.path.join(self.out, "step", f"{id}.step")
                 export_step(shape, step)
                 downloads.append(
@@ -608,7 +935,13 @@ class Model:
                 )
             print(f"  {entry['label']}: {time.time() - started:.1f}s")
 
-        if self.downloads and len(self._parts) > 1:
+        # (the whole is had as STEP only where every part of it is: one in part would be
+        # taken for all of it)
+        if (
+            self.downloads
+            and len(self._parts) > 1
+            and not any(entry.get("mesh") for entry in self._parts)
+        ):
             name = _slug(self.title or "model")
             bodies = []
             for entry in self._parts:

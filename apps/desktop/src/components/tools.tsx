@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Kbd } from "@/components/ui/kbd"
 import { Toggle } from "@/components/ui/toggle"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import {
   Tooltip,
   TooltipContent,
@@ -33,6 +34,7 @@ import {
 } from "@/components/ui/tooltip"
 import { oneFile, sizeOf } from "@/lib/model"
 import { MAC } from "@/lib/platform"
+import { usePreferences, type Format } from "@/lib/preferences"
 import { savedAs } from "@/lib/saved"
 import { SPREAD, useStore } from "@/lib/store"
 import type { LoadedModel } from "./viewport/load"
@@ -182,11 +184,20 @@ export function Switch({
   )
 }
 
+/** What the model's files can be saved as, in the order they are offered. */
+const FORMATS: { value: Format; label: string }[] = [
+  { value: "step", label: "STEP" },
+  { value: "stl", label: "STL" },
+  { value: "obj", label: "OBJ" },
+]
+
 /**
  * The model as files, to take elsewhere: a button that brings up the ways there are to
  * have it. All of it in one file, every part in its place; or its parts, each in a file
  * of its own, in one archive. One part of it, or the parts of one group, are had from
- * the list of parts. There is no button for a model that has no files to hand out.
+ * the list of parts. Each is had as STEP, for CAD, as the build wrote it; or as a mesh,
+ * STL for a slicer or OBJ for a 3D program, made of what the view draws. What is chosen
+ * here is what the list of parts saves, too.
  */
 function Downloads({
   loaded,
@@ -197,16 +208,22 @@ function Downloads({
 }) {
   const [open, setOpen] = React.useState(false)
   const say = useStore((state) => state.say)
-  const { downloads, title } = loaded.model
-  const whole = oneFile(downloads)
+  const format = usePreferences((state) => state.format)
+  const change = usePreferences((state) => state.change)
+  const { downloads, title, parts: every } = loaded.model
+  if (loaded.standIn || every.length === 0) return null
+  const step = oneFile(downloads)
   // (a model of one part is all there in that part's file: there is nothing to archive)
   const parts = downloads.filter((file) => file.kind === "part")
   const apart = parts.length > 1 ? parts : []
-  if (!whole && apart.length === 0) return null
   // the archive goes by what the whole model's file does, or the model
   const called =
-    whole?.name.replace(/\.[^.]+$/, "") ||
+    step?.name.replace(/\.[^.]+$/, "") ||
     (title ?? "model").replace(/[^A-Za-z0-9]+/g, "-").toLowerCase()
+  const kind = FORMATS.find((one) => one.value === format)!.label
+  const zipped = (count: number) => (saved: boolean) => {
+    if (saved) say(`Saved ${count} parts as a zip`)
+  }
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <Tooltip disableHoverablePopup>
@@ -224,51 +241,132 @@ function Downloads({
       </Tooltip>
       {/* (wide enough for a name and a size on one line) */}
       <DropdownMenuContent side="left" align="start" className="w-60">
-        <DropdownMenuGroup>
-          {whole && (
+        <ToggleGroup
+          aria-label="Format"
+          variant="outline"
+          size="sm"
+          spacing={0}
+          className="w-full p-1"
+          value={[format]}
+          // one is always chosen: pressing the chosen one again changes nothing
+          onValueChange={(chosen) => {
+            const next = chosen.find((one) => one !== format) as
+              Format | undefined
+            if (next) change({ format: next })
+          }}
+        >
+          {FORMATS.map((option) => (
+            <ToggleGroupItem
+              key={option.value}
+              value={option.value}
+              // the chosen one is lit the way a button that is on is
+              className="flex-1 aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary/85 aria-pressed:hover:text-primary-foreground"
+            >
+              {option.label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+        {format === "step" ? (
+          step || apart.length > 0 ? (
+            <DropdownMenuGroup>
+              {step && (
+                <DropdownMenuItem
+                  onClick={() =>
+                    void window.cad.model.saveCopy(
+                      projectId,
+                      step.file,
+                      savedAs(step.name)
+                    )
+                  }
+                >
+                  Full model
+                  <Size kind={kind} bytes={step.bytes} />
+                </DropdownMenuItem>
+              )}
+              {apart.length > 0 && (
+                <DropdownMenuItem
+                  onClick={() =>
+                    void window.cad.model
+                      .saveArchive(
+                        projectId,
+                        apart.map(({ file, name }) => ({ file, name })),
+                        savedAs(`${called}-parts.zip`)
+                      )
+                      .then(zipped(apart.length))
+                  }
+                >
+                  Zip with parts
+                  {/* (what the files in it come to: the archive itself is smaller) */}
+                  <Size
+                    kind={kind}
+                    bytes={apart.reduce((all, file) => all + file.bytes, 0)}
+                  />
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuGroup>
+          ) : (
+            // a model made of a mesh, or built without them
+            <p className="px-2 py-1.5 text-xs text-balance text-muted-foreground">
+              This model has no STEP files. It can be saved as STL or OBJ.
+            </p>
+          )
+        ) : (
+          <DropdownMenuGroup>
             <DropdownMenuItem
               onClick={() =>
-                void window.cad.model.saveCopy(
+                void window.cad.model.saveMeshes(
                   projectId,
-                  whole.file,
-                  savedAs(whole.name)
+                  format,
+                  [
+                    {
+                      name: `${called}.${format}`,
+                      parts: every.map((part) => part.id),
+                    },
+                  ],
+                  "file",
+                  savedAs(`${called}.${format}`)
                 )
               }
             >
               Full model
-              <Size bytes={whole.bytes} />
+              <Size kind={kind} />
             </DropdownMenuItem>
-          )}
-          {apart.length > 0 && (
-            <DropdownMenuItem
-              onClick={() =>
-                void window.cad.model
-                  .saveArchive(
-                    projectId,
-                    apart.map(({ file, name }) => ({ file, name })),
-                    savedAs(`${called}-parts.zip`)
-                  )
-                  .then((saved) => {
-                    if (saved) say(`Saved ${apart.length} parts as a zip`)
-                  })
-              }
-            >
-              Zip with parts
-              {/* (what the files in it come to: the archive itself is smaller) */}
-              <Size bytes={apart.reduce((all, file) => all + file.bytes, 0)} />
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuGroup>
+            {every.length > 1 && (
+              <DropdownMenuItem
+                onClick={() =>
+                  void window.cad.model
+                    .saveMeshes(
+                      projectId,
+                      format,
+                      every.map((part) => ({
+                        name: `${part.id}.${format}`,
+                        parts: [part.id],
+                      })),
+                      "zip",
+                      savedAs(`${called}-parts.zip`)
+                    )
+                    .then(zipped(every.length))
+                }
+              >
+                Zip with parts
+                <Size kind={kind} />
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuGroup>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )
 }
 
-/** What kind of file a way of having the model is, and how big: at the end of its row. */
-function Size({ bytes }: { bytes: number }) {
+/**
+ * What kind of file a way of having the model is, and how big where that is known: at
+ * the end of its row. (A mesh is made as it is saved, so how big is not known before.)
+ */
+function Size({ kind, bytes }: { kind: string; bytes?: number }) {
   return (
     <span className="ml-auto shrink-0 pl-4 text-xs whitespace-nowrap text-muted-foreground tabular-nums">
-      STEP {sizeOf(bytes)}
+      {kind} {bytes !== undefined && sizeOf(bytes)}
     </span>
   )
 }

@@ -676,6 +676,20 @@ export type CadApi = {
       name: string
     ): Promise<boolean>
     /**
+     * save parts of the model as meshes, STL or OBJ, made of what the view draws: each
+     * set of parts given is one file, called `name` (one STL keeps no parts apart; an
+     * OBJ has each as an object). One set is saved where the user picks (`called` is
+     * what it goes by unless they say otherwise); several go in a new folder called
+     * `called`, or in one zip archive called that
+     */
+    saveMeshes(
+      projectId: string,
+      format: "stl" | "obj",
+      sets: { name: string; parts: string[] }[],
+      how: "file" | "folder" | "zip",
+      called: string
+    ): Promise<boolean>
+    /**
      * save a drawing the app has made of a model, an SVG, somewhere the user picks:
      * `name` is what the file is called unless they call it something else
      */
@@ -882,6 +896,7 @@ export const CHANNEL = {
   modelSaveCopy: "model:save-copy",
   modelSaveCopies: "model:save-copies",
   modelSaveArchive: "model:save-archive",
+  modelSaveMeshes: "model:save-meshes",
   modelSaveDrawing: "model:save-drawing",
   modelSaveDrawings: "model:save-drawings",
   modelNameGroup: "model:name-group",

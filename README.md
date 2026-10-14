@@ -4,7 +4,7 @@ A desktop workbench for CAD projects that are built from code
 ([enclose.dev](https://enclose.dev)). You look at the model in 3D, click the part you
 mean, say what should change, and Claude edits the project and rebuilds it.
 
-Early days: for macOS only, and of CAD files it opens only STEP.
+Early days: for macOS only, and of CAD files it opens STEP, STL and OBJ.
 
 ## Install
 

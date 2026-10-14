@@ -538,6 +538,23 @@ export class Projects {
     })
   }
 
+  /**
+   * Whether a project's model has parts made of a mesh (an STL or OBJ file), as its
+   * manifest says: what the agent is to be told about, when it has.
+   */
+  hasMeshes(id: string): boolean {
+    const manifest = this.found.get(id)?.manifest
+    if (!manifest) return false
+    try {
+      const { parts } = JSON.parse(fs.readFileSync(manifest, "utf8")) as {
+        parts?: { mesh?: unknown }[]
+      }
+      return Array.isArray(parts) && parts.some((part) => part?.mesh === true)
+    } catch {
+      return false
+    }
+  }
+
   /** Whether a folder is one of the projects already. */
   knows(dir: string): boolean {
     try {

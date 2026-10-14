@@ -419,6 +419,41 @@ function Item({
 }
 
 /**
+ * A model made of a mesh can be cut into and added to, but what was a size of it is
+ * gone: offered here, the agent builds it again as code, with the mesh to measure. Or
+ * the mesh is kept as it is, and this is not offered again.
+ */
+function RebuildOffer({ project }: { project: Project }) {
+  const offered = useStore(
+    (state) =>
+      state.meshes[project.id] === true &&
+      !state.keptMeshes.includes(project.id)
+  )
+  const rebuild = useStore((state) => state.rebuild)
+  const keepMesh = useStore((state) => state.keepMesh)
+  if (!offered) return null
+  return (
+    <div className="flex flex-col gap-2.5 rounded-lg border bg-card px-3.5 py-3 text-sm">
+      <div className="flex flex-col gap-0.5">
+        <span className="font-medium">Made from a mesh</span>
+        <span className="text-balance text-muted-foreground">
+          It can be cut into and added to, but its sizes can’t be changed until
+          it is rebuilt as code.
+        </span>
+      </div>
+      <div className="flex gap-1.5">
+        <Button size="sm" onClick={() => rebuild(project.id)}>
+          Rebuild as editable design
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => keepMesh(project.id)}>
+          Keep the mesh
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+/**
  * What the conversation goes by, at the top of it. Clicked, it is written over: Enter,
  * or clicking away, keeps what is written, and Esc leaves it as it was. Left empty, the
  * conversation goes back to going by the first thing said in it.
@@ -759,6 +794,10 @@ export function Thread({ project }: { project: Project }) {
       )}
 
       <div className="flex flex-col gap-2 p-3.5 pt-0">
+        {/* (not while anything is being done here, which it would only be in the way of) */}
+        {!working && !elsewhere && project.lookOver === null && (
+          <RebuildOffer project={project} />
+        )}
         <Composer
           placeholder={
             project.manifest
