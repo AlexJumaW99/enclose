@@ -154,6 +154,13 @@ export type PartRef = {
 export type PartNote = { part: PartRef; text: string }
 
 /**
+ * Words picked out of what was said in a conversation, and what the user says of them:
+ * an answer to something that was asked there, or what they want made clear. Nothing
+ * said, where the words are only pointed to, for the message to be about.
+ */
+export type Quote = { quote: string; text: string }
+
+/**
  * A picture put with a message: a photo, a sketch, a drawing. The app keeps a copy of
  * it, with the project's others, and shows it from there.
  */
@@ -196,6 +203,8 @@ export type ThreadItem =
       part: PartRef | null
       /** what was said of parts of the model, sent along with the message */
       notes?: PartNote[]
+      /** what was said of words picked out of the conversation, sent along with it too */
+      quotes?: Quote[]
       /**
        * The whole objects called on from the view for the message, which is about them:
        * each as one thing, and not as the parts it is made of.
@@ -737,7 +746,9 @@ export type CadApi = {
        */
       reference?: string | null,
       /** the pictures that go with it, as the app keeps them */
-      pictures?: Attached[]
+      pictures?: Attached[],
+      /** the words picked out of the conversation that go with it, and what is said of each */
+      quotes?: Quote[]
     ): Promise<string | null>
     /**
      * Have Claude look over the model of files just opened, from what the view shows of

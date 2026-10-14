@@ -97,7 +97,8 @@ const api: CadApi = {
       objects,
       manner,
       reference,
-      pictures
+      pictures,
+      quotes
     ) =>
       ipcRenderer.invoke(
         CHANNEL.threadSend,
@@ -108,7 +109,8 @@ const api: CadApi = {
         objects,
         manner,
         reference ?? null,
-        pictures ?? []
+        pictures ?? [],
+        quotes ?? []
       ),
     lookOver: (projectId, seen, manner) =>
       ipcRenderer.invoke(CHANNEL.threadLookOver, projectId, seen, manner),

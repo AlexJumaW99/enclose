@@ -25,6 +25,7 @@ import type {
   PermissionAnswer,
   ProviderId,
   Question,
+  Quote,
   Said,
   Seen,
   ThreadItem,
@@ -111,6 +112,8 @@ type Asked = {
   reference?: string
   /** the pictures that go with the message */
   pictures?: Shown[]
+  /** the words picked out of the conversation that go with it, and what is said of each */
+  quotes?: Quote[]
   /**
    * It is what the user asked for in another conversation, as the agent summed it up
    * there: the conversation it begins is a new version of the project
@@ -609,6 +612,7 @@ function guide(
     ...ANSWERING,
     "- A message may hold a <comments> block: things the user has said of parts of the model, one <comment> for each. Each names the part and gives the point on it they clicked, the way the surface faces there and which face it is, in the model's own coordinates (mm, Z up), and holds what they said. Take each as a change wanted at that place. The rest of the message, if there is any, is what they said of the model as a whole.",
     "- A click in the view picks out a whole object, not one part of it: the parts of a group that touch one another, such as a circuit board with all that is on it. A <comment> made of one has object, what the app calls it, and parts, the ids of all its parts. Its part, id and point are then only where on the object the user clicked: take what they said as said of the whole object, unless it says otherwise.",
+    "- A message may hold a <quotes> block: words the user picked out of what you said earlier in this conversation, one <quote> for each. The lines of a quote that begin with > are your words, as they picked them out. What comes after them in the quote is what the user says to those words: their answer, where you asked something there, or what they want explained, changed or done about it. A quote with nothing after its words is only pointed to, and the rest of the message is said of it. Take each quote for itself, and leave none unanswered.",
     `- A message may hold an <objects> block: whole objects the user picked out in the view for the message to be about, one <object> for each, with what the app calls it and the ids of all its parts. What the message says, it says of those objects, each as one thing: they are what the user means by "this", "these" or "them". The user may still want only some part of one changed (the cap of a button, one chip on a board) and say so in their own words, not by its id: then find that part among the object's parts, by their labels, sizes and places (${tool(VIEWPORT, "parts")}) or by looking (${tool(VIEWPORT, "screenshot")}), and change that part alone. Ask which they mean only if it cannot be told.`,
     "- The user can take back what one of your turns did to the project's files, with Cmd+Z in the app, and put it back again: it is how they try a change and think better of it, and it costs them nothing. The next message then leads with an <undone> block that names each such turn by what was asked for in it. The project's files, and the model built from them, are as they were before that turn, whatever you remember having done in it: read a file again before you go on from it, and do not make the change again unless you are asked to. A <redone> block names turns whose changes were put back since: the files are as those turns left them.",
     ...picturing(tool),
@@ -684,15 +688,17 @@ const NOT_TOLD: Told = { undone: [], redone: [] }
  * The message as Claude gets it: which of its turns have had what they did taken back
  * since it last heard, or put back; the reference scene the message is about, if it is
  * about that and not the model; the whole objects it is about; what was said of parts
- * of the model; and then the message. A message that is a command leads with it, or
- * Claude Code would not know it for one.
+ * of the model; what was said of words picked out of the conversation; and then the
+ * message. A message that is a command leads with it, or Claude Code would not know it
+ * for one.
  */
 export function withNotes(
   text: string,
   notes: PartNote[],
   objects: ObjectRef[] = [],
   told: Told = NOT_TOLD,
-  reference: Referenced | null = null
+  reference: Referenced | null = null,
+  quotes: Quote[] = []
 ): string {
   const turned = (["undone", "redone"] as const).flatMap((how) =>
     told[how].length > 0
@@ -720,7 +726,8 @@ export function withNotes(
     notes.length === 0 &&
     objects.length === 0 &&
     turned.length === 0 &&
-    scene.length === 0
+    scene.length === 0 &&
+    quotes.length === 0
   )
     return text
   const at = (v: number[] | null) =>
@@ -748,7 +755,22 @@ export function withNotes(
           "</comments>",
         ]
       : []
-  const ahead = [turned, scene, called, comments]
+  // the words picked out are marked line by line, as words quoted in a letter are, so
+  // that nothing in them is taken for the end of the quote, or for what was said of it
+  const quoted =
+    quotes.length > 0
+      ? [
+          "<quotes>",
+          ...quotes.flatMap(({ quote, text: said }) => [
+            "<quote>",
+            ...quote.split("\n").map((line) => `> ${line}`.trimEnd()),
+            ...(said ? [said] : []),
+            "</quote>",
+          ]),
+          "</quotes>",
+        ]
+      : []
+  const ahead = [turned, scene, called, comments, quoted]
     .filter((block) => block.length > 0)
     .flatMap((block, index) => (index > 0 ? ["", ...block] : block))
   return (text.startsWith("/") ? [text, "", ...ahead] : [...ahead, "", text])
@@ -927,8 +949,12 @@ function wordsOf(item: Extract<ThreadItem, { kind: "user" | "assistant" }>) {
   // of what Claude said, the part it said outright: the rest is for whoever asks
   if (item.kind === "assistant") return replyOf(item.text).said
   if (item.text) return item.text
-  // nothing but what was said of parts: or, with nothing said at all, what it is about
-  const said = (item.notes ?? []).map((note) => note.text)
+  // nothing but what was said of parts, and of words picked out: or, with nothing said
+  // at all, what it is about
+  const said = [
+    ...(item.notes ?? []).map((note) => note.text),
+    ...(item.quotes ?? []).flatMap((one) => (one.text ? [one.text] : [])),
+  ]
   const pictures = item.pictures?.length ?? 0
   return (
     said.length > 0
@@ -936,6 +962,7 @@ function wordsOf(item: Extract<ThreadItem, { kind: "user" | "assistant" }>) {
       : [
           ...(item.reference ? [item.reference] : []),
           ...(item.objects ?? []).map((one) => one.label),
+          ...(item.quotes ?? []).map((one) => `“${one.quote}”`),
           ...(pictures > 0
             ? [pictures === 1 ? "An image" : `${pictures} images`]
             : []),
@@ -975,6 +1002,7 @@ function saidOf(
     text,
     part: null,
     ...(notes.length > 0 ? { notes } : {}),
+    ...(asked.quotes?.length ? { quotes: asked.quotes } : {}),
     ...(objects.length > 0 ? { objects } : {}),
     ...(asked.reference ? { reference: asked.reference } : {}),
     ...(pictures.length > 0
@@ -1281,17 +1309,20 @@ export class Threads {
     /** the reference scene on screen, when that is what the message is about */
     reference: Referenced | null = null,
     /** the pictures that go with it */
-    pictures: Shown[] = []
+    pictures: Shown[] = [],
+    /** the words picked out of the conversation that go with it, and what is said of each */
+    quotes: Quote[] = []
   ): string | null {
     const asked: Asked = {
       content: (told, provider) =>
         pictured(
-          withNotes(text, notes, objects, told, reference),
+          withNotes(text, notes, objects, told, reference, quotes),
           pictures,
           TAKES_PICTURES[provider]
         ),
       reference: reference?.name,
       pictures,
+      quotes,
     }
     return this.say(
       projectId,

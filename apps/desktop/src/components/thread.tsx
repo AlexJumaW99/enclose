@@ -8,6 +8,7 @@ import {
   GitBranchPlusIcon,
   PanelRightCloseIcon,
   PlusIcon,
+  QuoteIcon,
   TriangleAlertIcon,
   XIcon,
 } from "lucide-react"
@@ -22,6 +23,7 @@ import { Composer } from "@/components/composer"
 import { ReferenceIcon } from "@/components/icons"
 import { Thumb } from "@/components/picture"
 import { QuestionCard } from "@/components/question"
+import { QUOTABLE, Quoting } from "@/components/quoting"
 import { Reply } from "@/components/reply"
 import { Steps } from "@/components/steps"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -40,6 +42,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { stretches } from "@/lib/mentions"
+import { inLine } from "@/lib/quotes"
 import { answering, PROVIDER_WORDS, usable } from "@/lib/providers"
 import { inBlocks, type Block } from "@/lib/steps"
 import {
@@ -189,6 +192,25 @@ function UserMessage({
           ))}
         </div>
       )}
+      {/* what was said of words picked out of the conversation, each under its words */}
+      {item.quotes?.map((one, index) => (
+        <Bubble
+          key={index}
+          of={one.quote + one.text}
+          waiting={waiting}
+          className="flex flex-col items-start gap-1.5"
+        >
+          {/* how the words begin, in one line, as a chip like a part's: it is what was
+              said of them that is read here, and all of them are told where the pointer
+              rests on the chip */}
+          <Badge variant="outline" title={one.quote} className="max-w-full">
+            {/* (the sign keeps its size: it is the words that give way) */}
+            <QuoteIcon data-icon="inline-start" className="shrink-0" />
+            <span className="min-w-0 truncate">{inLine(one.quote)}</span>
+          </Badge>
+          {one.text}
+        </Bubble>
+      ))}
       {/* what was said of parts, each under the name of its part */}
       {item.notes?.map((note, index) => (
         <Bubble
@@ -370,7 +392,12 @@ function Item({
     case "user":
       return <UserMessage item={item} project={project} />
     case "assistant":
-      return <Reply item={item} />
+      // (words of an answer can be picked out, for something to be said of them)
+      return (
+        <div {...{ [QUOTABLE]: "" }}>
+          <Reply item={item} />
+        </div>
+      )
     case "permission":
       return <PermissionCard item={item} project={project} />
     case "question":
@@ -570,6 +597,7 @@ export function Thread({ project }: { project: Project }) {
   const setThreadOpen = useStore((state) => state.setThreadOpen)
   const width = useStore((state) => state.threadWidth)
   const end = React.useRef<HTMLDivElement>(null)
+  const panel = React.useRef<HTMLElement>(null)
 
   const openId = open?.id
   React.useEffect(() => {
@@ -605,6 +633,7 @@ export function Thread({ project }: { project: Project }) {
 
   return (
     <aside
+      ref={panel}
       // (a ground of its own, for the light that goes across it to go behind the rest)
       className="relative isolate flex shrink-0 flex-col border-l bg-background"
       // however wide it was dragged, the view keeps its share of a narrower window
@@ -615,6 +644,8 @@ export function Thread({ project }: { project: Project }) {
       }}
     >
       <Edge />
+      {/* (what is being quoted is this conversation's: it is let go of with it) */}
+      <Quoting key={open?.id ?? "new"} panel={panel} />
       {/* a faint light across its ground, for as long as the new version is on its way */}
       {versioning && <div aria-hidden className="version-coming" />}
       <header className="drag flex h-12 shrink-0 items-center justify-between gap-2 pr-3 pl-8">

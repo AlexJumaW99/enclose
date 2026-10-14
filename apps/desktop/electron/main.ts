@@ -34,6 +34,7 @@ import {
   type PartNote,
   type PermissionAnswer,
   type Project,
+  type Quote,
   type ReferenceSource,
   type Seen,
   type Settings,
@@ -741,6 +742,32 @@ const objectsFrom = (given: unknown): ObjectRef[] =>
         : []
   )
 
+/** The most words picked out of a conversation that go with one message, and of any one. */
+const MOST_QUOTES = 24
+const MOST_QUOTED = 4000
+
+/**
+ * The words picked out of the conversation that go with a message, as the window gave
+ * them, with what is said of each: those that read as that.
+ */
+const quotesFrom = (given: unknown): Quote[] =>
+  (Array.isArray(given) ? given : [])
+    .flatMap((one: Partial<Quote> | null) => {
+      const quote = typeof one?.quote === "string" ? one.quote.trim() : ""
+      return quote
+        ? [
+            {
+              quote: quote.slice(0, MOST_QUOTED),
+              text:
+                typeof one?.text === "string"
+                  ? one.text.trim().slice(0, MOST_QUOTED)
+                  : "",
+            },
+          ]
+        : []
+    })
+    .slice(0, MOST_QUOTES)
+
 const mannerFrom = (manner: Partial<Manner> | null): Manner => ({
   provider: PROVIDERS.find((one) => one === manner?.provider) ?? "claude",
   model: typeof manner?.model === "string" ? manner.model : null,
@@ -1273,7 +1300,8 @@ function wire() {
       objects: ObjectRef[] | null,
       given: Partial<Manner> | null,
       reference: unknown,
-      attached: unknown
+      attached: unknown,
+      quotes: unknown
     ) => {
       const manner = mannerFrom(given)
       const noted = Array.isArray(notes)
@@ -1282,6 +1310,7 @@ function wire() {
       const called = objectsFrom(objects)
       const about = referencedBy(String(id), reference)
       const shown = pictures.read(String(id), attached)
+      const quoted = quotesFrom(quotes)
       // answers at once, with the conversation it went into: the turn runs for as long
       // as it runs, and reports through thread items
       const into = threads.send(
@@ -1292,7 +1321,8 @@ function wire() {
         called,
         manner,
         about,
-        shown
+        shown,
+        quoted
       )
       // the user has started on the project themselves: its model is theirs to have
       // put in order, by asking
@@ -1305,6 +1335,7 @@ function wire() {
           notes: noted.length,
           objects: called.length,
           pictures: shown.length,
+          quotes: quoted.length,
           reference: about !== null,
         })
       return into

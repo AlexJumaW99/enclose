@@ -9,6 +9,7 @@ import {
   LockKeyholeOpenIcon,
   PaperclipIcon,
   PencilIcon,
+  QuoteIcon,
   SparklesIcon,
   SquareIcon,
   XIcon,
@@ -56,6 +57,7 @@ import {
 } from "@/lib/manner"
 import { matching, putIn, tokenAt } from "@/lib/mentions"
 import { isPicture } from "@/lib/pictures"
+import { inLine } from "@/lib/quotes"
 import {
   answering,
   offeredModels,
@@ -71,6 +73,7 @@ import {
   useStore,
   type Called,
   type Note,
+  type Quoted,
 } from "@/lib/store"
 import { useNow } from "@/lib/time"
 import {
@@ -378,9 +381,13 @@ function Manner({
 const OFF =
   "shrink-0 cursor-pointer rounded-full p-0.5 text-muted-foreground outline-none hover:text-foreground"
 
-/** A chip on the message box: a part called on from the view, or what was said of one. */
-type Chip = { called: Called } | { note: Note }
-const of = (chip: Chip) => ("called" in chip ? chip.called : chip.note)
+/**
+ * A chip on the message box: a part called on from the view, what was said of one, or
+ * words picked out of the conversation with what was said of them.
+ */
+type Chip = { called: Called } | { note: Note } | { quote: Quoted }
+const of = (chip: Chip) =>
+  "called" in chip ? chip.called : "note" in chip ? chip.note : chip.quote
 
 /**
  * What is waiting to go with the next message: the parts called on from the view, and
@@ -391,12 +398,25 @@ const of = (chip: Chip) => ("called" in chip ? chip.called : chip.note)
  * many parts it is made of. The reference scene the model is set in is a chip too, and
  * with it on the box the message is about the scene. What was said of a part is a chip
  * that says which part and how it begins; pressed, it opens that again beside the part.
+ * Words picked out of the conversation are a chip of how they begin, and of what was said
+ * of them; pressed, it opens that again over the chip.
  */
-function Waiting({ called, notes }: { called: Called[]; notes: Note[] }) {
+function Waiting({
+  called,
+  notes,
+  quotes,
+}: {
+  called: Called[]
+  notes: Note[]
+  quotes: Quoted[]
+}) {
   const write = useStore((state) => state.write)
   const dropNote = useStore((state) => state.dropNote)
   const dropCalled = useStore((state) => state.dropCalled)
+  const quote = useStore((state) => state.quote)
+  const dropQuote = useStore((state) => state.dropQuote)
   const writing = useStore((state) => state.writing)
+  const quoting = useStore((state) => state.quoting?.id ?? null)
   const noted = useStore((state) => state.noted)
   // (those called on together stay as they were given, and any kept from before chips
   // had a time come after the rest, as they were)
@@ -405,8 +425,9 @@ function Waiting({ called, notes }: { called: Called[]; notes: Note[] }) {
       [
         ...called.map((part): Chip => ({ called: part })),
         ...notes.map((note): Chip => ({ note })),
+        ...quotes.map((one): Chip => ({ quote: one })),
       ].sort((a, b) => (of(b).at ?? 0) - (of(a).at ?? 0)),
-    [called, notes]
+    [called, notes, quotes]
   )
   // the row goes back to its start for a new one, should it have been moved along
   const row = React.useRef<HTMLDivElement>(null)
@@ -446,6 +467,50 @@ function Waiting({ called, notes }: { called: Called[]; notes: Note[] }) {
                   type="button"
                   onClick={() => dropCalled(part.id)}
                   aria-label={`Leave ${part.label} out of the message`}
+                  className={OFF}
+                >
+                  <XIcon className="size-3" />
+                </button>
+              </Badge>
+            )
+          }
+          if ("quote" in chip) {
+            const one = chip.quote
+            const words = inLine(one.quote)
+            return (
+              <Badge
+                key={one.id}
+                data-quote={one.id}
+                variant="secondary"
+                className={cn(
+                  "h-6 max-w-52 shrink-0 gap-1 pr-1",
+                  quoting === one.id && "ring-1 ring-foreground/30",
+                  noted === one.id && "just-noted"
+                )}
+              >
+                <button
+                  type="button"
+                  title={one.quote}
+                  onClick={() => quote({ id: one.id })}
+                  className="flex min-w-0 cursor-pointer items-center gap-1.5 outline-none"
+                >
+                  <QuoteIcon className="size-3 shrink-0" />
+                  {/* how the words begin, which gives way to what was said of them */}
+                  <span
+                    className={cn("truncate", one.text && "max-w-20 shrink-0")}
+                  >
+                    {words}
+                  </span>
+                  {one.text && (
+                    <span className="truncate font-normal text-muted-foreground">
+                      {one.text}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => dropQuote(one.id)}
+                  aria-label="Take back what was quoted"
                   className={OFF}
                 >
                   <XIcon className="size-3" />
@@ -612,6 +677,7 @@ function Marks({
 
 /** Stable when a project has nothing said of its parts, and none of them called on. */
 const NO_NOTES: Note[] = []
+const NO_QUOTES: Quoted[] = []
 const NO_CALLED: Called[] = []
 const NO_PICTURES: Attached[] = []
 const NO_CHOICES: Choice[] = []
@@ -646,6 +712,9 @@ export function Composer({
   const setText = useStore((state) => state.setDraft)
   const notes = useStore((state) =>
     project ? (state.notes[project.id] ?? NO_NOTES) : NO_NOTES
+  )
+  const quotes = useStore((state) =>
+    project ? (state.quotes[project.id] ?? NO_QUOTES) : NO_QUOTES
   )
   const called = useStore((state) =>
     project ? (state.called[project.id] ?? NO_CALLED) : NO_CALLED
@@ -828,6 +897,7 @@ export function Composer({
   const something =
     text.trim() !== "" ||
     notes.length > 0 ||
+    quotes.length > 0 ||
     called.length > 0 ||
     pictures.length > 0
   const submit = () => {
@@ -868,8 +938,8 @@ export function Composer({
           trouble={pictureTrouble}
         />
       )}
-      {(called.length > 0 || notes.length > 0) && (
-        <Waiting called={called} notes={notes} />
+      {(called.length > 0 || notes.length > 0 || quotes.length > 0) && (
+        <Waiting called={called} notes={notes} quotes={quotes} />
       )}
       <div className="relative w-full">
         {pictures.length > 0 && (

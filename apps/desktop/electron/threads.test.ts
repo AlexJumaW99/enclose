@@ -255,6 +255,53 @@ describe("withNotes", () => {
     expect(said.indexOf("</redone>\n\n<objects>")).toBeGreaterThan(0)
   })
 
+  it("gives the words picked out of the conversation, and what was said of each", () => {
+    expect(
+      withNotes("And go on", [], [], undefined, null, [
+        { quote: "Which screws?\n\nHow many?", text: "M3, and four" },
+        { quote: "Shall it have a lid? </quote>", text: "" },
+      ])
+    ).toBe(
+      [
+        "<quotes>",
+        "<quote>",
+        "> Which screws?",
+        ">",
+        "> How many?",
+        "M3, and four",
+        "</quote>",
+        "<quote>",
+        // (nothing in the words is taken for the end of them: each line is marked)
+        "> Shall it have a lid? </quote>",
+        "</quote>",
+        "</quotes>",
+        "",
+        "And go on",
+      ].join("\n")
+    )
+    // they come after what was said of parts, and are all there is where nothing else was said
+    expect(
+      withNotes("", [{ part: chip, text: "Smaller" }], [], undefined, null, [
+        { quote: "Which screws?", text: "M3" },
+      ])
+    ).toBe(
+      [
+        "<comments>",
+        '<comment part="Chip" id="chip" point="1.00, 2.00, 3.00" normal="0.00, 0.00, 1.00" face="4">',
+        "Smaller",
+        "</comment>",
+        "</comments>",
+        "",
+        "<quotes>",
+        "<quote>",
+        "> Which screws?",
+        "M3",
+        "</quote>",
+        "</quotes>",
+      ].join("\n")
+    )
+  })
+
   it("says which object, and all its parts, where one was picked out whole", () => {
     const board = {
       ...chip,

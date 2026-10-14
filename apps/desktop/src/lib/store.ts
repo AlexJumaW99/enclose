@@ -44,6 +44,7 @@ import {
   type PartRef,
   type Project,
   type Provider,
+  type Quote,
   type ProviderId,
   type ProviderSettings,
   type Seen,
@@ -313,18 +314,26 @@ const savedScenes = (): Record<string, string> => {
 }
 
 /**
- * What was waiting to be sent when the window was last up: what was said of parts, the
- * parts called on from the view, the pictures put on the message boxes, and what was
- * written in them. Whatever of it does not read as that is dropped.
+ * What was waiting to be sent when the window was last up: what was said of parts and of
+ * words picked out of the conversations, the parts called on from the view, the pictures
+ * put on the message boxes, and what was written in them. Whatever of it does not read
+ * as that is dropped.
  */
 function savedWaiting(): Pick<
   State,
-  "notes" | "drafts" | "called" | "pictures"
+  "notes" | "quotes" | "drafts" | "called" | "pictures"
 > {
-  const nothing = { notes: {}, drafts: {}, called: {}, pictures: {} }
+  const nothing = {
+    notes: {},
+    quotes: {},
+    drafts: {},
+    called: {},
+    pictures: {},
+  }
   try {
     const kept = JSON.parse(saved(WAITING_KEY) ?? "null") as {
       notes?: unknown
+      quotes?: unknown
       drafts?: unknown
       called?: unknown
       pictures?: unknown
@@ -344,6 +353,21 @@ function savedWaiting(): Pick<
               (note.part.piece === undefined ||
                 (typeof note.part.piece?.label === "string" &&
                   Array.isArray(note.part.piece.parts)))
+          ),
+        ]
+      )
+    )
+    const quotes = Object.fromEntries(
+      Object.entries((kept.quotes ?? {}) as Record<string, unknown>).map(
+        ([project, said]) => [
+          project,
+          (Array.isArray(said) ? said : []).filter(
+            (one: Partial<Quoted> | null): one is Quoted =>
+              typeof one?.id === "string" &&
+              typeof one.quote === "string" &&
+              one.quote !== "" &&
+              typeof one.text === "string" &&
+              typeof one.at === "number"
           ),
         ]
       )
@@ -384,7 +408,7 @@ function savedWaiting(): Pick<
         ]
       )
     )
-    return { notes, drafts, called, pictures }
+    return { notes, quotes, drafts, called, pictures }
   } catch {
     return nothing
   }
@@ -563,8 +587,20 @@ type State = {
    */
   notes: Record<string, Note[]>
   /**
-   * The note just made, by its id: its chip on the message box shimmers for a moment,
-   * so that where it has gone is seen. Null once it has, and when none was made.
+   * What has been said of words picked out of each project's conversations and not yet
+   * sent: it goes with the next message, and until then shows on the message box.
+   */
+  quotes: Record<string, Quoted[]>
+  /**
+   * The words picked out of the conversation that something is being said of, in a box
+   * beside them: words just picked out (`id` null), or some already kept, where what was
+   * said of them is being changed. Null when nothing is.
+   */
+  quoting: { id: string | null; quote: string } | null
+  /**
+   * The note just made, or the quote, by its id: its chip on the message box shimmers
+   * for a moment, so that where it has gone is seen. Null once it has, and when none was
+   * made.
    */
   noted: string | null
   /** what is written in each project's message box so far */
@@ -662,6 +698,18 @@ type State = {
    */
   keepNote(text: string): string | null
   dropNote(id: string): void
+  /**
+   * Start saying something of words picked out of the conversation, go back to what was
+   * said of some already kept (their id), or stop (null).
+   */
+  quote(of: { quote: string } | { id: string } | null): void
+  /**
+   * Keep the words being quoted for the next message, with what was written of them,
+   * which may be nothing: or, of some already kept, what is now said of them. Gives back
+   * the quote's id, or null if nothing was being quoted.
+   */
+  keepQuote(text: string): string | null
+  dropQuote(id: string): void
   setDraft(text: string): void
   /**
    * Call on parts and whole objects for the open project's next message, those of them
@@ -809,6 +857,12 @@ async function turnBack(projectId: string, way: "undo" | "redo") {
 export type Note = PartNote & { id: string; at?: number }
 
 /**
+ * Words picked out of a conversation, waiting to be sent with what is said of them: and
+ * when they were picked out, which is where their chip goes among the others.
+ */
+export type Quoted = Quote & { id: string; at: number }
+
+/**
  * Something called on from the view for the next message: what it goes by, and is shown
  * as. A part, by its id; or a whole object, which has `parts`, the ids of all it is made
  * of, and an id made up for it; or the reference scene the model is set in, which has
@@ -883,6 +937,7 @@ export const useStore = create<State>()((set, get) => ({
   plain: false,
   writing: null,
   ...savedWaiting(),
+  quoting: null,
   noted: null,
   pictureTrouble: null,
   colours: savedColours(),
@@ -904,6 +959,7 @@ export const useStore = create<State>()((set, get) => ({
       hoveredId: null,
       finding: null,
       writing: null,
+      quoting: null,
       // (the tools are the project's own: another's are not up until asked for)
       toolsOpen: false,
       view: homeView(),
@@ -1126,6 +1182,57 @@ export const useStore = create<State>()((set, get) => ({
         [activeId]: (notes[activeId] ?? []).filter((note) => note.id !== id),
       },
       writing: writing === id ? null : writing,
+    })
+  },
+
+  quote(of) {
+    const { activeId, quotes } = get()
+    if (of === null) return set({ quoting: null })
+    if ("quote" in of)
+      return set({ quoting: of.quote ? { id: null, quote: of.quote } : null })
+    const kept = (activeId ? quotes[activeId] : undefined)?.find(
+      (one) => one.id === of.id
+    )
+    if (kept) set({ quoting: { id: kept.id, quote: kept.quote } })
+  },
+
+  keepQuote(text) {
+    const { activeId, quotes, quoting } = get()
+    if (!activeId || !quoting) return null
+    const said = text.trim()
+    const before = quotes[activeId] ?? []
+    const at = Date.now()
+    const id = quoting.id ?? `quote-${at}-${before.length}`
+    set((state) => ({
+      quotes: {
+        ...quotes,
+        [activeId]:
+          quoting.id === null
+            ? [...before, { id, quote: quoting.quote, text: said, at }]
+            : // (words can be quoted with nothing said of them: they are still kept)
+              before.map((one) =>
+                one.id === id ? { ...one, text: said } : one
+              ),
+      },
+      quoting: null,
+      // new ones are pointed out on the message box, which takes the typing from here
+      ...(quoting.id === null && {
+        noted: id,
+        writeRequests: state.writeRequests + 1,
+      }),
+    }))
+    return id
+  },
+
+  dropQuote(id) {
+    const { activeId, quotes, quoting } = get()
+    if (!activeId) return
+    set({
+      quotes: {
+        ...quotes,
+        [activeId]: (quotes[activeId] ?? []).filter((one) => one.id !== id),
+      },
+      quoting: quoting?.id === id ? null : quoting,
     })
   },
 
@@ -1476,10 +1583,12 @@ export const useStore = create<State>()((set, get) => ({
     // and with the reference scene called on, it is the scene the message is about
     const reference = called.find((one) => one.scene)?.scene ?? null
     const notes = get().notes[project.id] ?? []
+    const quotes = get().quotes[project.id] ?? []
     const pictures = get().pictures[project.id] ?? []
     if (
       !message &&
       notes.length === 0 &&
+      quotes.length === 0 &&
       objects.length === 0 &&
       !reference &&
       pictures.length === 0
@@ -1495,8 +1604,10 @@ export const useStore = create<State>()((set, get) => ({
     set((state) => ({
       threadOpen: true,
       writing: null,
+      quoting: null,
       drafts: { ...state.drafts, [project.id]: "" },
       notes: { ...state.notes, [project.id]: [] },
+      quotes: { ...state.quotes, [project.id]: [] },
       called: { ...state.called, [project.id]: [] },
       // (the app keeps its copies of them: they are the conversation's now)
       pictures: { ...state.pictures, [project.id]: [] },
@@ -1511,7 +1622,8 @@ export const useStore = create<State>()((set, get) => ({
         objects,
         mannerIn(get(), open),
         reference,
-        pictures
+        pictures,
+        quotes.map(({ quote, text }) => ({ quote, text }))
       )
       .then((id) => {
         // stay with it: a conversation that has just begun is not yet the one on the
@@ -1762,6 +1874,7 @@ export function connect() {
   useStore.subscribe((state, was) => {
     if (
       state.notes !== was.notes ||
+      state.quotes !== was.quotes ||
       state.drafts !== was.drafts ||
       state.called !== was.called ||
       state.pictures !== was.pictures
@@ -1770,6 +1883,7 @@ export function connect() {
         WAITING_KEY,
         JSON.stringify({
           notes: state.notes,
+          quotes: state.quotes,
           drafts: state.drafts,
           called: state.called,
           pictures: state.pictures,

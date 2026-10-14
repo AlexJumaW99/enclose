@@ -246,6 +246,13 @@
   }
 }
 
+/* Words of the conversation that something is being said of: they stay lit, as they
+   were when they were picked out, while the box they are written of in has the caret
+   (components/quoting.tsx). */
+::highlight(quoted) {
+  background-color: color-mix(in oklch, var(--foreground) 16%, transparent);
+}
+
 /* The chip of something just said of a part: a light goes across the ground of it,
    quickly, three times, so that it is seen on the message box. The words on it stay as
    they are. The light starts and ends clear of the chip, and clear of it is where it is

@@ -16,7 +16,7 @@ Each thing counted is an event: its name, and a few words and numbers that say w
 | `app opened` | |
 | `project added` | Whether it was new, an example, CAD files or a folder; which example; how many CAD files |
 | `project removed` | |
-| `message sent` | The agent, its model, the effort and the permissions; whether it began a conversation; how many notes on parts, parts called on by name and pictures went with it; whether it was about a reference scene |
+| `message sent` | The agent, its model, the effort and the permissions; whether it began a conversation; how many notes on parts, quotes, parts called on by name and pictures went with it; whether it was about a reference scene |
 | `model looked over` | The agent, its model, the effort and the permissions |
 | `version begun` | The agent, its model, the effort and the permissions |
 | `change turned back` | Whether it was undone or redone |

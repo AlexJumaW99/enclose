@@ -6,24 +6,18 @@ import * as React from "react"
 import * as THREE from "three"
 import { Html } from "@react-three/drei"
 import { cn } from "cn"
-import {
-  ArrowUpIcon,
-  DownloadIcon,
-  MessageSquareIcon,
-  XIcon,
-} from "lucide-react"
+import { DownloadIcon, MessageSquareIcon } from "lucide-react"
 
 import type { Vec3 } from "@shared/api"
 import { PALETTE, type PaletteName } from "@shared/palette"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { Writing } from "@/components/writing"
 import { partFile, type Model } from "@/lib/model"
-import { MAC } from "@/lib/platform"
 import { savedAs } from "@/lib/saved"
 import { goesBy, useStore, type Note, type Selection } from "@/lib/store"
 import type { LoadedPart } from "./load"
@@ -36,8 +30,7 @@ const ROOM = { left: 290, right: 76, top: 60, bottom: 90 }
 const BUTTONS = { left: 250, right: 70, up: 24, down: 24 }
 const WRITING = { left: 150, right: 150, up: 60, down: 130 }
 const RING = { left: 150, right: 108, up: 108, down: 108 }
-/** How wide the box that is written in is, and how far above the place it starts, px. */
-const WRITING_WIDTH = 288
+/** How far above the place the box that is written in starts, px. */
 const WRITING_ABOVE = 24
 /** What every button floating over the view is: a frosted circle of its own. */
 const ROUND =
@@ -52,101 +45,6 @@ const between = (value: number, least: number, most: number) =>
   Math.min(Math.max(value, least), Math.max(least, most))
 
 type Size = { width: number; height: number }
-
-/**
- * Where something is said of the part: what should change at the place that was clicked.
- * Enter keeps it for the next message, as a chip on the message box, where more can be
- * gathered from other parts; with Cmd (or Ctrl) held, it and everything waiting are
- * sent at once. Esc, or Cancel, leaves things as they were.
- */
-function Writing({ label, note }: { label: string; note: Note | null }) {
-  const write = useStore((state) => state.write)
-  const [text, setText] = React.useState(note?.text ?? "")
-
-  const keep = (now: boolean) => {
-    const { keepNote, send, setThreadOpen } = useStore.getState()
-    if (!keepNote(text)) return
-    // where it has gone is on show
-    setThreadOpen(true)
-    if (now) send()
-  }
-
-  return (
-    <div
-      onPointerDown={held}
-      className="relative"
-      style={{ width: WRITING_WIDTH }}
-    >
-      <div className="flex w-full flex-col gap-2 rounded-2xl border bg-popover/95 p-3 shadow-xl">
-        {/* which part this is said of: a chip like those on the message box, a little
-            lighter, so that it shows on this one */}
-        <Badge className="max-w-full self-start bg-foreground/20 text-foreground">
-          <span className="truncate">{label}</span>
-        </Badge>
-        <textarea
-          autoFocus
-          value={text}
-          onChange={(event) => setText(event.target.value)}
-          onFocus={(event) => {
-            // carrying on from the end of what was written
-            const end = event.target.value.length
-            event.target.setSelectionRange(end, end)
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              event.stopPropagation()
-              write(null)
-            }
-            if (
-              event.key !== "Enter" ||
-              event.shiftKey ||
-              event.nativeEvent.isComposing
-            )
-              return
-            event.preventDefault()
-            keep(event.metaKey || event.ctrlKey)
-          }}
-          placeholder="What should change here?"
-          rows={2}
-          className="field-sizing-content max-h-40 min-h-11 w-full resize-none bg-transparent text-sm leading-relaxed outline-none placeholder:text-muted-foreground"
-        />
-        <div className="flex items-end justify-between gap-2">
-          {/* in its corner as the button is in its own: the letters stand as far up
-              from the bottom of the box as in from its side. Its own box is cut down to
-              the letters for that, and it is moved over by the room the sign for the key
-              has of its own to its left */}
-          <span
-            className={cn(
-              "text-xs text-muted-foreground [text-box:trim-both_cap_alphabetic]",
-              MAC && "-ml-[1.5px]"
-            )}
-          >
-            {MAC ? "⌘" : "Ctrl"} Enter to send now
-          </span>
-          <Button
-            size="icon-sm"
-            className="rounded-full"
-            disabled={!text.trim() && !note}
-            onClick={() => keep(false)}
-          >
-            <ArrowUpIcon />
-            <span className="sr-only">Add to the message</span>
-          </Button>
-        </div>
-      </div>
-      {/* leaving what is being written, without keeping it: off the top corner of the
-          box, and as plain to see over any part as the part's name is */}
-      <button
-        type="button"
-        onClick={() => write(null)}
-        className="absolute right-0 bottom-full mb-1.5 flex h-6 cursor-pointer items-center gap-1 rounded-full bg-foreground px-2 text-xs font-medium whitespace-nowrap text-background shadow-sm ring-1 ring-background/25 outline-none hover:bg-[color-mix(in_oklch,var(--foreground),var(--background)_15%)]"
-      >
-        <XIcon className="size-3.5" />
-        Cancel
-      </button>
-    </div>
-  )
-}
 
 /** A round button over the view, named by what it does. */
 function Does({
@@ -367,8 +265,27 @@ export function PartMarks({
     <Html position={at} calculatePosition={kept} zIndexRange={OVER}>
       {writing !== null ? (
         // over the place, where the buttons were
-        <div className="-translate-x-1/2" style={{ marginTop: -WRITING_ABOVE }}>
-          <Writing key={writing} label={label} note={note} />
+        <div
+          onPointerDown={held}
+          className="-translate-x-1/2"
+          style={{ marginTop: -WRITING_ABOVE }}
+        >
+          <Writing
+            key={writing}
+            label={<span className="truncate">{label}</span>}
+            from={note?.text}
+            placeholder="What should change here?"
+            // (one already made, left with nothing in it, is taken back)
+            bare={note !== null}
+            onKeep={(text, now) => {
+              const { keepNote, send, setThreadOpen } = useStore.getState()
+              if (!keepNote(text)) return
+              // where it has gone is on show
+              setThreadOpen(true)
+              if (now) send()
+            }}
+            onCancel={() => write(null)}
+          />
         </div>
       ) : choosing ? (
         // round the first of the buttons, which is the one that was pressed

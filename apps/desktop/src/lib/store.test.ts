@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 // The store is the window's: it keeps things in the window's storage, and tells the
 // app's own process what of the view is used. Both are stood in for here, before the
 // store is read, since it reads what was kept as it is made.
-const { kept, used } = vi.hoisted(() => {
+const { kept, used, sent } = vi.hoisted(() => {
   const kept = new Map<string, string>()
   const used: string[] = []
   vi.stubGlobal("localStorage", {
@@ -12,10 +12,19 @@ const { kept, used } = vi.hoisted(() => {
     removeItem: (key: string) => void kept.delete(key),
   })
   vi.stubGlobal("location", { hash: "" })
+  const sent: unknown[][] = []
   vi.stubGlobal("window", {
-    cad: { analytics: { used: (name: string) => void used.push(name) } },
+    cad: {
+      analytics: { used: (name: string) => void used.push(name) },
+      thread: {
+        send: async (...given: unknown[]) => {
+          sent.push(given)
+          return "conversation"
+        },
+      },
+    },
   })
-  return { kept, used }
+  return { kept, used, sent }
 })
 
 import type { Vec3 } from "@shared/api"
@@ -36,6 +45,7 @@ beforeEach(() => {
   useStore.setState(fresh, true)
   kept.clear()
   used.length = 0
+  sent.length = 0
   state().activate("clock")
 })
 
@@ -196,5 +206,72 @@ describe("the view with the window to itself", () => {
     state().setBare(true)
     expect(state().leave()).toBe(false)
     expect(state().bare).toBe(true)
+  })
+})
+
+describe("words picked out of the conversation", () => {
+  const quotes = () => state().quotes.clock ?? []
+
+  it("are kept for the next message, with what was said of them or nothing", () => {
+    state().quote({ quote: "Which screws?" })
+    expect(state().quoting).toEqual({ id: null, quote: "Which screws?" })
+    const asked = state().writeRequests
+    const first = state().keepQuote("  M3, four of them ")
+    expect(quotes()).toMatchObject([
+      { id: first, quote: "Which screws?", text: "M3, four of them" },
+    ])
+    // where they have gone is pointed out, and the message box takes the typing
+    expect(state()).toMatchObject({ quoting: null, noted: first })
+    expect(state().writeRequests).toBe(asked + 1)
+    // words alone are something to send
+    state().quote({ quote: "Shall it have a lid?" })
+    const second = state().keepQuote("")
+    expect(quotes().map((one) => one.text)).toEqual(["M3, four of them", ""])
+    expect(second).not.toBe(first)
+    // and with none picked out, nothing is kept
+    expect(state().keepQuote("Nothing")).toBeNull()
+    state().quote({ quote: "" })
+    expect(state().quoting).toBeNull()
+    expect(quotes()).toHaveLength(2)
+  })
+
+  it("can have what was said of them changed, and be taken back", () => {
+    state().quote({ quote: "Which screws?" })
+    const id = state().keepQuote("M3") as string
+    state().quote({ id })
+    expect(state().quoting).toEqual({ id, quote: "Which screws?" })
+    expect(state().keepQuote("M4, on second thoughts")).toBe(id)
+    expect(quotes()).toMatchObject([
+      { id, quote: "Which screws?", text: "M4, on second thoughts" },
+    ])
+    // left with nothing said, the words are still quoted
+    state().quote({ id })
+    state().keepQuote(" ")
+    expect(quotes()).toMatchObject([{ id, text: "" }])
+    // one that is not there is not gone back to
+    state().quote({ id: "nothing" })
+    expect(state().quoting).toBeNull()
+    state().quote({ id })
+    state().dropQuote(id)
+    expect(quotes()).toEqual([])
+    expect(state().quoting).toBeNull()
+  })
+
+  it("go with the message, and are then no longer waiting", () => {
+    useStore.setState({
+      projects: [{ id: "clock", conversations: [] }] as never,
+    })
+    state().quote({ quote: "Which screws?" })
+    state().keepQuote("M3")
+    state().quote({ quote: "Something else" })
+    state().send()
+    expect(sent).toHaveLength(1)
+    expect(sent[0][0]).toBe("clock")
+    expect(sent[0].at(-1)).toEqual([{ quote: "Which screws?", text: "M3" }])
+    // (what was being said of other words when it went is let go of)
+    expect(state()).toMatchObject({ quoting: null, quotes: { clock: [] } })
+    // nothing waiting is nothing to send
+    state().send()
+    expect(sent).toHaveLength(1)
   })
 })

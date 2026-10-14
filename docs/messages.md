@@ -30,6 +30,21 @@ What you say of a part in the view, and the parts you add to chat from it, show 
 on the message box and go with the next message. [Picking parts out](selecting.md) says
 how.
 
+## What was said of Claude's words
+
+Select words in one of Claude's answers and **Quote** comes up by them. Press it, and a
+box opens beside the words, the one a part has: write what you say to them (your answer,
+where something was asked there, or what you want made clear) and Enter keeps it for the
+next message, as a chip on the message box. Nothing is sent by that. More can be quoted
+the same way, each with what you say to it, and they all go with the message when you
+send it. Cmd+Enter in the box sends at once, with everything that is waiting; Esc, or
+Cancel, leaves things as they were.
+
+Words can be quoted with nothing said of them: the message then says the rest. Click a
+chip to change what was said, and its cross takes the quote back off the message. A
+message that was sent shows how each quote begins, in one line, over what was said to
+it. Claude gets all of the words you picked out, with what you said to each.
+
 ## Pictures
 
 A message can take pictures with it: a photo of the thing to make, a sketch, a drawing
