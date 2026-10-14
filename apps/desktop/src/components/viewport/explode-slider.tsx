@@ -1,6 +1,4 @@
-import { Slider } from "@base-ui/react/slider"
-import { cn } from "cn"
-
+import { PillSlider } from "@/components/pill-slider"
 import {
   Tooltip,
   TooltipContent,
@@ -11,32 +9,21 @@ import { SPREAD, useStore } from "@/lib/store"
 /**
  * How far apart the parts of an exploded model are pulled: drag to pull them further
  * than the model's own distances, which is where it starts. It is made to look like the
- * switches it is found beside: as tall as one, with the same thing in it to take hold of.
+ * switches it is found beside.
  */
 export function Spread({ className }: { className?: string }) {
   const spread = useStore((state) => state.view.spread)
   const setView = useStore((state) => state.setView)
   return (
-    <Slider.Root
+    <PillSlider
+      label="How far apart the parts are pulled"
       min={SPREAD.min}
       max={SPREAD.max}
       step={0.05}
       value={spread}
-      onValueChange={(value) => setView({ spread: value as number })}
-      // the handle is all of it inside the track: at either end, it is against the end
-      thumbAlignment="edge"
-      className={cn("w-28", className)}
-    >
-      {/* (as much room round the handle, at the ends, as a switch leaves round its own) */}
-      <Slider.Control className="flex h-[18.4px] w-full cursor-ew-resize touch-none items-center rounded-full bg-input px-[1.2px] select-none dark:bg-input/80">
-        <Slider.Track className="relative h-full w-full">
-          <Slider.Thumb
-            aria-label="How far apart the parts are pulled"
-            className="size-4 rounded-full bg-background outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-foreground"
-          />
-        </Slider.Track>
-      </Slider.Control>
-    </Slider.Root>
+      onChange={(value) => setView({ spread: value })}
+      className={className}
+    />
   )
 }
 

@@ -5,6 +5,7 @@ import { ChevronDownIcon, XIcon } from "lucide-react"
 import type { Settings as AppSettings } from "@shared/api"
 import { Logo } from "@/components/mark"
 import { Miniature } from "@/components/miniature"
+import { PillSlider } from "@/components/pill-slider"
 import { CheckAgain, Providers } from "@/components/providers"
 import { Group, Row } from "@/components/setting"
 import { useTheme } from "@/components/theme-provider"
@@ -18,7 +19,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Kbd } from "@/components/ui/kbd"
-import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import {
@@ -386,21 +386,18 @@ function Speed({
 }) {
   return (
     <>
-      <span className="w-10 text-sm text-muted-foreground tabular-nums">
+      <span className="w-10 font-mono text-sm text-muted-foreground tabular-nums">
         {Math.round(value * 100)}%
       </span>
-      <div className="min-w-0 flex-1">
-        <Slider
-          aria-label={label}
-          min={range.min}
-          max={range.max}
-          step={0.05}
-          value={[value]}
-          onValueChange={(next) =>
-            onChange(Array.isArray(next) ? next[0] : next)
-          }
-        />
-      </div>
+      <PillSlider
+        label={label}
+        min={range.min}
+        max={range.max}
+        step={0.05}
+        value={value}
+        onChange={onChange}
+        className="w-auto min-w-0 flex-1"
+      />
     </>
   )
 }

@@ -46,7 +46,9 @@ export type Preferences = Buttons & {
 }
 
 export const TURN_SPEED = { min: 0.4, max: 2.5 }
-export const ZOOM_SPEED = { min: 0.4, max: 2.5 }
+// (at 100% a zoom goes at three times the camera controls' own pace: at the least, at
+// about a third of theirs)
+export const ZOOM_SPEED = { min: 0.1, max: 2.5 }
 const DEFAULTS: Preferences = {
   scrolling: "auto",
   ...PRESETS.enclose,
