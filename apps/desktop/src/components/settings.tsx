@@ -3,6 +3,7 @@ import { cn } from "cn"
 import { ChevronDownIcon, XIcon } from "lucide-react"
 
 import type { Settings as AppSettings } from "@shared/api"
+import { Logo } from "@/components/mark"
 import { Miniature } from "@/components/miniature"
 import { CheckAgain, Providers } from "@/components/providers"
 import { Group, Row } from "@/components/setting"
@@ -27,6 +28,7 @@ import {
 } from "@/components/ui/tooltip"
 import { SETTLE_DAYS } from "@/lib/conversations"
 import { ACCESS_WORDS } from "@/lib/manner"
+import { RESTING_WIDTH } from "@/lib/mark"
 import {
   PRESET_WORDS,
   PRESETS,
@@ -52,6 +54,14 @@ const SECTIONS = [
 ] as const satisfies { id: string; label: string }[]
 
 type SectionId = (typeof SECTIONS)[number]["id"]
+
+/** How big the mark stands over the sections, px. */
+const LOGO_SIZE = 28
+/**
+ * How far the mark stops short of the side of its square, px. It is moved over by as
+ * much, so that it starts where the sections under it do.
+ */
+const LOGO_INSET = (LOGO_SIZE * (1 - RESTING_WIDTH)) / 2
 
 /**
  * A choice of one out of a few, all of them in view. One that is to `fill` is as wide as
@@ -833,7 +843,15 @@ export function Settings() {
         {/* room for the window's traffic lights, and something to drag it by */}
         <div className="drag h-12 shrink-0" />
         <div className="flex min-h-0 flex-1">
-          <nav className="flex w-41.25 shrink-0 flex-col items-start pt-2.5 pl-7.5">
+          {/* the mark level with the open section's name, and the sections level with
+              what is under it: the first of them on a line with its first words */}
+          <nav className="flex w-41.25 shrink-0 flex-col items-start pt-2.75 pl-7.5">
+            <div
+              className="mb-7.75 flex h-8 items-center"
+              style={{ marginLeft: -LOGO_INSET }}
+            >
+              <Logo size={LOGO_SIZE} />
+            </div>
             {SECTIONS.map(({ id, label }) => (
               <button
                 key={id}
