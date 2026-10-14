@@ -6,7 +6,9 @@ import {
   barred,
   listedModels,
   offeredModels,
+  PROVIDER_WORDS,
   standing,
+  trouble,
   usable,
 } from "./providers"
 
@@ -51,6 +53,15 @@ const provider = (
           checkedAt: 1,
           ...more.status,
         },
+})
+
+describe("PROVIDER_WORDS", () => {
+  it("says how each is installed from its makers' own address, and where they say more", () => {
+    for (const { install, docs } of Object.values(PROVIDER_WORDS)) {
+      expect(install).toMatch(/^curl -fsSL https:\/\/\S+ \| (ba)?sh$/)
+      expect(docs).toMatch(/^https:\/\//)
+    }
+  })
 })
 
 describe("offeredModels", () => {
@@ -136,14 +147,21 @@ describe("barred", () => {
 })
 
 describe("standing", () => {
-  it("says who is signed in", () => {
-    expect(standing(provider("claude"))).toMatchObject({
-      tone: "ok",
-      headline: "Signed in · Max",
-    })
+  it("says who is signed in, by what they pay for", () => {
+    expect(
+      standing(provider("claude", { status: { account: "Claude Max" } }))
+    ).toMatchObject({ tone: "ok", headline: "You’re using Claude Max" })
     expect(
       standing(provider("grok", { status: { account: null } })).headline
     ).toBe("Signed in")
+  })
+
+  it("says how they reach it, where they pay for nothing it names", () => {
+    const says = (account: string) =>
+      standing(provider("codex", { status: { account } })).headline
+    expect(says("API key")).toBe("You’re using an API key")
+    expect(says("Grok account")).toBe("You’re using your Grok account")
+    expect(says("someone@example.com")).toBe("Signed in as someone@example.com")
   })
 
   it("says what is wanting, and what to do about it", () => {
@@ -172,7 +190,10 @@ describe("standing", () => {
 
   it("is quiet about one that is not in use, or is still being looked at", () => {
     const off = provider("codex", { settings: { enabled: false } })
-    expect(standing(off)).toMatchObject({ tone: "off", headline: "Off" })
+    expect(standing(off)).toMatchObject({
+      tone: "off",
+      headline: "Switched off",
+    })
     expect(usable(off)).toBe(false)
     expect(
       standing(
@@ -187,5 +208,41 @@ describe("standing", () => {
       standing(provider("grok", { checking: true, status: { signedIn: null } }))
         .headline
     ).toBe("Checking…")
+  })
+})
+
+describe("trouble", () => {
+  it("is what to do about one that did not answer, whatever it said", () => {
+    expect(
+      trouble(
+        provider("claude", {
+          status: { signedIn: null, trouble: "Claude Code did not answer." },
+        })
+      )
+    ).toEqual({
+      title: "Claude Code is not responding",
+      command: "claude",
+      after: " to see that it works, then check again.",
+    })
+  })
+
+  it("is how to sign in, for one nobody is signed in to", () => {
+    expect(
+      trouble(provider("codex", { status: { signedIn: false } }))
+    ).toMatchObject({ title: "Sign in to Codex", command: "codex login" })
+  })
+
+  it("is nothing for one that is well, off, not installed, or being looked at", () => {
+    expect(trouble(provider("claude"))).toBeNull()
+    expect(
+      trouble(
+        provider("codex", {
+          settings: { enabled: false },
+          status: { trouble: "Codex did not answer." },
+        })
+      )
+    ).toBeNull()
+    expect(trouble(provider("grok", { status: { path: null } }))).toBeNull()
+    expect(trouble(provider("grok", { status: null }))).toBeNull()
   })
 })

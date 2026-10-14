@@ -23,25 +23,29 @@ export function Group({
  * One setting: what it is and what it does on the left, the control on the right. One
  * that may `wrap` puts its control underneath where there is no room beside. One in
  * `halves` gives each side half of the row, whatever is on it, for the control to fill:
- * a run of them lines up down the middle.
+ * a run of them lines up down the middle. One that is `flush` leaves the room at its
+ * sides to what holds it.
  */
 export function Row({
   title,
   detail,
   wrap,
   halves,
+  flush,
   children,
 }: {
   title: React.ReactNode
   detail?: React.ReactNode
   wrap?: boolean
   halves?: boolean
+  flush?: boolean
   children?: React.ReactNode
 }) {
   return (
     <div
       className={cn(
-        "flex items-center justify-between gap-x-6 gap-y-2.5 px-4 py-3.5",
+        "flex items-center justify-between gap-x-6 gap-y-2.5 py-4",
+        !flush && "px-4",
         wrap && "flex-wrap",
         halves && "grid grid-cols-2"
       )}

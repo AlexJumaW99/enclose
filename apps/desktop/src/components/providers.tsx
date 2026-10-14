@@ -1,6 +1,13 @@
 import * as React from "react"
 import { cn } from "cn"
-import { PlusIcon, RefreshCwIcon, StarIcon, XIcon } from "lucide-react"
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  CopyIcon,
+  PlusIcon,
+  RefreshCwIcon,
+  XIcon,
+} from "lucide-react"
 
 import type {
   EnvVar,
@@ -9,8 +16,8 @@ import type {
   ProviderId,
   ProviderSettings,
 } from "@shared/api"
-import { ProviderIcon } from "@/components/icons"
-import { Group, Row } from "@/components/setting"
+import { ProviderIcon, StarIcon } from "@/components/icons"
+import { Row } from "@/components/setting"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
@@ -18,6 +25,7 @@ import {
   listedModels,
   PROVIDER_WORDS,
   standing,
+  trouble,
   usable,
   type Standing,
 } from "@/lib/providers"
@@ -37,6 +45,9 @@ const HOME: Partial<
 
 /** What more one might be started with, for the box that asks. */
 const ARGS: Partial<Record<ProviderId, string>> = { claude: "e.g. --chrome" }
+
+/** What is typed for a machine to read: a path, a name as a program has it. */
+const TYPED = "font-mono text-[13px] md:text-[13px]"
 
 /** The mark of something wanting a look: nothing, where nothing does. */
 function Dot({ tone }: { tone: Standing["tone"] }) {
@@ -80,76 +91,157 @@ function Draft({
       }}
       spellCheck={false}
       autoComplete="off"
-      className={cn("h-8 w-56 font-mono text-xs md:text-xs", className)}
+      className={cn("h-8 w-56", TYPED, className)}
       {...props}
     />
   )
 }
 
-/** One of them in the list: what it is, how it stands, and whether it is in use. */
-function Entry({
-  provider,
-  open,
-  onOpen,
+/**
+ * Some of what there is to choose about an agent, in a frame of its own under what it
+ * has in common: one thing to a line, and a rule between each two.
+ */
+function Box({
+  title,
+  children,
 }: {
-  provider: Provider
-  open: boolean
-  onOpen: () => void
+  title: string
+  children: React.ReactNode
 }) {
-  const { name } = PROVIDER_WORDS[provider.id]
-  const { tone, headline, detail } = standing(provider)
-  const { enabled } = provider.settings
   return (
-    <div
-      className={cn("flex items-center gap-3 pr-4", open && "bg-foreground/5")}
-    >
-      <button
-        type="button"
-        role="tab"
-        aria-selected={open}
-        onClick={onOpen}
-        className="flex min-w-0 flex-1 items-center gap-3 py-3.5 pl-4 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset"
-      >
-        {/* its mark stands left of all that is said of it, half way down */}
-        <ProviderIcon
-          provider={provider.id}
-          className={cn("size-4 shrink-0", !enabled && "opacity-50")}
-        />
-        <span className="flex min-w-0 flex-col gap-0.5">
-          <span
-            className={cn(
-              "flex items-baseline gap-2 text-sm font-medium",
-              !enabled && "text-muted-foreground"
-            )}
-          >
-            {name}
-            {provider.status?.version && (
-              <span className="font-mono text-xs font-normal text-muted-foreground">
-                v{provider.status.version}
+    <section className="rounded-2xl border border-foreground/10 px-5 pt-5 pb-2.5">
+      <h4 className="text-sm text-muted-foreground">{title}</h4>
+      <div className="mt-2 divide-y divide-border/60">{children}</div>
+    </section>
+  )
+}
+
+/** Some of its models, in a frame under what they have in common. */
+function Listed({
+  title,
+  models,
+  provider,
+}: {
+  title: string
+  models: ModelChoice[]
+  provider: Provider
+}) {
+  const { hidden, favorites, custom } = provider.settings
+  if (models.length === 0) return null
+  const without = (list: string[], id: string) =>
+    list.filter((one) => one !== id)
+  const change = (patch: Partial<ProviderSettings>) =>
+    void changeProvider(provider.id, patch)
+  return (
+    <Box title={title}>
+      {models.map((model) => {
+        const id = model.id ?? ""
+        const off = hidden.includes(id)
+        const favorite = favorites.includes(id)
+        return (
+          <div key={id} className="flex h-9.5 items-center gap-2.5">
+            <button
+              type="button"
+              aria-pressed={favorite}
+              aria-label={`${favorite ? "Remove" : "Make"} ${model.name} a favorite`}
+              title="Favorites come first where a model is chosen"
+              onClick={() =>
+                change({
+                  favorites: favorite
+                    ? without(favorites, id)
+                    : [...favorites, id],
+                })
+              }
+              // the star keeps its middle whichever way it is drawn, and is pressed
+              // from a little way off
+              className={cn(
+                "relative flex w-3.5 shrink-0 cursor-pointer justify-center rounded-sm outline-none after:absolute after:-inset-2 focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                favorite
+                  ? "text-attention"
+                  : "text-muted-foreground/70 hover:text-foreground"
+              )}
+            >
+              {/* in a line, its points run on past where they are drawn to: it is
+                  drawn a little smaller, to look the size it is filled */}
+              <StarIcon
+                filled={favorite}
+                className={cn("shrink-0", favorite ? "size-4" : "size-3.5")}
+              />
+            </button>
+            <span className="min-w-0 truncate text-sm font-medium">
+              {model.name}
+            </span>
+            {model.name !== id && (
+              <span className="min-w-0 truncate font-mono text-sm text-muted-foreground">
+                {id}
               </span>
             )}
-          </span>
-          <span className="flex items-baseline gap-1.5 text-sm text-muted-foreground">
-            {/* (level with the middle of the first line, where there are two) */}
-            <span className="flex h-5 shrink-0 items-center empty:hidden">
-              <Dot tone={tone} />
+            <span className="ml-auto flex shrink-0 items-center gap-2.5 pl-2">
+              {custom.includes(id) && (
+                <button
+                  type="button"
+                  aria-label={`Remove ${model.name}`}
+                  onClick={() =>
+                    change({
+                      custom: without(custom, id),
+                      hidden: without(hidden, id),
+                      favorites: without(favorites, id),
+                    })
+                  }
+                  className="-m-1 cursor-pointer rounded-md p-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                >
+                  <XIcon size={15} absoluteStrokeWidth strokeWidth={1} />
+                </button>
+              )}
+              <Switch
+                aria-label={`Show ${model.name} in the composer`}
+                title="Offered where a model is chosen"
+                checked={!off}
+                onCheckedChange={(on) =>
+                  change({ hidden: on ? without(hidden, id) : [...hidden, id] })
+                }
+              />
             </span>
-            <span className="line-clamp-2">
-              {tone === "warn" && detail && headline === "Needs attention"
-                ? `${headline} · ${detail}`
-                : headline}
-            </span>
-          </span>
-        </span>
-      </button>
-      <Switch
-        aria-label={`Use ${name}`}
-        checked={enabled}
-        onCheckedChange={(on) =>
-          void changeProvider(provider.id, { enabled: on })
-        }
+          </div>
+        )
+      })}
+    </Box>
+  )
+}
+
+/**
+ * Its models: which are offered where one is chosen, by the switch, and which come first
+ * there, by the star. One that is switched off stays where it was in its list.
+ */
+function Models({ provider }: { provider: Provider }) {
+  const { cli } = PROVIDER_WORDS[provider.id]
+  const { favorites } = provider.settings
+  const all = listedModels(provider)
+  // one that is not in use, or not well, has none to list: what is wanting is said
+  // over this
+  if (all.length === 0 && (!usable(provider) || trouble(provider))) return null
+  const first = (model: ModelChoice) => favorites.includes(model.id ?? "")
+  return (
+    <section className="flex flex-col gap-5">
+      <h3 className="mb-2 text-sm font-medium">Models</h3>
+      {all.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          {provider.checking
+            ? `Asking ${cli} for its models…`
+            : `${cli} has not said what models it has.`}
+        </p>
+      )}
+      <Listed
+        title="Favorites"
+        provider={provider}
+        models={all.filter(first)}
       />
-    </div>
+      <Listed
+        title="All"
+        provider={provider}
+        models={all.filter((model) => !first(model))}
+      />
+    </section>
   )
 }
 
@@ -169,6 +261,7 @@ function Variables({ provider }: { provider: Provider }) {
   return (
     <>
       <Row
+        flush
         title="Variables"
         detail="API keys, base URLs and other settings for this CLI."
       >
@@ -182,7 +275,7 @@ function Variables({ provider }: { provider: Provider }) {
         </Button>
       </Row>
       {rows.map((row, index) => (
-        <div key={index} className="flex items-center gap-2 px-4 py-2.5">
+        <div key={index} className="flex items-center gap-2 py-2.5">
           <Input
             aria-label="Name"
             placeholder="NAME"
@@ -191,7 +284,7 @@ function Variables({ provider }: { provider: Provider }) {
             onBlur={() => keep(rows)}
             spellCheck={false}
             autoComplete="off"
-            className="h-8 w-52 font-mono text-xs md:text-xs"
+            className={cn("h-8 w-44", TYPED)}
           />
           <Input
             aria-label="Value"
@@ -205,7 +298,7 @@ function Variables({ provider }: { provider: Provider }) {
             onBlur={() => keep(rows)}
             spellCheck={false}
             autoComplete="off"
-            className="h-8 flex-1 font-mono text-xs md:text-xs"
+            className={cn("h-8 flex-1", TYPED)}
           />
           <Button
             variant="ghost"
@@ -226,200 +319,32 @@ function Variables({ provider }: { provider: Provider }) {
   )
 }
 
-/** Some of its models, under what they have in common. */
-function Models_({
-  title,
-  models,
-  provider,
-}: {
-  title: string
-  models: ModelChoice[]
-  provider: Provider
-}) {
-  const { hidden, favorites, custom } = provider.settings
-  if (models.length === 0) return null
-  const without = (list: string[], id: string) =>
-    list.filter((one) => one !== id)
-  const change = (patch: Partial<ProviderSettings>) =>
-    void changeProvider(provider.id, patch)
-  return (
-    <div className="flex flex-col">
-      <h3 className="pb-1 text-xs text-muted-foreground">{title}</h3>
-      {models.map((model) => {
-        const id = model.id ?? ""
-        const off = hidden.includes(id)
-        const favorite = favorites.includes(id)
-        return (
-          <div key={id} className="flex h-8 items-center gap-2.5">
-            <button
-              type="button"
-              aria-pressed={favorite}
-              aria-label={`${favorite ? "Remove" : "Make"} ${model.name} a favorite`}
-              onClick={() =>
-                change({
-                  favorites: favorite
-                    ? without(favorites, id)
-                    : [...favorites, id],
-                })
-              }
-              className="-m-1 cursor-pointer rounded-md p-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            >
-              <StarIcon
-                size={15}
-                absoluteStrokeWidth
-                strokeWidth={1}
-                className={cn(favorite && "fill-attention text-attention")}
-              />
-            </button>
-            <span
-              className={cn(
-                "truncate text-sm font-medium",
-                off && "text-muted-foreground"
-              )}
-            >
-              {model.name}
-            </span>
-            {model.name !== id && (
-              <span className="truncate font-mono text-xs text-muted-foreground">
-                {id}
-              </span>
-            )}
-            <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-              {model.efforts.length > 0 && "Reasoning"}
-            </span>
-            {custom.includes(id) && (
-              <button
-                type="button"
-                aria-label={`Remove ${model.name}`}
-                onClick={() =>
-                  change({
-                    custom: without(custom, id),
-                    hidden: without(hidden, id),
-                    favorites: without(favorites, id),
-                  })
-                }
-                className="-m-1 cursor-pointer rounded-md p-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              >
-                <XIcon size={15} absoluteStrokeWidth strokeWidth={1} />
-              </button>
-            )}
-            <Switch
-              size="sm"
-              aria-label={`Show ${model.name} in the composer`}
-              checked={!off}
-              onCheckedChange={(on) =>
-                change({ hidden: on ? without(hidden, id) : [...hidden, id] })
-              }
-            />
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-/** Its models: which are offered where one is chosen, and which come first there. */
-function Models({ provider }: { provider: Provider }) {
-  const { name, cli } = PROVIDER_WORDS[provider.id]
-  const { hidden, favorites, custom } = provider.settings
-  const [filter, setFilter] = React.useState("")
+/** A model the agent has and does not list, added by what the agent knows it as. */
+function Added({ provider }: { provider: Provider }) {
+  const { cli } = PROVIDER_WORDS[provider.id]
   const [adding, setAdding] = React.useState<string | null>(null)
-  const all = listedModels(provider)
-
-  if (all.length === 0 && adding === null)
-    return (
-      <Row
-        title={
-          !usable(provider)
-            ? `${name} is not in use`
-            : provider.checking
-              ? `Asking ${cli} for its models…`
-              : `${cli} has not said what models it has`
-        }
-        detail={
-          usable(provider)
-            ? undefined
-            : provider.status?.path
-              ? "Switch it on to list its models."
-              : `Install ${cli} to list its models.`
-        }
-      >
-        {usable(provider) && !provider.checking && (
-          <Button variant="outline" size="sm" onClick={() => setAdding("")}>
-            <PlusIcon />
-            Add custom model
-          </Button>
-        )}
-      </Row>
-    )
-
-  const wanted = filter.trim().toLowerCase()
-  const found = all.filter(
-    (model) =>
-      !wanted ||
-      model.name.toLowerCase().includes(wanted) ||
-      (model.id ?? "").toLowerCase().includes(wanted)
-  )
-  const off = (model: ModelChoice) => hidden.includes(model.id ?? "")
-  const first = (model: ModelChoice) => favorites.includes(model.id ?? "")
-  const shown = all.filter((model) => !off(model))
   const add = () => {
     const id = (adding ?? "").trim()
     setAdding(null)
-    if (id && !all.some((model) => model.id === id))
-      void changeProvider(provider.id, { custom: [...custom, id] })
+    if (id && !listedModels(provider).some((model) => model.id === id))
+      void changeProvider(provider.id, {
+        custom: [...provider.settings.custom, id],
+      })
   }
-  const said = [
-    `${all.length} ${all.length === 1 ? "model" : "models"}`,
-    ...(shown.some(first)
-      ? [
-          `${shown.filter(first).length} ${shown.filter(first).length === 1 ? "favorite" : "favorites"}`,
-        ]
-      : []),
-    ...(all.length > shown.length
-      ? [`${all.length - shown.length} hidden`]
-      : []),
-  ].join(" · ")
-
   return (
-    <div className="flex flex-col gap-4 px-4 py-3.5">
-      <p className="text-sm text-muted-foreground">
-        Models switched off are left out of the composer.
-      </p>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
-        <Input
-          aria-label="Filter models"
-          placeholder="Filter models"
-          value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-          spellCheck={false}
-          className="h-8 w-48"
-        />
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() =>
-            void changeProvider(provider.id, {
-              hidden:
-                shown.length === 0 ? [] : all.map((model) => model.id ?? ""),
-            })
-          }
-        >
-          {shown.length === 0 ? "Show all" : "Hide all"}
-        </Button>
-        <span className="text-sm text-muted-foreground">{said}</span>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="ml-auto"
-          onClick={() => setAdding("")}
-        >
+    <>
+      <Row
+        flush
+        title="Add a model"
+        detail={`One ${cli} has that is not listed above.`}
+      >
+        <Button variant="outline" size="sm" onClick={() => setAdding("")}>
           <PlusIcon />
-          Add custom model
+          Add model
         </Button>
-      </div>
+      </Row>
       {adding !== null && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 py-2.5">
           <Input
             aria-label="Model"
             placeholder={`A model as ${cli} knows it`}
@@ -431,7 +356,7 @@ function Models({ provider }: { provider: Provider }) {
             }}
             spellCheck={false}
             autoComplete="off"
-            className="h-8 flex-1 font-mono text-xs md:text-xs"
+            className={cn("h-8 flex-1", TYPED)}
           />
           <Button variant="outline" size="sm" onClick={add}>
             Add
@@ -441,60 +366,29 @@ function Models({ provider }: { provider: Provider }) {
           </Button>
         </div>
       )}
-      <Models_
-        title="Favorites"
-        provider={provider}
-        models={found.filter((model) => first(model) && !off(model))}
-      />
-      <Models_
-        title="All"
-        provider={provider}
-        models={found.filter((model) => !first(model) && !off(model))}
-      />
-      <Models_
-        title="Hidden from the composer"
-        provider={provider}
-        models={found.filter(off)}
-      />
-      {found.length === 0 && (
-        <p className="text-sm text-muted-foreground">No model matches.</p>
-      )}
-    </div>
+    </>
   )
 }
 
-/** All there is to say and to choose about one of them. */
-function Detail({ provider }: { provider: Provider }) {
-  const { name, cli, command } = PROVIDER_WORDS[provider.id]
-  const { tone, headline, detail } = standing(provider)
-  const { settings, status } = provider
+/**
+ * What few have any need to touch: what is run, where it keeps its own settings, what
+ * it is started with, and a model it does not list.
+ */
+function Advanced({ provider }: { provider: Provider }) {
+  const { cli, command } = PROVIDER_WORDS[provider.id]
+  const { settings } = provider
   const home = HOME[provider.id]
   const change = (patch: Partial<ProviderSettings>) =>
     void changeProvider(provider.id, patch)
   return (
-    <div className="flex flex-col gap-6 p-5">
-      <header className="flex items-center gap-2.5 px-1">
-        <ProviderIcon provider={provider.id} className="size-4.5 shrink-0" />
-        <h2 className="text-sm font-medium">{name}</h2>
-        {status?.version && (
-          <span className="ml-auto font-mono text-xs text-muted-foreground">
-            v{status.version}
-          </span>
-        )}
-      </header>
-      <Group>
+    <div className="flex flex-col gap-5">
+      <Box title="Runtime">
         <Row
-          title={
-            <span className="flex items-center gap-1.5">
-              <Dot tone={tone} />
-              {headline}
-            </span>
-          }
-          detail={detail ?? undefined}
-        />
-      </Group>
-      <Group title="Runtime">
-        <Row title="Binary path" detail={`The ${cli} binary to run.`} wrap>
+          flush
+          wrap
+          title="Binary path"
+          detail={`The ${cli} binary to run.`}
+        >
           <Draft
             aria-label="Binary path"
             placeholder={command}
@@ -504,9 +398,10 @@ function Detail({ provider }: { provider: Provider }) {
         </Row>
         {home && (
           <Row
+            flush
+            wrap
             title={home.title}
             detail={`Where ${cli} keeps its settings and sign-in.`}
-            wrap
           >
             <Draft
               aria-label={home.title}
@@ -517,9 +412,10 @@ function Detail({ provider }: { provider: Provider }) {
           </Row>
         )}
         <Row
+          flush
+          wrap
           title="Launch arguments"
           detail="Extra arguments passed when a session starts."
-          wrap
         >
           <Draft
             aria-label="Launch arguments"
@@ -528,27 +424,221 @@ function Detail({ provider }: { provider: Provider }) {
             onCommit={(args) => change({ args })}
           />
         </Row>
-      </Group>
-      <Group title="Environment">
+      </Box>
+      <Box title="Environment">
         <Variables provider={provider} />
-      </Group>
-      <Group title="Models">
-        <Models provider={provider} />
-      </Group>
+      </Box>
+      <Box title="Other models">
+        <Added provider={provider} />
+      </Box>
+    </div>
+  )
+}
+
+/** How long a command copied says so, in ms. */
+const COPIED_MS = 1500
+
+/** Something to type in a terminal, as it is to be typed, with a button that copies it. */
+function Command({ text }: { text: string }) {
+  const [copied, setCopied] = React.useState(false)
+  React.useEffect(() => {
+    if (!copied) return
+    const timer = setTimeout(() => setCopied(false), COPIED_MS)
+    return () => clearTimeout(timer)
+  }, [copied])
+  return (
+    <span className="inline-flex max-w-full items-center gap-0.5 rounded-lg bg-foreground/6 py-0.5 pr-0.5 pl-2">
+      <code className="min-w-0 truncate font-mono text-[13px] text-foreground select-all">
+        {text}
+      </code>
+      <button
+        type="button"
+        aria-label={copied ? "Copied" : "Copy"}
+        title={copied ? "Copied" : "Copy"}
+        onClick={() =>
+          void navigator.clipboard.writeText(text).then(() => setCopied(true))
+        }
+        className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      >
+        {copied ? (
+          <CheckIcon className="size-3.5" />
+        ) : (
+          <CopyIcon className="size-3.5" />
+        )}
+      </button>
+    </span>
+  )
+}
+
+/** How one that is not on the machine is put there: in a terminal, or as its makers say. */
+function Install({ provider }: { provider: Provider }) {
+  const { name, install, docs } = PROVIDER_WORDS[provider.id]
+  return (
+    <div className="flex flex-col gap-3 text-sm text-muted-foreground">
+      {/* the command on a line of its own, under what to do with it */}
+      <div className="flex flex-col items-start gap-2">
+        <p>Open Terminal and type</p>
+        <Command text={install} />
+      </div>
+      <p>
+        <a
+          href={docs}
+          target="_blank"
+          rel="noreferrer"
+          className="underline underline-offset-4 hover:text-foreground"
+        >
+          Visit the {name} docs
+        </a>
+      </p>
     </div>
   )
 }
 
 /**
- * The agents a message can be put to: each in a list, with a switch for whether it is in
- * use, and beside the list all there is to choose about the one that is open.
+ * What is wrong with one that is installed and switched on, in two lines: what it comes
+ * to, and what to type in a terminal to see to it. What the agent itself said of it, in
+ * its own words, is there for a pointer that rests on it.
  */
-export function Providers() {
+function Trouble({ provider }: { provider: Provider }) {
+  const wrong = trouble(provider)
+  if (!wrong) return null
+  return (
+    <div
+      className="flex flex-col gap-0.5 text-sm"
+      title={provider.status?.trouble ?? undefined}
+    >
+      <p className="font-medium">{wrong.title}</p>
+      <p className="text-muted-foreground">
+        Open Terminal and type{" "}
+        <code className="rounded-md bg-foreground/6 px-1.5 py-0.5 font-mono text-[13px] text-foreground">
+          {wrong.command}
+        </code>
+        {wrong.after}
+      </p>
+    </div>
+  )
+}
+
+/**
+ * What there is to choose about one that is open: its models first, and the rest under
+ * them for whoever asks to see it.
+ */
+function Body({ provider, id }: { provider: Provider; id: string }) {
+  const [advanced, setAdvanced] = React.useState(false)
+  const { tone, detail } = standing(provider)
+  // looked for, and not found
+  const missing = provider.status !== null && !provider.status.path
+  return (
+    <div id={id} className="flex flex-col gap-7 px-8 pb-7">
+      {/* what is wanting of it, and what to do about that: what is wrong with one that
+          is there, or, where it is not on the machine, how it is put there, after what
+          was wrong with a path given for it */}
+      <Trouble provider={provider} />
+      {tone !== "ok" &&
+        tone !== "warn" &&
+        detail &&
+        (!missing || provider.settings.binary) && (
+          <p className="text-sm text-muted-foreground">{detail}</p>
+        )}
+      {missing && <Install provider={provider} />}
+      <Models provider={provider} />
+      {advanced && <Advanced provider={provider} />}
+      <button
+        type="button"
+        aria-expanded={advanced}
+        onClick={() => setAdvanced(!advanced)}
+        className="cursor-pointer self-start rounded-sm text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      >
+        {advanced ? "Hide advanced settings" : "Show advanced settings"}
+      </button>
+    </div>
+  )
+}
+
+/**
+ * One of them: its mark, what it is and how it stands, and at the far side its version,
+ * the switch for whether it is in use, and an arrow. All of the line opens it, but for
+ * the switch.
+ */
+function Entry({
+  provider,
+  open,
+  onOpen,
+}: {
+  provider: Provider
+  open: boolean
+  onOpen: () => void
+}) {
+  const { name } = PROVIDER_WORDS[provider.id]
+  const { tone, headline, detail } = standing(provider)
+  const { enabled } = provider.settings
+  const body = React.useId()
+  return (
+    <div>
+      <div className="relative flex min-h-24.5 items-center gap-5 pr-7 pl-8">
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={body}
+          title={detail ?? undefined}
+          onClick={onOpen}
+          // it is pressed anywhere on its line: only the switch stands over it
+          className="flex min-w-0 flex-1 cursor-pointer items-center gap-6 text-left outline-none after:absolute after:inset-0 focus-visible:after:ring-[3px] focus-visible:after:ring-ring/50 focus-visible:after:ring-inset"
+        >
+          <ProviderIcon
+            provider={provider.id}
+            className={cn(
+              "size-8 shrink-0",
+              !enabled && "opacity-50 grayscale"
+            )}
+          />
+          <span className="flex min-w-0 flex-col">
+            <span className="text-sm font-medium">{name}</span>
+            <span className="flex items-baseline gap-1.5 text-sm text-muted-foreground">
+              {/* (level with the middle of the line) */}
+              <span className="flex h-5 shrink-0 items-center empty:hidden">
+                <Dot tone={tone} />
+              </span>
+              <span className="truncate">{headline}</span>
+            </span>
+          </span>
+        </button>
+        {provider.status?.version && (
+          <span className="font-mono text-sm text-muted-foreground uppercase">
+            v{provider.status.version}
+          </span>
+        )}
+        <Switch
+          aria-label={`Use ${name}`}
+          checked={enabled}
+          onCheckedChange={(on) =>
+            void changeProvider(provider.id, { enabled: on })
+          }
+          className="z-10"
+        />
+        <ChevronDownIcon
+          absoluteStrokeWidth
+          strokeWidth={1}
+          className={cn(
+            "size-6 shrink-0 text-muted-foreground transition-transform",
+            open && "rotate-180"
+          )}
+        />
+      </div>
+      {/* each has its own boxes, with nothing in them of another's */}
+      {open && <Body id={body} provider={provider} />}
+    </div>
+  )
+}
+
+/**
+ * The agents looked at again, for one installed or signed in to since: when it was last
+ * done, as a button that does it. It stands beside the name of the section.
+ */
+export function CheckAgain() {
   const providers = useStore((state) => state.providers)
-  const [open, setOpen] = React.useState<ProviderId>("claude")
   const [asked, setAsked] = React.useState(false)
   const now = useNow(30_000)
-  const provider = providers.find((one) => one.id === open)
   const checking = asked || providers.some((one) => one.checking)
   const checked = Math.max(
     0,
@@ -556,47 +646,45 @@ export function Providers() {
   )
   const since = ago(checked, now)
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2">
-      <div className="flex justify-end">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="gap-1.5 text-muted-foreground"
-          disabled={checking}
-          onClick={() => {
-            setAsked(true)
-            void checkProviders().finally(() => setAsked(false))
-          }}
-        >
-          <RefreshCwIcon className={cn(checking && "animate-spin")} />
-          {checking
-            ? "Checking…"
-            : checked === 0
-              ? "Check again"
-              : `Checked ${since === "now" ? "just now" : `${since} ago`}`}
-        </Button>
-      </div>
-      <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl bg-card ring-1 ring-foreground/10">
-        <div
-          role="tablist"
-          aria-orientation="vertical"
-          aria-label="Providers"
-          className="flex w-72 shrink-0 flex-col divide-y divide-border/60 overflow-y-auto border-r border-border/60 last:*:border-b"
-        >
-          {providers.map((one) => (
-            <Entry
-              key={one.id}
-              provider={one}
-              open={one.id === open}
-              onOpen={() => setOpen(one.id)}
-            />
-          ))}
-        </div>
-        <div role="tabpanel" className="min-w-0 flex-1 overflow-y-auto">
-          {/* each has its own boxes, with nothing in them of another's */}
-          {provider && <Detail key={provider.id} provider={provider} />}
-        </div>
-      </div>
+    <Button
+      variant="ghost"
+      size="sm"
+      // its words end where the list under it does
+      className="-mr-3 gap-1.5 text-muted-foreground"
+      disabled={checking}
+      onClick={() => {
+        setAsked(true)
+        void checkProviders().finally(() => setAsked(false))
+      }}
+    >
+      <RefreshCwIcon className={cn(checking && "animate-spin")} />
+      {checking
+        ? "Checking…"
+        : checked === 0
+          ? "Check again"
+          : `Checked ${since === "now" ? "just now" : `${since} ago`}`}
+    </Button>
+  )
+}
+
+/**
+ * The agents a message can be put to, one under another: each says how it stands and has
+ * a switch for whether it is in use, and opens, one at a time, onto its models and what
+ * else there is to choose about it.
+ */
+export function Providers() {
+  const providers = useStore((state) => state.providers)
+  const [open, setOpen] = React.useState<ProviderId | null>(null)
+  return (
+    <div className="divide-y divide-border/60 overflow-hidden rounded-2xl bg-card ring-1 ring-foreground/10">
+      {providers.map((one) => (
+        <Entry
+          key={one.id}
+          provider={one}
+          open={one.id === open}
+          onOpen={() => setOpen(one.id === open ? null : one.id)}
+        />
+      ))}
     </div>
   )
 }

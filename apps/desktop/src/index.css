@@ -8,6 +8,17 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* What a machine reads is written in Iosevka, medium, where it is tried: in the settings.
+   The one weight is brought in, and as woff2 alone, which is all this window reads. */
+@font-face {
+  font-family: "Iosevka";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("@fontsource/iosevka/files/iosevka-latin-500-normal.woff2")
+    format("woff2");
+}
+
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: "Inter Variable", sans-serif;
@@ -162,6 +173,15 @@
   html {
     @apply font-sans;
   }
+}
+
+/* In the settings, a path, a version and a model's name as its maker has it are in
+   Iosevka, and in its medium: lighter, its narrow letters read thin beside Inter. */
+.settings {
+  --font-mono: "Iosevka", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.settings .font-mono {
+  font-weight: 500;
 }
 
 /* The window has no title bar of its own: these strips are what you drag it by. */

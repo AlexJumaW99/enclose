@@ -9,25 +9,44 @@ import type {
 
 /**
  * What each is called: by its name, by the command-line agent that is run, and by what
- * is typed to run that, which is also how its sign-in is begun.
+ * is typed to run that, which is also how its sign-in is begun. Then how it is put on a
+ * Mac, by what its makers have typed in a terminal, and where they say more of that.
  */
 export const PROVIDER_WORDS: Record<
   ProviderId,
-  { name: string; cli: string; command: string; signIn: string }
+  {
+    name: string
+    cli: string
+    command: string
+    signIn: string
+    install: string
+    docs: string
+  }
 > = {
   claude: {
     name: "Claude",
     cli: "Claude Code",
     command: "claude",
     signIn: "claude",
+    install: "curl -fsSL https://claude.ai/install.sh | bash",
+    docs: "https://code.claude.com/docs/en/setup",
   },
   codex: {
     name: "Codex",
     cli: "Codex",
     command: "codex",
     signIn: "codex login",
+    install: "curl -fsSL https://chatgpt.com/codex/install.sh | sh",
+    docs: "https://learn.chatgpt.com/docs/codex/cli",
   },
-  grok: { name: "Grok", cli: "Grok", command: "grok", signIn: "grok login" },
+  grok: {
+    name: "Grok",
+    cli: "Grok",
+    command: "grok",
+    signIn: "grok login",
+    install: "curl -fsSL https://x.ai/cli/install.sh | bash",
+    docs: "https://x.ai/cli",
+  },
 }
 
 /** Whether a message can be put to one: it is switched on, and installed. */
@@ -115,6 +134,18 @@ export type Standing = {
   detail: string | null
 }
 
+/**
+ * Who is signed in, as it is said to them: by what they pay for, where the agent says,
+ * and failing that by how they reach it.
+ */
+function using(account: string | null): string {
+  if (!account) return "Signed in"
+  if (account.includes("@")) return `Signed in as ${account}`
+  if (account === "API key") return "You’re using an API key"
+  if (account === "Grok account") return "You’re using your Grok account"
+  return `You’re using ${account}`
+}
+
 export function standing(provider: Provider): Standing {
   const { cli, signIn } = PROVIDER_WORDS[provider.id]
   const { status, settings } = provider
@@ -130,13 +161,13 @@ export function standing(provider: Provider): Standing {
   if (!settings.enabled)
     return {
       tone: "off",
-      headline: "Off",
+      headline: "Switched off",
       detail: `Switch it on to use ${cli} in Enclose.`,
     }
   if (status.signedIn)
     return {
       tone: "ok",
-      headline: status.account ? `Signed in · ${status.account}` : "Signed in",
+      headline: using(status.account),
       detail: `Enclose uses the account signed in to ${cli}.`,
     }
   if (status.signedIn === false)
@@ -154,4 +185,27 @@ export function standing(provider: Provider): Standing {
     headline: "Ready",
     detail: `Enclose uses the account signed in to ${cli}.`,
   }
+}
+
+/**
+ * What is wrong with one that is installed and switched on, as two lines say it: what it
+ * comes to, and what to type in a terminal to see to it, with what follows that. Null
+ * where nothing is.
+ */
+export function trouble(
+  provider: Provider
+): { title: string; command: string; after: string } | null {
+  if (standing(provider).tone !== "warn") return null
+  const { cli, command, signIn } = PROVIDER_WORDS[provider.id]
+  return provider.status?.signedIn === false
+    ? {
+        title: `Sign in to ${cli}`,
+        command: signIn,
+        after: ", then check again.",
+      }
+    : {
+        title: `${cli} is not responding`,
+        command,
+        after: " to see that it works, then check again.",
+      }
 }

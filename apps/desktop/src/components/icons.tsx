@@ -127,6 +127,35 @@ export function ReferenceIcon(props: IconProps) {
   )
 }
 
+/**
+ * A star with straight sides and sharp points, which marks a favourite: in a line for
+ * one that is not, and filled for one that is. The line is a pixel wide at any size.
+ */
+export function StarIcon({
+  filled,
+  ...props
+}: IconProps & { filled?: boolean }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill={filled ? "currentColor" : "none"}
+      stroke={filled ? "none" : "currentColor"}
+      strokeWidth="1"
+      strokeLinejoin="miter"
+      aria-hidden
+      {...props}
+    >
+      <path
+        vectorEffect="non-scaling-stroke"
+        d="M12 2.95 14.245 9.86h7.266l-5.878 4.27 2.245 6.91L12 16.77l-5.878 4.27 2.245-6.91L2.489 9.86h7.266Z"
+      />
+    </svg>
+  )
+}
+
 /** Claude's mark, in Claude's colour: whose models these are. */
 export function ClaudeIcon(props: IconProps) {
   return (

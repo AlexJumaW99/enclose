@@ -132,7 +132,8 @@ function onPath(name: string): string | null {
 /**
  * An app opened from the Dock or Finder gets a bare PATH, without the directories a
  * terminal adds - which is where `claude`, `python3` and the rest live. Ask the login
- * shell what PATH it would use, and adopt it. Once is enough, once it has answered. A
+ * shell what PATH it would use, and adopt it. Once is enough, once it has answered, until
+ * the agents are looked at again on purpose. A
  * shell with a lot in its profile can take many seconds over it, the first time after
  * the machine was started above all: it is given that long, and one that was given up
  * on is asked again the next time something is looked for, or the app would go on
@@ -341,8 +342,13 @@ export class Providers {
     return same ? Promise.resolve() : this.check(id)
   }
 
-  /** Look at one of them again, or at them all. */
+  /**
+   * Look at one of them again, or at them all. The terminal's PATH is asked for afresh
+   * first: an installer puts its folder on it, and what was installed since the app
+   * opened is found only there.
+   */
   check(id?: ProviderId): Promise<void> {
+    adopted = null
     return Promise.all(
       (id ? [id] : PROVIDERS).map((one) =>
         this.next(one, async () => {

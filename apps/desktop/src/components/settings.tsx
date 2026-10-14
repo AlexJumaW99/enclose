@@ -1,20 +1,10 @@
 import * as React from "react"
 import { cn } from "cn"
-import {
-  ArrowLeftIcon,
-  ChevronDownIcon,
-  InfoIcon,
-  KeyboardIcon,
-  PaletteIcon,
-  Rotate3dIcon,
-  SlidersHorizontalIcon,
-  SparklesIcon,
-  type LucideIcon,
-} from "lucide-react"
+import { ChevronDownIcon, XIcon } from "lucide-react"
 
 import type { Settings as AppSettings } from "@shared/api"
 import { Miniature } from "@/components/miniature"
-import { Providers } from "@/components/providers"
+import { CheckAgain, Providers } from "@/components/providers"
 import { Group, Row } from "@/components/setting"
 import { useTheme } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
@@ -30,6 +20,11 @@ import { Kbd } from "@/components/ui/kbd"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { SETTLE_DAYS } from "@/lib/conversations"
 import { ACCESS_WORDS } from "@/lib/manner"
 import {
@@ -46,14 +41,15 @@ import { TURN_SPEED, usePreferences, ZOOM_SPEED } from "@/lib/preferences"
 import { dated } from "@/lib/saved"
 import { useStore } from "@/lib/store"
 
+/** The sections, in the order they are listed: what is turned to most comes first. */
 const SECTIONS = [
-  { id: "general", label: "General", icon: SlidersHorizontalIcon },
-  { id: "appearance", label: "Appearance", icon: PaletteIcon },
-  { id: "navigation", label: "Navigation", icon: Rotate3dIcon },
-  { id: "shortcuts", label: "Shortcuts", icon: KeyboardIcon },
-  { id: "providers", label: "Providers", icon: SparklesIcon },
-  { id: "about", label: "About", icon: InfoIcon },
-] as const satisfies { id: string; label: string; icon: LucideIcon }[]
+  { id: "general", label: "General" },
+  { id: "navigation", label: "Navigation" },
+  { id: "shortcuts", label: "Shortcuts" },
+  { id: "providers", label: "Providers" },
+  { id: "appearance", label: "Appearance" },
+  { id: "about", label: "About" },
+] as const satisfies { id: string; label: string }[]
 
 type SectionId = (typeof SECTIONS)[number]["id"]
 
@@ -138,7 +134,7 @@ function Days({
         }}
         // what was left half-typed gives way to what stands
         onBlur={() => setTyped(String(value))}
-        className="h-8 w-16 text-right tabular-nums"
+        className="h-8 w-16 text-center tabular-nums"
       />
       <span className="text-sm text-muted-foreground">
         {value === 1 ? "day" : "days"}
@@ -193,7 +189,9 @@ function General() {
             <>
               Where new projects are saved.
               <span className="mt-1 block text-xs">
-                <span className="font-mono break-all">{folder ?? " "}</span>
+                <span className="font-mono text-[13px] break-all">
+                  {folder ?? " "}
+                </span>
                 {size !== null && ` · ${roomOf(size)}`}
               </span>
             </>
@@ -781,14 +779,22 @@ const PAGES: Record<SectionId, () => React.ReactNode> = {
   about: About,
 }
 
+/** What is done to all of a section, for the ones that have it: beside its name. */
+const BESIDE: Partial<Record<SectionId, () => React.ReactNode>> = {
+  providers: CheckAgain,
+}
+
 /**
- * The settings, over the whole window: the sections down the left, and the one that is
- * open beside them. Esc, or Back, returns to the model.
+ * The settings, in a panel that floats over the window from its left side: the sections
+ * down the left of it, and beside them the one that is open, under its name. The app is
+ * still to be seen past the panel, dimmed. Esc, the cross, or a click on the app puts
+ * the settings away.
  */
 export function Settings() {
   const close = useStore((state) => state.setSettingsOpen)
   const [open, setOpen] = React.useState<SectionId>("general")
   const Page = PAGES[open]
+  const Beside = BESIDE[open]
   const section = SECTIONS.find((item) => item.id === open)
 
   React.useEffect(() => {
@@ -803,64 +809,87 @@ export function Settings() {
     return () => window.removeEventListener("keydown", key, true)
   }, [close])
 
+  // what is typed is the settings' from the moment they open, not the message box's
+  const panel = React.useRef<HTMLDivElement>(null)
+  React.useEffect(() => panel.current?.focus(), [])
+
   return (
-    <div className="fixed inset-0 z-40 flex bg-background text-foreground">
-      <nav className="flex w-60 shrink-0 flex-col border-r border-border/60 bg-sidebar">
+    <div className="settings fixed inset-0 z-40 text-foreground">
+      {/* the app past the panel: dimmed, and a click on it puts the settings away */}
+      <div
+        aria-hidden
+        className="no-drag absolute inset-0 animate-in bg-black/30 duration-200 fade-in-0 dark:bg-black/50"
+        onClick={() => close(false)}
+      />
+      {/* (the window's own corners are the panel's on the left, where it meets its edge) */}
+      <div
+        ref={panel}
+        role="dialog"
+        aria-modal
+        aria-label="Settings"
+        tabIndex={-1}
+        className="no-drag absolute inset-y-0 left-0 flex w-205 max-w-full animate-in flex-col rounded-r-xl bg-background shadow-2xl ring-1 ring-foreground/10 duration-200 fade-in-0 outline-none slide-in-from-left-3"
+      >
         {/* room for the window's traffic lights, and something to drag it by */}
-        <div className="drag flex h-12 shrink-0 items-center pl-22 text-sm font-medium">
-          Enclose
-        </div>
-        <div className="flex flex-1 flex-col gap-0.5 p-2">
-          {SECTIONS.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              type="button"
-              aria-current={open === id}
-              onClick={() => setOpen(id)}
-              className={cn(
-                "flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-left text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                open === id
-                  ? "bg-sidebar-accent font-medium"
-                  : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground"
-              )}
-            >
-              <Icon className="size-4 shrink-0" />
-              {label}
-            </button>
-          ))}
-        </div>
-        <div className="p-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start gap-2.5 text-muted-foreground"
-            onClick={() => close(false)}
+        <div className="drag h-12 shrink-0" />
+        <div className="flex min-h-0 flex-1">
+          <nav className="flex w-41.25 shrink-0 flex-col items-start pt-2.5 pl-7.5">
+            {SECTIONS.map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                aria-current={open === id ? "page" : undefined}
+                onClick={() => setOpen(id)}
+                className={cn(
+                  "flex h-5.75 items-center rounded-sm text-[13px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                  open === id
+                    ? "text-foreground"
+                    : "text-muted-foreground/75 hover:text-foreground"
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+          {/* each section is read from its top, and goes up out of sight softly */}
+          <main
+            key={open}
+            className="min-w-0 flex-1 overflow-y-auto mask-t-from-[calc(100%-0.625rem)] pr-12"
           >
-            <ArrowLeftIcon />
-            Back
-            <Kbd className="ml-auto">Esc</Kbd>
-          </Button>
+            <div className="flex flex-col gap-8 pt-2.75 pb-10">
+              <div className="flex items-center justify-between gap-4">
+                <h1 className="px-0.5 text-2xl font-medium">
+                  {section?.label}
+                </h1>
+                {Beside && <Beside />}
+              </div>
+              <Page />
+            </div>
+          </main>
         </div>
-      </nav>
-      <main className="flex min-w-0 flex-1 flex-col">
-        <div className="drag flex h-12 shrink-0 items-center gap-2 px-6 text-sm">
-          <span className="text-muted-foreground">Settings</span>
-          <span className="text-muted-foreground/50">/</span>
-          <span className="font-medium">{section?.label}</span>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <div
-            className={cn(
-              "mx-auto flex w-full flex-col gap-8 px-8 pt-4",
-              // the providers are a list with what is open of it beside: wider than a
-              // column of settings, and as tall as the window, scrolling within itself
-              open === "providers" ? "h-full max-w-5xl pb-8" : "max-w-2xl pb-16"
-            )}
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                onClick={() => close(false)}
+                className="absolute bottom-3 left-4 flex size-9 items-center justify-center rounded-full bg-muted outline-none hover:bg-foreground/15 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              />
+            }
           >
-            <Page />
-          </div>
-        </div>
-      </main>
+            <XIcon
+              className="size-5.5"
+              absoluteStrokeWidth
+              strokeWidth={1.25}
+            />
+            <span className="sr-only">Close settings</span>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="has-data-[slot=kbd]:pr-2.5">
+            Close
+            <Kbd>Esc</Kbd>
+          </TooltipContent>
+        </Tooltip>
+      </div>
     </div>
   )
 }
