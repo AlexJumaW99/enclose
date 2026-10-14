@@ -869,10 +869,12 @@ export function Settings() {
               </button>
             ))}
           </nav>
-          {/* each section is read from its top, and goes up out of sight softly */}
+          {/* each section is read from its top, and goes up out of sight softly; it is
+              let out to the left by as much as it is padded there, so the rings round its
+              cards and controls aren't cut off at their left edge */}
           <main
             key={open}
-            className="min-w-0 flex-1 overflow-y-auto mask-t-from-[calc(100%-0.625rem)] pr-12"
+            className="-ml-1 min-w-0 flex-1 overflow-y-auto mask-t-from-[calc(100%-0.625rem)] pr-12 pl-1"
           >
             <div className="flex flex-col gap-8 pt-2.75 pb-10">
               <div className="flex items-center justify-between gap-4">
