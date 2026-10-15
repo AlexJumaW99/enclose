@@ -5,6 +5,7 @@ import path from "node:path"
 import {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   ipcMain,
   net,
@@ -24,6 +25,7 @@ import {
   OWN_SCENE,
   PROVIDERS,
   SCENE_HOST,
+  type GitHubState,
   type GroupAsked,
   type GuideSummary,
   type Looks,
@@ -54,6 +56,10 @@ import { fileGuide, guideOf, guidesIn, removeGuide } from "./assembly"
 import { Changes } from "./changes"
 import { Versions } from "./versions"
 import { zipOf } from "./zip"
+import { managedNow } from "./backup"
+import { Backups, type BackingUp } from "./backups"
+import { Connection } from "./connection"
+import { git } from "./git"
 import { MESH_FORMATS, meshFile, trianglesOf, type MeshFormat } from "./meshes"
 import { followRename, listCommands, lookAtClaude } from "./claude"
 import { lookAtCodex } from "./codex"
@@ -190,6 +196,10 @@ const guideServer = new GuideServer(path.join(HERE, "guide"), (id) => {
 })
 /** the app's newer versions: none are looked for when it is run from a checkout */
 let updates: Updates | null = null
+/** GitHub, as projects are backed up to it, and backing them up */
+let connection: Connection
+let backups: Backups
+let backingUp: BackingUp = null
 /** the count of how the app is used: none is kept when it is run from a checkout */
 let analytics: Analytics | null = null
 /**
@@ -289,6 +299,12 @@ async function turnBack(id: string, way: "undo" | "redo"): Promise<Undone> {
   projects.refresh(id)
   if (!change.files.some((file) => file.path === manifest)) projects.changed(id)
   broadcast()
+  // the project's history has it too, as one more step: what was pushed stays as it was
+  void backups.record(id, {
+    what: `${way === "undo" ? "Undid" : "Redid"} “${change.what}”`,
+    conversation: null,
+    conversationId: whose(id) ?? null,
+  })
   analytics?.record("change turned back", { way })
   return { ok: true, what: change.what }
 }
@@ -296,6 +312,31 @@ const send = (channel: string, ...args: unknown[]) => {
   if (win && !win.isDestroyed()) win.webContents.send(channel, ...args)
 }
 const broadcast = () => send(CHANNEL.projectsChanged, list())
+const githubState = (): GitHubState => ({
+  connection: connection.state,
+  backingUp,
+})
+const sendGitHub = () => send(CHANNEL.githubChanged, githubState())
+
+/** The projects as backing them up has them. */
+function backed() {
+  return projects
+    .list(() => [])
+    .flatMap(({ id, name }) => {
+      const project = projects.get(id)
+      return project
+        ? [
+            {
+              id,
+              path: project.path,
+              name,
+              manifest: project.manifest,
+              build: project.build,
+            },
+          ]
+        : []
+    })
+}
 
 // --- a project as each of its conversations has it ------------------------------------
 
@@ -506,6 +547,14 @@ function makeModel(id: string) {
       builds.delete(id)
       projects.report(id, failed)
       follow()
+      // there is a model of it now, and so a repository to be made for it, where GitHub is
+      // connected (what the build wrote is no part of the history)
+      if (!failed)
+        void backups.record(id, {
+          what: "Built the model",
+          conversation: null,
+          conversationId: whose(id) ?? null,
+        })
     })
   })
 }
@@ -522,9 +571,11 @@ function open(paths: string[]): { id: string | null; refused: string[] } {
   )
   let id: string | null = null
   for (const dir of opened.folders) {
-    if (!projects.knows(dir))
-      analytics?.record("project added", { from: "folder" })
+    const known = projects.knows(dir)
+    if (!known) analytics?.record("project added", { from: "folder" })
     id = projects.add(dir)
+    // its history kept from now on, unless it is a repository of somebody's own already
+    if (!known) void backups.prepare(id, "Opened in Enclose")
   }
   for (const bundle of opened.bundles) {
     const { projectsFolder, lookOver } = settings.get()
@@ -539,6 +590,10 @@ function open(paths: string[]): { id: string | null; refused: string[] } {
       // what is in the files is Claude's to name and group, once there is a model of it
       ...(lookOver ? { lookOver: written } : {}),
     })
+    void backups.prepare(
+      id,
+      `Brought in ${bundle.files.map((file) => path.basename(file.as)).join(", ")}`
+    )
     makeModel(id)
   }
   return { id, refused: opened.refused }
@@ -686,6 +741,7 @@ function lookOver(id: string, seen: Seen, manner: Manner): string | null {
       // (the project alone is renamed: its folder is left as it is called)
       named = title
       projects.rename(id, title)
+      void backups.renamed(id)
       projects.refresh(id)
       broadcast()
       return `Done: ${arranged.parts.length} parts in ${arranged.groups.length} groups (${arranged.groups.map((group) => group.label).join(", ")}).${title === called ? "" : ` The project is called "${title}" now.`} The view shows the model so.`
@@ -893,6 +949,7 @@ function wire() {
   ipcMain.handle(CHANNEL.projectsCreate, () => {
     const made = newFolder()
     const id = projects.add(made.dir, { name: made.name, standIn: true })
+    void backups.prepare(id, "Started in Enclose")
     analytics?.record("project added", { from: "new" })
     return list().find((p) => p.id === id) ?? null
   })
@@ -920,6 +977,7 @@ function wire() {
       const { projectsFolder } = settings.get()
       const dir = startFrom(from, example.name, projectsFolder, KIT)
       id = projects.add(dir, { name: example.name })
+      void backups.prepare(id, `Started from the ${example.name} example`)
       analytics?.record("project added", {
         from: "example",
         example: example.id,
@@ -974,9 +1032,22 @@ function wire() {
     projects.remove(project.id)
     analytics?.record("project removed")
   })
-  ipcMain.handle(CHANNEL.projectsRename, (_, id: string, name: string) =>
+  ipcMain.handle(CHANNEL.projectsRename, (_, id: string, name: string) => {
     projects.rename(String(id), String(name))
-  )
+    void backups.renamed(String(id))
+  })
+  ipcMain.handle(CHANNEL.githubGet, () => githubState())
+  ipcMain.handle(CHANNEL.githubConnect, () => {
+    // (heard of as it goes: the window is not kept waiting on the user's typing)
+    void connection.connect()
+  })
+  ipcMain.handle(CHANNEL.githubOpenCode, () => connection.openCode())
+  ipcMain.handle(CHANNEL.githubOpenInstall, () => connection.openInstall())
+  ipcMain.handle(CHANNEL.githubCancel, () => connection.cancel())
+  ipcMain.handle(CHANNEL.githubDisconnect, () => {
+    connection.disconnect()
+    analytics?.record("github disconnected")
+  })
   ipcMain.handle(CHANNEL.projectsReveal, (_, id: string) => {
     const project = projects.get(id)
     if (project) void shell.openPath(project.path)
@@ -1665,6 +1736,31 @@ if (!app.requestSingleInstanceLock()) {
     changes = new Changes(path.join(data, "changes"))
     versions = new Versions(path.join(data, "versions"))
     pictures = new Pictures(path.join(data, "pictures"))
+    connection = new Connection({
+      saved: () => settings.github(),
+      save: (github) => settings.setGitHub(github),
+      open: (url) => void shell.openExternal(url),
+      copy: (text) => clipboard.writeText(text),
+      get: (url, init) => net.fetch(String(url), init),
+      onChange: sendGitHub,
+      onConnected: () => {
+        analytics?.record("github connected")
+        // every project there is, backed up now, with the window saying how far it has got
+        void backups.all(true)
+      },
+    })
+    backups = new Backups({
+      git,
+      projects: backed,
+      fits: (dir) => versions.fits(dir),
+      versioned: () => settings.get().versions,
+      github: () => connection.connected(),
+      signedOut: () => connection.signedOut(),
+      onProgress: (progress) => {
+        backingUp = progress
+        sendGitHub()
+      },
+    })
     threads = new Threads({
       dir: path.join(data, "threads"),
       projects,
@@ -1703,12 +1799,23 @@ if (!app.requestSingleInstanceLock()) {
         return filed
       },
       // (what Claude Code keeps of a folder is in its home, wherever the user has that)
-      onRenamed: (from, to) =>
+      onRenamed: (from, to) => {
         followRename(
           from,
           to,
           expandHome(settings.provider("claude").home) || undefined
-        ),
+        )
+        // the project has its name now: its repository takes it too
+        const renamed = projects.list(() => []).find((one) => one.path === to)
+        if (renamed) void backups.renamed(renamed.id)
+      },
+      onTurned: (projectId, conversationId, what, conversation) =>
+        void backups.record(projectId, { what, conversation, conversationId }),
+      history: (projectId) => {
+        const project = projects.get(projectId)
+        if (!project || !managedNow(project.path)) return "off"
+        return connection.connected() ? "github" : "local"
+      },
       viewport: askViewport,
       onItem: (projectId, conversationId, item) =>
         send(CHANNEL.threadItem, projectId, conversationId, item),
@@ -1789,6 +1896,9 @@ if (!app.requestSingleInstanceLock()) {
       )
         makeModel(id)
     }
+
+    // what changed in the projects while the app was not open goes to GitHub, unshown
+    if (connection.connected() && !CAPTURE) void backups.all(false)
 
     // a folder or a CAD file on the command line is opened, like `code <folder>`
     const given = process.argv

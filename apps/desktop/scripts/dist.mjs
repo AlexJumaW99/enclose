@@ -15,9 +15,12 @@
 //               notarytool store-credentials`; or with an App Store Connect key, given
 //               as APPLE_API_KEY (its file), APPLE_API_KEY_ID and APPLE_API_ISSUER
 // With neither the app is still made, and runs on the Mac that made it.
+import { arch as here } from "node:os"
 import { resolve } from "node:path"
 
 import { Arch, Platform, build } from "electron-builder"
+
+import { prepareGit } from "./git.mjs"
 
 const ROOT = resolve(import.meta.dirname, "..")
 
@@ -33,89 +36,100 @@ const notarized = Boolean(
     process.env.APPLE_API_ISSUER)
 )
 
-const made = await build({
-  projectDir: ROOT,
-  targets: Platform.MAC.createTarget(
-    ["dmg", "zip"],
-    ...archs.map((arch) => Arch[arch])
-  ),
-  // (made, and no more: a release is put up by hand, as docs/development.md says)
-  publish: "never",
-  config: {
-    // what a Mac knows the app by, and files what it lets the app do under: not to be
-    // changed once people have the app
-    appId: "dev.enclose.desktop",
-    copyright: "Copyright © 2026 Glauber",
-    directories: { output: "release" },
-    // The build, and of the icons the ones a window is given. Of node_modules, what the
-    // Electron side loads as it runs comes along by itself: the package's dependencies,
-    // which is why what Vite bundles into the window is listed as a devDependency.
-    files: [
-      "dist",
-      "dist-electron",
-      "icons/icon-512.png",
-      "icons/icon.ico",
-      "!**/*.map",
-      // The agent SDK brings a Claude Code of its own, a quarter of a gigabyte of it.
-      // The app runs the one on the user's machine (see `running` in electron/claude.ts).
-      "!**/node_modules/@anthropic-ai/claude-agent-sdk-*/**",
-    ],
-    // The kit goes in as it is, beside the app's archive and not in it: Python reads it,
-    // and an agent copies from it (`TOP` in electron/main.ts is where it is looked for).
-    extraResources: [
-      {
-        from: "../../kit",
-        to: "kit",
-        filter: ["**/*", "!**/__pycache__", "!**/.DS_Store"],
-      },
-    ],
-    mac: {
-      category: "public.app-category.graphics-design",
-      icon: "icons/icon.icns",
-      // (by the name alone: what the app is shown as has spaces in it, and a download
-      // is linked to by this)
-      artifactName: "Enclose-${version}-${arch}.${ext}",
-      notarize: notarized,
-      // A Mac asks its user before an app, or anything the app runs, reads one of these
-      // folders, and shows them this as the reason.
-      extendInfo: {
-        NSDocumentsFolderUsageDescription:
-          "Enclose keeps its projects in your Documents folder, and opens the ones you have there.",
-        NSDesktopFolderUsageDescription:
-          "Enclose opens the projects and CAD files you have on your Desktop.",
-        NSDownloadsFolderUsageDescription:
-          "Enclose opens the projects and CAD files you have in Downloads.",
-      },
-    },
-    // The window the disk image opens: the app, and the Applications folder it is
-    // dragged to, with an arrow between them. The arrow is in the picture behind
-    // (installer/background.svg, which `npm run icons` makes pictures of), and the
-    // window is the size of that picture. It is a light one: Finder writes the names
-    // under the icons in black whatever is behind them.
-    dmg: {
-      // The disk images are named for the kind of Mac and not for the version, so that
-      // the newest of each is always at one address: the site's download button, and
-      // enclose.dev/download, go to
-      //   github.com/enclosedev/enclose/releases/latest/download/Enclose-arm64.dmg
-      // (and -x64), which GitHub answers with whichever release is the latest. The
-      // archives an installed app updates from keep their versions: latest-mac.yml
-      // names them, and nothing else has to find them.
-      artifactName: "Enclose-${arch}.${ext}",
-      title: "${productName}",
-      background: "installer/background.png",
-      iconSize: 128,
-      iconTextSize: 13,
-      contents: [
-        { x: 180, y: 166, type: "file" },
-        { x: 480, y: 166, type: "link", path: "/Applications" },
+let made
+try {
+  made = await build({
+    projectDir: ROOT,
+    targets: Platform.MAC.createTarget(
+      ["dmg", "zip"],
+      ...archs.map((arch) => Arch[arch])
+    ),
+    // (made, and no more: a release is put up by hand, as docs/development.md says)
+    publish: "never",
+    config: {
+      // what a Mac knows the app by, and files what it lets the app do under: not to be
+      // changed once people have the app
+      appId: "dev.enclose.desktop",
+      copyright: "Copyright © 2026 Glauber",
+      directories: { output: "release" },
+      // The build, and of the icons the ones a window is given. Of node_modules, what the
+      // Electron side loads as it runs comes along by itself: the package's dependencies,
+      // which is why what Vite bundles into the window is listed as a devDependency.
+      files: [
+        "dist",
+        "dist-electron",
+        "icons/icon-512.png",
+        "icons/icon.ico",
+        "!**/*.map",
+        // The agent SDK brings a Claude Code of its own, a quarter of a gigabyte of it.
+        // The app runs the one on the user's machine (see `running` in electron/claude.ts).
+        "!**/node_modules/@anthropic-ai/claude-agent-sdk-*/**",
       ],
+      // The git a project's history is kept with is a program, run from where it is: out
+      // of the app's archive, as a folder beside it. It is fetched for each kind of Mac
+      // as that one is made (scripts/git.mjs).
+      asarUnpack: ["**/node_modules/dugite/git/**"],
+      beforePack: async ({ arch }) => prepareGit(Arch[arch]),
+      // The kit goes in as it is, beside the app's archive and not in it: Python reads it,
+      // and an agent copies from it (`TOP` in electron/main.ts is where it is looked for).
+      extraResources: [
+        {
+          from: "../../kit",
+          to: "kit",
+          filter: ["**/*", "!**/__pycache__", "!**/.DS_Store"],
+        },
+      ],
+      mac: {
+        category: "public.app-category.graphics-design",
+        icon: "icons/icon.icns",
+        // (by the name alone: what the app is shown as has spaces in it, and a download
+        // is linked to by this)
+        artifactName: "Enclose-${version}-${arch}.${ext}",
+        notarize: notarized,
+        // A Mac asks its user before an app, or anything the app runs, reads one of these
+        // folders, and shows them this as the reason.
+        extendInfo: {
+          NSDocumentsFolderUsageDescription:
+            "Enclose keeps its projects in your Documents folder, and opens the ones you have there.",
+          NSDesktopFolderUsageDescription:
+            "Enclose opens the projects and CAD files you have on your Desktop.",
+          NSDownloadsFolderUsageDescription:
+            "Enclose opens the projects and CAD files you have in Downloads.",
+        },
+      },
+      // The window the disk image opens: the app, and the Applications folder it is
+      // dragged to, with an arrow between them. The arrow is in the picture behind
+      // (installer/background.svg, which `npm run icons` makes pictures of), and the
+      // window is the size of that picture. It is a light one: Finder writes the names
+      // under the icons in black whatever is behind them.
+      dmg: {
+        // The disk images are named for the kind of Mac and not for the version, so that
+        // the newest of each is always at one address: the site's download button, and
+        // enclose.dev/download, go to
+        //   github.com/enclosedev/enclose/releases/latest/download/Enclose-arm64.dmg
+        // (and -x64), which GitHub answers with whichever release is the latest. The
+        // archives an installed app updates from keep their versions: latest-mac.yml
+        // names them, and nothing else has to find them.
+        artifactName: "Enclose-${arch}.${ext}",
+        title: "${productName}",
+        background: "installer/background.png",
+        iconSize: 128,
+        iconTextSize: 13,
+        contents: [
+          { x: 180, y: 166, type: "file" },
+          { x: 480, y: 166, type: "link", path: "/Applications" },
+        ],
+      },
+      // Where an app that is installed looks for the versions after it: the releases of
+      // the app's repository, the latest of them. It is written into the app, and is why
+      // latest-mac.yml is made.
+      publish: { provider: "github", owner: "enclosedev", repo: "enclose" },
     },
-    // Where an app that is installed looks for the versions after it: the releases of
-    // the app's repository, the latest of them. It is written into the app, and is why
-    // latest-mac.yml is made.
-    publish: { provider: "github", owner: "enclosedev", repo: "enclose" },
-  },
-})
+  })
+} finally {
+  // and the git of this Mac's own kind again, for running the app from the checkout
+  prepareGit(here())
+}
 
 // what goes up with a release
 for (const file of [

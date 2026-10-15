@@ -577,6 +577,25 @@ export type Feature = (typeof FEATURES)[number]
  * with this much of it here (0 to 1); or it is here, and is what the app is once it has
  * been started again, which it is about to be when that has been asked for.
  */
+/**
+ * GitHub, as the app backs projects up to it (electron/github.ts). unavailable: this
+ * build of the app has no GitHub app of its own to connect through. off: not connected.
+ * code: the user is to type `code` at `uri` on GitHub's site. install: signed in, but
+ * Enclose's app is still to be installed on the account, at `url`. on: connected.
+ */
+export type GitHubConnection =
+  | { state: "unavailable" }
+  | { state: "off"; trouble: string | null }
+  | { state: "code"; code: string; uri: string }
+  | { state: "install"; login: string; url: string }
+  | { state: "on"; login: string; name: string | null }
+
+/** GitHub, and how far backing every project up to it has got, while it is under way. */
+export type GitHubState = {
+  connection: GitHubConnection
+  backingUp: { done: number; total: number } | null
+}
+
 export type Update =
   | { state: "none" }
   | {
@@ -864,6 +883,20 @@ export type CadApi = {
     /** say that the view was put into one of these, for the app's count of its use */
     used(feature: Feature): void
   }
+  github: {
+    get(): Promise<GitHubState>
+    /** sign in to GitHub: what the user is to do is heard of as it comes */
+    connect(): Promise<void>
+    /** copy the code to be typed, and open the page it is typed on */
+    openCode(): Promise<void>
+    /** open the page Enclose's app is installed from */
+    openInstall(): Promise<void>
+    /** stop signing in, where it is under way */
+    cancel(): Promise<void>
+    /** forget the account: the repositories stay on GitHub, and the history in each project */
+    disconnect(): Promise<void>
+    onChange(listener: (state: GitHubState) => void): () => void
+  }
   update: {
     get(): Promise<Update>
     /** fetch the newer version there is: how far along it is, is heard of as it comes */
@@ -942,6 +975,13 @@ export const CHANNEL = {
   updateDownload: "update:download",
   updateRestart: "update:restart",
   updateChanged: "update:changed",
+  githubGet: "github:get",
+  githubConnect: "github:connect",
+  githubOpenCode: "github:open-code",
+  githubOpenInstall: "github:open-install",
+  githubCancel: "github:cancel",
+  githubDisconnect: "github:disconnect",
+  githubChanged: "github:changed",
   viewportRequest: "viewport:request",
   viewportResponse: "viewport:response",
 } as const

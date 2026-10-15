@@ -3,6 +3,8 @@ import { cn } from "cn"
 import { ChevronDownIcon, XIcon } from "lucide-react"
 
 import type { Settings as AppSettings } from "@shared/api"
+import { ConnectGitHub } from "@/components/connect-github"
+import { GitHubIcon } from "@/components/icons"
 import { Logo } from "@/components/mark"
 import { Miniature } from "@/components/miniature"
 import { PillSlider } from "@/components/pill-slider"
@@ -49,6 +51,7 @@ const SECTIONS = [
   { id: "navigation", label: "Navigation" },
   { id: "shortcuts", label: "Shortcuts" },
   { id: "providers", label: "Providers" },
+  { id: "connections", label: "Connections" },
   { id: "appearance", label: "Appearance" },
   { id: "about", label: "About" },
 ] as const satisfies { id: string; label: string }[]
@@ -749,6 +752,66 @@ function Shortcuts() {
   )
 }
 
+/**
+ * The services the app keeps the user's work with, each with the button that connects
+ * it. GitHub first: every project backed up to a private repository of its own on the
+ * user's account, after every change, with nothing more asked of them.
+ */
+function Connections() {
+  const { connection, backingUp } = useStore((state) => state.github)
+  const { github } = window.cad
+  // what it is at, in one line: what went wrong, where something did
+  const said =
+    connection.state === "unavailable"
+      ? "Not available in this version of Enclose."
+      : connection.state === "off"
+        ? (connection.trouble ??
+          "Back up your projects to private repositories.")
+        : connection.state === "code" || connection.state === "install"
+          ? "Connecting…"
+          : backingUp
+            ? `Backing up to @${connection.login}: ${backingUp.done} of ${backingUp.total}`
+            : `Backed up to @${connection.login}.`
+  return (
+    // laid out as the agents are, each with its mark
+    <div className="divide-y divide-border/60 overflow-hidden rounded-2xl bg-card ring-1 ring-foreground/10">
+      <div className="flex min-h-24.5 items-center gap-5 pr-7 pl-8">
+        <span className="flex min-w-0 flex-1 items-center gap-6">
+          <GitHubIcon className="size-6.5 shrink-0" />
+          <span className="flex min-w-0 flex-col">
+            <span className="text-sm font-medium">GitHub</span>
+            <span
+              className={cn(
+                "truncate text-sm text-muted-foreground",
+                connection.state === "off" &&
+                  connection.trouble &&
+                  "text-destructive"
+              )}
+            >
+              {said}
+            </span>
+          </span>
+        </span>
+        {connection.state === "off" && (
+          <Button size="sm" onClick={() => void github.connect()}>
+            Connect
+          </Button>
+        )}
+        {connection.state === "on" && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void github.disconnect()}
+          >
+            Disconnect
+          </Button>
+        )}
+      </div>
+      <ConnectGitHub connection={connection} />
+    </div>
+  )
+}
+
 function About() {
   return (
     <Group title="Enclose">
@@ -783,6 +846,7 @@ const PAGES: Record<SectionId, () => React.ReactNode> = {
   navigation: Navigation,
   shortcuts: Shortcuts,
   providers: Providers,
+  connections: Connections,
   about: About,
 }
 
@@ -807,6 +871,8 @@ export function Settings() {
   React.useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return
+      // a dialog over the settings is put away first, by itself
+      if (document.querySelector('[data-slot="connect-github"]')) return
       // before anything under the settings hears it
       event.stopPropagation()
       event.preventDefault()

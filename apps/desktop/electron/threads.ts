@@ -203,6 +203,18 @@ export type ThreadsDeps = {
   ) => void
   /** a conversation's status or last message changed: the sidebar needs redrawing */
   onSummary: () => void
+  /**
+   * whether the app keeps a project's history in git: off, where it does not (a
+   * repository of somebody's own, say); local; or github, backed up there as well
+   */
+  history: (projectId: string) => "off" | "local" | "github"
+  /** a turn is over, and the folder as it left it: what was asked, in which conversation */
+  onTurned: (
+    projectId: string,
+    conversationId: string,
+    what: string,
+    conversation: string | null
+  ) => void
 }
 
 /** What one of the app's own tools goes by here, whichever agent calls on it. */
@@ -584,6 +596,17 @@ const MESHES = [
   "- To rebuild a model as an editable design is to build each mesh part again in model.py with build123d, as its designer would have drawn it, so that its sizes can be changed from then on. Read the mesh to measure it: its bounding box, its volume, sections through it at several heights (shape & a thin box, then the faces and edges of that), and where its flat faces are and which way they face. Take the sizes from what you measure, rounded as a designer would have chosen them, and name each as a variable at the top of model.py. Build it where the mesh is, then check it against the mesh before you go on: the volume of each difference, (rebuilt - mesh) and (mesh - rebuilt), small beside the part's own, and a screenshot of the two together. Then hand over the rebuilt part in place of the mesh, under the same id and without mesh=True, and leave the file in source/ as it is. Do it part by part where there are several. A shape that no designer would have drawn (a scan, a sculpted figure) cannot be rebuilt so: say that, and leave it a mesh. Say at the end what you matched, how closely, and what you were unsure of.",
 ]
 
+/**
+ * What an agent is told of the project's history, where the app keeps it in git: that
+ * the app commits, and pushes, and the agent leaves git to it.
+ */
+function keepingHistory(history: "off" | "local" | "github"): string[] {
+  if (history === "off") return []
+  return [
+    `- The app keeps this project's history in git${history === "github" ? ", and backs it up to a private repository on the user's GitHub account" : ""}. After each of your turns it commits what the folder holds, with what was asked as the message, on a branch of this conversation's own where each conversation has its own version${history === "github" ? ", and pushes it" : ""}. Leave that to it: do not commit, push, make or switch branches, rewrite history or change the repository's settings yourself, unless the user asks you to. What the build writes is left out of it by .gitignore, which you may add to (never remove the app's lines); a file of 50 MB or more is kept with Git LFS by itself. Never put a password, a key or a token in the project's files.`,
+  ]
+}
+
 /** What an agent is told about where it is, on top of its own instructions. */
 function guide(
   provider: ProviderId,
@@ -602,7 +625,9 @@ function guide(
   /** it can make the project tools of its own, and try them: not so on looking over, either */
   trying: boolean,
   /** its model has parts made of a mesh */
-  meshes = false
+  meshes = false,
+  /** whether the app keeps its history in git, and backs that up to GitHub */
+  history: "off" | "local" | "github" = "off"
 ): string {
   const tool = knownAs(provider)
   const lines = [
@@ -641,6 +666,7 @@ function guide(
     // (there is nothing to write a guide to until there is a model)
     ...(trying && manifest ? assembling(tool, kit) : []),
     ...(trying ? versioning(tool) : []),
+    ...keepingHistory(history),
     ...SIZES,
     ...(canAsk ? QUESTIONS : []),
     ...fastening(kit, canAsk),
@@ -1584,7 +1610,8 @@ export class Threads {
       // it. Codex and Grok ask in what they say; and nothing is asked on looking over.
       provider === "claude" && asked.arrange === undefined,
       asked.arrange === undefined,
-      this.deps.projects.hasMeshes(projectId)
+      this.deps.projects.hasMeshes(projectId),
+      this.deps.history(projectId)
     )
     const guided = createHash("sha1").update(told).digest("hex")
 
@@ -1755,6 +1782,14 @@ export class Threads {
       // and with nothing at work in the folder any more, a project that has just been
       // given its shape can take its name
       if (!goesOn) this.deps.projects.christen(projectId, this.deps.onRenamed)
+      // and what it left is kept in the project's history, where the app keeps that
+      if (this.books.get(projectId) === book)
+        this.deps.onTurned(
+          projectId,
+          conversation.id,
+          run.what,
+          conversation.name ?? null
+        )
       this.deps.onSummary()
     }
   }

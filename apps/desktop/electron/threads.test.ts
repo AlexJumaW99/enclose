@@ -649,6 +649,8 @@ on("turn/interrupt", () => {
     onItem: () => {},
     onVersion: (_, from, to) => begun.push({ from, to }),
     onSummary: () => {},
+    onTurned: () => {},
+    history: () => "off" as const,
   })
   const now = () => threads.summaries(ID)[0]
   return {

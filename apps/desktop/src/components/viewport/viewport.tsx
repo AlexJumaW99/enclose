@@ -59,6 +59,7 @@ import { objectsOf, pieceWith, wholeOf } from "./apart"
 import { ARRIVAL, newIn, type Arriving } from "./arriving"
 import { AxisGizmo } from "./axis-gizmo"
 import { bridge } from "./bridge"
+import { BackingUp } from "@/components/backing-up"
 import { ExplodeSlider } from "./explode-slider"
 import {
   disposeModel,
@@ -1712,6 +1713,7 @@ function Model({ project }: { project: Project }) {
           a newer agent, and what was just done, are told with no model there as well */}
       <div className="pointer-events-none absolute inset-x-0 bottom-5 flex flex-col items-center gap-2.5">
         <NewerAgent />
+        <BackingUp />
         {loaded ? (
           <>
             {lookingOver && (

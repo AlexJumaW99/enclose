@@ -50,6 +50,7 @@ import {
   type Seen,
   type ThreadItem,
   type Turned,
+  type GitHubState,
   type Update,
   type Vec3,
 } from "@shared/api"
@@ -543,6 +544,8 @@ type State = {
   bare: boolean
   /** where the app is with a newer version of itself, as the app last said */
   update: Update
+  /** GitHub, as projects are backed up to it, and how far backing them all up has got */
+  github: GitHubState
   access: Access
   /** the agents there are, once the app has said: Claude Code, Codex, Grok */
   providers: Provider[]
@@ -946,6 +949,7 @@ export const useStore = create<State>()((set, get) => ({
   settingsOpen: false,
   bare: false,
   update: { state: "none" },
+  github: { connection: { state: "unavailable" }, backingUp: null },
   access: savedAccess(saved(ACCESS_KEY)),
   providers: [],
   provider: PROVIDERS.find((one) => one === saved(PROVIDER_KEY)) ?? "claude",
@@ -2017,6 +2021,8 @@ export function connect() {
     .then((providers) => useStore.setState({ providers }))
   cad.update.onChange((update) => useStore.setState({ update }))
   void cad.update.get().then((update) => useStore.setState({ update }))
+  cad.github.onChange((github) => useStore.setState({ github }))
+  void cad.github.get().then((github) => useStore.setState({ github }))
 }
 
 // lets a script drive the app when it is being checked without a person at it

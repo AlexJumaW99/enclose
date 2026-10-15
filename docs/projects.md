@@ -32,6 +32,31 @@ it, but what was said about it is forgotten, which the app asks about first: ope
 folder again and it is a new project. The one folder it clears away is one that came to
 nothing, which the app made and nothing was put in.
 
+## History and backup
+
+Every project the app makes keeps its history in git, and so does a folder you open
+that was not a git repository already. A folder that was one is yours, kept your own way,
+and the app commits nothing in it.
+
+After each turn of Claude's, and each Cmd+Z, the app commits what the folder holds, with
+what was asked as the message. Each conversation that has [its own
+version](working-with-claude.md#versions) of the project has a branch of its own: the
+first is `main`, and each after it `version/<what it began with>`, from where the project
+was when it began. With versions off, everything is on `main`. What the build writes
+(`build/`), a Python of the project's own, Python's caches and `.env` files are left
+out, in `.gitignore`; a file of 50 MB or more is kept with Git LFS. A folder too big to
+have [versions](working-with-claude.md#versions) has no history kept either. The app brings its own git,
+with Git LFS, so nothing has to be installed for it.
+
+Connect GitHub in the settings (Connections) and every project is backed up as well:
+each to a private repository of its own on your account, `enclose-<project name>`, made
+the first time the project has a model, and pushed to after each commit, every branch of
+it. Nothing is asked. Connecting backs up every project there is at once, with a pill at
+the foot of the view saying how far it has got. A project renamed renames its repository.
+A push that fails, with no connection say, is tried again a few minutes later.
+
+Claude is told that the app does this, and leaves git alone unless you ask it otherwise.
+
 ## Starting from nothing
 
 A project can be an empty folder. It opens as any project does, in the viewer, with a

@@ -35,6 +35,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { useControlHeld } from "@/lib/keys"
 import { sizeOf } from "@/lib/model"
 import { MAC } from "@/lib/platform"
 import { useStack, useStore } from "@/lib/store"
@@ -301,6 +302,8 @@ function ProjectCard({ project, now }: { project: Project; now: number }) {
   // the card is lit for its project, unless what is open is spread out under it
   const openUnder = under.some((c) => c.id === open?.id)
   const lit = active && !(spread && openUnder)
+  // which branch it is on is seen while Control is held, and is out of the way otherwise
+  const branches = useControlHeld()
   // The card of the project that is opened is brought to where it can be seen: a new
   // one comes in at the top of the list, which may have been scrolled a long way down.
   const card = React.useRef<HTMLDivElement>(null)
@@ -349,8 +352,9 @@ function ProjectCard({ project, now }: { project: Project; now: number }) {
                 under.length > 0 ? "Start a new session" : "No messages yet"
               }
             />
-            {/* the branch, for a folder that is kept in git: a line more on its card */}
-            {project.branch && (
+            {/* the branch, for a folder that is kept in git: a line more on its
+                card, while Control is held */}
+            {project.branch && branches && (
               <span
                 className={cn(
                   SMALL,

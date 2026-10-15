@@ -163,6 +163,15 @@ const api: CadApi = {
   analytics: {
     used: (feature) => ipcRenderer.send(CHANNEL.analyticsUsed, feature),
   },
+  github: {
+    get: () => ipcRenderer.invoke(CHANNEL.githubGet),
+    connect: () => ipcRenderer.invoke(CHANNEL.githubConnect),
+    openCode: () => ipcRenderer.invoke(CHANNEL.githubOpenCode),
+    openInstall: () => ipcRenderer.invoke(CHANNEL.githubOpenInstall),
+    cancel: () => ipcRenderer.invoke(CHANNEL.githubCancel),
+    disconnect: () => ipcRenderer.invoke(CHANNEL.githubDisconnect),
+    onChange: (listener) => on(CHANNEL.githubChanged, listener),
+  },
   update: {
     get: () => ipcRenderer.invoke(CHANNEL.updateGet),
     download: () => ipcRenderer.invoke(CHANNEL.updateDownload),

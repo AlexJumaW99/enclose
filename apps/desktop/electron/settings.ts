@@ -9,6 +9,7 @@ import {
   type ProviderSettings,
   type Settings,
 } from "../shared/api"
+import type { Account, Tokens } from "./github"
 
 /** A list of names, from what may be anything: the strings in it, each once. */
 const names = (given: unknown): string[] => [
@@ -82,6 +83,8 @@ export type Vault = {
 
 type Saved = Partial<Settings> & {
   providers?: Partial<Record<ProviderId, unknown>>
+  /** the GitHub account projects are backed up to, and its tokens, sealed */
+  github?: { account: Account; sealed: string }
 }
 
 export class SettingsStore {
@@ -173,6 +176,41 @@ export class SettingsStore {
     }
     this.write()
     return next
+  }
+
+  /**
+   * The GitHub account projects are backed up to, and what signs the app in to it:
+   * null where there is none, or where what was kept cannot be had back.
+   */
+  github(): { account: Account; tokens: Tokens } | null {
+    const kept = this.saved.github
+    if (!kept || !this.vault) return null
+    try {
+      return {
+        account: kept.account,
+        tokens: JSON.parse(this.vault.unseal(kept.sealed)),
+      }
+    } catch {
+      return null
+    }
+  }
+
+  /** Keep a GitHub account, sealed, or forget the one there is. Not kept where nothing can seal it. */
+  setGitHub(github: { account: Account; tokens: Tokens } | null): boolean {
+    if (github && !this.vault) return false
+    const rest = { ...this.saved }
+    delete rest.github
+    this.saved = github
+      ? {
+          ...rest,
+          github: {
+            account: github.account,
+            sealed: this.vault!.seal(JSON.stringify(github.tokens)),
+          },
+        }
+      : rest
+    this.write()
+    return true
   }
 
   private write() {

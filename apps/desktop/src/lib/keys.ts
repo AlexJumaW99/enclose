@@ -1,3 +1,5 @@
+import * as React from "react"
+
 import { useStore } from "./store"
 
 /**
@@ -29,3 +31,24 @@ window.addEventListener("pointerdown", () => (tabbed = false), true)
  */
 export const spaceTaken = (event: KeyboardEvent) =>
   event.defaultPrevented || (tabbed && event.target !== document.body)
+
+/**
+ * Whether Control is held down, by itself or with others: what shows what the app keeps
+ * out of sight until it is asked for. Let go of, or the window left, and it is not.
+ */
+export function useControlHeld(): boolean {
+  const [held, setHeld] = React.useState(false)
+  React.useEffect(() => {
+    const key = (event: KeyboardEvent) => setHeld(event.ctrlKey)
+    const gone = () => setHeld(false)
+    window.addEventListener("keydown", key, true)
+    window.addEventListener("keyup", key, true)
+    window.addEventListener("blur", gone)
+    return () => {
+      window.removeEventListener("keydown", key, true)
+      window.removeEventListener("keyup", key, true)
+      window.removeEventListener("blur", gone)
+    }
+  }, [])
+  return held
+}

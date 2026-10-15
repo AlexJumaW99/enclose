@@ -20,7 +20,7 @@ Each thing counted is an event: its name, and a few words and numbers that say w
 | `model looked over` | The agent, its model, the effort and the permissions |
 | `version begun` | The agent, its model, the effort and the permissions |
 | `change turned back` | Whether it was undone or redone |
-| `model saved` | Whether as CAD files or as drawings, and how many |
+| `model saved` | Whether as CAD files or as drawings; for STL or OBJ, which; and how many |
 | `assembly guide asked for` | The agent, its model, the effort and the permissions; whether it was of the whole model |
 | `assembly guide written` | How many steps |
 | `assembly guide opened` | |
@@ -30,6 +30,8 @@ Each thing counted is an event: its name, and a few words and numbers that say w
 | `provider switched` | Which agent, and whether on or off |
 | `provider updated` | Which agent, and what came of it: updated, the same as it was, failed, or not answering after |
 | `update fetched` | The version |
+| `github connected` | |
+| `github disconnected` | |
 
 With every event go the app's version, whether it is the installed app, your system
 (macOS, its version, and the kind of processor), and the name made up for your
