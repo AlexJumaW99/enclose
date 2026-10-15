@@ -437,6 +437,9 @@ export function runBuild(
     // (Python holds on to what it prints, when nobody is watching, until there is a lot)
     env: { ...env, PYTHONUNBUFFERED: "1" },
     stdio: ["ignore", "pipe", "pipe"],
+    // a process group of its own, for `stop` to reach all of it (on Windows this would
+    // open a console window for the build instead)
+    detached: process.platform !== "win32",
   })
   let done = 0
   let total: number | null = null
@@ -474,5 +477,23 @@ export function runBuild(
     child.once("error", () => failed(null))
     child.once("close", (code) => (code === 0 ? resolve(null) : failed(code)))
   })
-  return { finished, stop: () => void child.kill() }
+  // once it is over, its group's number may be given to something else
+  let over = false
+  void finished.then(() => (over = true))
+  /**
+   * Stop the build: the shell it runs in, and all that the shell started. A shell does
+   * not always hand itself over to the command it was given (dash, the /bin/sh of Debian
+   * and Ubuntu, never does), and with only the shell stopped Python would build on to
+   * the end. So the whole group the build was started in is told.
+   */
+  const stop = () => {
+    if (over || child.pid === undefined) return
+    try {
+      if (process.platform === "win32") child.kill()
+      else process.kill(-child.pid, "SIGTERM")
+    } catch {
+      // gone already
+    }
+  }
+  return { finished, stop }
 }

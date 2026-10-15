@@ -2,7 +2,7 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
   arrange,
@@ -477,6 +477,40 @@ describe("runBuild", () => {
       why: "python",
       detail: "ModuleNotFoundError: No module named 'build123d'",
     })
+  })
+
+  it("stops all of a build, and not just the shell it runs in", async () => {
+    // No shell hands itself over to a list of two commands, so it stays between the app
+    // and what it started, as dash (Debian's and Ubuntu's /bin/sh) does even with one.
+    let started: () => void = () => {}
+    const running = new Promise<void>((resolve) => (started = resolve))
+    const build = runBuild(
+      root,
+      "echo '1 part'; sleep 20; echo done",
+      process.env,
+      () => started()
+    )
+    await running
+    // (the shell goes on to start sleep the moment it has printed)
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    const asked = Date.now()
+    build.stop()
+    // A build is over once nothing holds what it prints to: sleep included.
+    expect(await build.finished).toMatchObject({
+      state: "failed",
+      why: "build",
+    })
+    expect(Date.now() - asked).toBeLessThan(2000)
+  })
+
+  it("sends nothing once a build is over", async () => {
+    // its group's number may be another's by then
+    const build = runBuild(root, "true", process.env, () => {})
+    expect(await build.finished).toBeNull()
+    const kill = vi.spyOn(process, "kill")
+    build.stop()
+    expect(kill).not.toHaveBeenCalled()
+    kill.mockRestore()
   })
 
   it("gives the last thing a failed build said", async () => {
